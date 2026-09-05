@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Institutional Equity Multi-Factor Optimizer Hub</title>
+<style>
+:root {
+--bg-main: #0b0f19; --bg-card: #151d30; --text-primary: #f8fafc;
+--text-secondary: #94a3b8; --accent-blue: #2563eb; --accent-hover: #1d4ed8;
+--emerald: #10b981; --border-color: #1e293b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+body { background-color: var(--bg-main); color: var(--text-primary); padding: 2rem; min-height: 100vh; }
+.container { max-width: 1400px; margin: 0 auto; }
+header { margin-bottom: 2.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1.5rem; }
+h1 { font-size: 2.25rem; font-weight: 700; margin-bottom: 0.5rem; color: #fff; }
+p.subtitle { color: var(--text-secondary); font-size: 1.1rem; }
+.control-panel { background: var(--bg-card); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 2rem; display: flex;
+align-items: center; gap: 1.5rem; }
+label { font-weight: 600; color: var(--text-primary); font-size: 1rem; }
+select { background: var(--bg-main); color: #fff; border: 1px solid var(--border-color); padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 1rem; cursor:
+pointer; outline: none; transition: border 0.2s; }
+select:focus { border-color: var(--accent-blue); }
+button { background: var(--accent-blue); color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: poin
+ter; transition: background 0.2s; }
+button:hover { background: var(--accent-hover); }
+.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; box-shadow: 0 10px 15px -3px rgba
+(0, 0, 0, 0.3); }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
+th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-b
+ottom: 2px solid var(--border-color); }
+td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); vertical-align: top; line-height: 1.5; }
+tr:hover { background: rgba(255, 255, 255, 0.02); }
+.allocation-badge { background: rgba(37, 99, 235, 0.2); color: #60a5fa; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 700; font-size: 0.9rem; displ
+ay: inline-block; border: 1px solid rgba(37, 99, 235, 0.3); }
+.moat-cell { max-width: 280px; font-size: 0.88rem; }
+.ticker-txt { font-weight: 700; color: #fff; background: #1e293b; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Institutional Equity Matrix Optimizer</h1>
+<p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
+</header>
+<div class="control-panel">
+<label for="riskProfile">Target Allocation Mandate Strategy:</label>
+<select id="riskProfile">
+<option value="tactical">Tactical Buying Urgency (Highest Upside Target Rank)</option>
+<option value="conservative">Conservative Profile (Moat Stability & High Yield Focus)</option>
+<option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
+<option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
+</select>
+</div>
+<div class="table-container">
+<table id="resultsTable">
+<thead>
+<tr>
+<button id="optimizeBtn">Execute Allocation Logic</button>
+<th>Ticker</th>
+<th>Company Name</th>
+<th>ROA (%)</th>
+<th>P/E Multiple</th>
+<th>Current Price</th>
+<th>Target Price</th>
+<th>Implied Upside</th>
+<th>Strategic Moat & Stability Profile</th>
+<th>Optimized Weight Allocation</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
