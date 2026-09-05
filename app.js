@@ -154,14 +154,33 @@ function runMatrixOptimization() {
 // Default execution initialization
 runMatrixOptimization();
 
-// --- Wire up live-data controls ---
-document.getElementById("apiKey").value = getSavedApiKey();
-document.getElementById("saveKeyBtn").addEventListener("click", () => {
-  const key = document.getElementById("apiKey").value.trim();
-  saveApiKey(key);
-  const statusEl = document.getElementById("fetchStatus");
-  statusEl.textContent = "Key saved in this browser.";
-  statusEl.style.color = "var(--emerald)";
-});
-document.getElementById("fetchLiveBtn").addEventListener("click", fetchLiveDataForAllAssets);
+// --- Wire up live-data controls (defensive: won't break if elements are missing) ---
+try{
+  const apiKeyEl = document.getElementById("apiKey");
+  if(apiKeyEl) apiKeyEl.value = getSavedApiKey();
+
+  const saveKeyBtn = document.getElementById("saveKeyBtn");
+  if(saveKeyBtn){
+    saveKeyBtn.addEventListener("click", () => {
+      const key = document.getElementById("apiKey").value.trim();
+      saveApiKey(key);
+      const statusEl = document.getElementById("fetchStatus");
+      if(statusEl){
+        statusEl.textContent = "Key saved in this browser.";
+        statusEl.style.color = "var(--emerald)";
+      }
+    });
+  } else {
+    console.warn("saveKeyBtn not found in the page — index.html may be out of date.");
+  }
+
+  const fetchLiveBtn = document.getElementById("fetchLiveBtn");
+  if(fetchLiveBtn){
+    fetchLiveBtn.addEventListener("click", fetchLiveDataForAllAssets);
+  } else {
+    console.warn("fetchLiveBtn not found in the page — index.html may be out of date.");
+  }
+}catch(err){
+  console.error("Failed to wire up live-data controls:", err);
+}
 
