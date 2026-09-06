@@ -1,5 +1,5 @@
-// APP.JS BUILD: v4.4 (moved Clear button out of cramped ticker column)
-console.log("app.js loaded — build v4.4 (moved Clear button out of cramped ticker column)");
+// APP.JS BUILD: v4.5 (block duplicate list names & duplicate tickers)
+console.log("app.js loaded — build v4.5 (block duplicate list names & duplicate tickers)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -245,6 +245,12 @@ function createList(name){
   saveAllLists(lists);
   setActiveListId(id);
   return id;
+}
+
+function listNameExists(name, excludeId){
+  const lists = getAllLists();
+  const normalized = name.trim().toLowerCase();
+  return Object.keys(lists).some(id => id !== excludeId && lists[id].name.trim().toLowerCase() === normalized);
 }
 
 function renameActiveList(newName){
@@ -627,7 +633,10 @@ try{
   const newListBtn = document.getElementById("newListBtn");
   if(newListBtn){
     newListBtn.addEventListener("click", () => {
-      const name = prompt("Name for the new list:", "List " + (Object.keys(getAllLists()).length + 1));
+      let name = prompt("Name for the new list:", "List " + (Object.keys(getAllLists()).length + 1));
+      while(name !== null && name.trim() !== "" && listNameExists(name)){
+        name = prompt(`"${name.trim()}" is already in use. Please choose a different name:`, "");
+      }
       if(name === null || name.trim() === "") return; // user cancelled
       createList(name.trim());
       renderListSelector();
@@ -641,7 +650,11 @@ try{
   if(renameListBtn){
     renameListBtn.addEventListener("click", () => {
       const current = getActiveList();
-      const name = prompt("Rename this list:", current.name);
+      const activeId = getActiveListId();
+      let name = prompt("Rename this list:", current.name);
+      while(name !== null && name.trim() !== "" && listNameExists(name, activeId)){
+        name = prompt(`"${name.trim()}" is already in use by another list. Please choose a different name:`, "");
+      }
       if(name === null || name.trim() === "") return;
       renameActiveList(name.trim());
       renderListSelector();
@@ -703,6 +716,13 @@ try{
 
       if(!ticker || !name){
         statusEl.textContent = "Ticker and Company Name are required.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+
+      const alreadyInList = getWorkingData().some(a => a.ticker === ticker);
+      if(alreadyInList){
+        statusEl.textContent = `${ticker} is already in this list. Edit it directly in the table, or remove it first if you want to re-add it fresh.`;
         statusEl.style.color = "var(--amber)";
         return;
       }
