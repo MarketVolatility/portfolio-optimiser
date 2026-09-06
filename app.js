@@ -1,5 +1,5 @@
-// APP.JS BUILD: v4.2 (phantom-edit guard, fetch-failed badge)
-console.log("app.js loaded — build v4.2 (phantom-edit guard, fetch-failed badge)");
+// APP.JS BUILD: v4.3 (repair stuck tickers with Clear button)
+console.log("app.js loaded — build v4.3 (repair stuck tickers with Clear button)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -160,7 +160,11 @@ function getAllLists(){
       list.customAssets.forEach(asset => {
         if(!globalOv[asset.ticker]) globalOv[asset.ticker] = {};
         Object.keys(asset).forEach(k => {
-          if(k !== 'ticker' && globalOv[asset.ticker][k] === undefined) globalOv[asset.ticker][k] = asset[k];
+          // roa/pe/currentPrice were always just placeholder shell values in the old
+          // schema (editable cells didn't exist yet), never genuine manual edits —
+          // migrating them as overrides would permanently block live data.
+          if(k === 'ticker' || k === 'roa' || k === 'pe' || k === 'currentPrice') return;
+          if(globalOv[asset.ticker][k] === undefined) globalOv[asset.ticker][k] = asset[k];
         });
       });
       list.includedCustomTickers = [...new Set([...(list.includedCustomTickers || []), ...list.customAssets.map(a => a.ticker)])];
@@ -325,6 +329,16 @@ function setCellOverride(ticker, field, value){
   setGlobalOverride(ticker, field, value);
 }
 
+function clearPriceOverrides(ticker){
+  const ov = getGlobalOverrides();
+  if(ov[ticker]){
+    delete ov[ticker].currentPrice;
+    delete ov[ticker].pe;
+    delete ov[ticker].roa;
+    saveGlobalOverrides(ov);
+  }
+}
+
 function renameTicker(oldTicker, newTicker){
   if(!newTicker || newTicker === oldTicker) return;
   // Snapshot the OLD ticker's current effective values (base + any override)
@@ -487,7 +501,7 @@ function runMatrixOptimization() {
     const rowElement = document.createElement('tr');
 
     let badge;
-    if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span>`;
+    if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${item.ticker}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
     else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
     else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="Finnhub couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
@@ -513,6 +527,7 @@ function runMatrixOptimization() {
 
   wireUpEditableCells();
   wireUpRowDeleteButtons();
+  wireUpClearOverrideButtons();
 }
 
 function wireUpRowDeleteButtons(){
@@ -523,6 +538,16 @@ function wireUpRowDeleteButtons(){
       runMatrixOptimization();
       renderRemoveList();
       renderListSelector();
+    });
+  });
+}
+
+function wireUpClearOverrideButtons(){
+  document.querySelectorAll('.clear-override-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const ticker = e.target.getAttribute('data-ticker');
+      clearPriceOverrides(ticker);
+      runMatrixOptimization();
     });
   });
 }
