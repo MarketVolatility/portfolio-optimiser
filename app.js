@@ -1,8 +1,9 @@
-// APP.JS BUILD: v4.1 (live badge fix, sort, row delete, sticky v2)
-console.log("app.js loaded — build v4.1 (live badge fix, sort, row delete, sticky v2)");
+// APP.JS BUILD: v4.2 (phantom-edit guard, fetch-failed badge)
+console.log("app.js loaded — build v4.2 (phantom-edit guard, fetch-failed badge)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
+let fetchFailedTickers = new Set(); // tickers where a live fetch was attempted but errored out
 let lastFetchTime = null;
 
 function getSavedApiKey(){
@@ -79,10 +80,12 @@ async function fetchLiveDataForAllAssets(){
         pe: metrics.pe,
         roa: metrics.roa,
       };
+      fetchFailedTickers.delete(asset.ticker);
       if(metrics.pe === undefined) noPeTickers.push(asset.ticker);
       successCount++;
     }catch(err){
       liveDataMap[asset.ticker] = undefined;
+      fetchFailedTickers.add(asset.ticker);
       failCount++;
       failedTickers.push(asset.ticker);
     }
@@ -436,6 +439,7 @@ function runMatrixOptimization() {
     const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
     const isLive = !!(live && live.price !== undefined) && !priceRelevantOverride;
     const isEdited = priceRelevantOverride;
+    const fetchFailed = fetchFailedTickers.has(asset.ticker) && !priceRelevantOverride;
 
     let upsidePercentage = (targetPrice - currentPrice) / currentPrice;
     let attributionScore = 0;
@@ -456,7 +460,7 @@ function runMatrixOptimization() {
       if (growth.includes("High") || growth.includes("Moat")) attributionScore += 25;
     }
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0), finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0), finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
 
   const netMatrixScore = processedAssets.reduce((accum, item) => accum + item.finalScore, 0);
@@ -485,21 +489,22 @@ function runMatrixOptimization() {
     let badge;
     if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span>`;
     else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
+    else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="Finnhub couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
 
     rowElement.innerHTML = `
       <td>
         <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}"><br>${badge}
       </td>
-      <td><input class="cell-input" data-ticker="${item.ticker}" data-field="name" type="text" value="${item.name.replace(/"/g,'&quot;')}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" type="number" step="0.01" value="${item.roa}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" type="number" step="0.01" value="${item.pe}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" type="number" step="0.01" value="${item.currentPrice}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="targetPrice" type="number" step="0.01" value="${item.targetPrice}"></td>
+      <td><input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${item.name.replace(/"/g,'&quot;')}" type="text" value="${item.name.replace(/"/g,'&quot;')}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" data-resolved-value="${item.roa}" type="number" step="0.01" value="${item.roa}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" data-resolved-value="${item.pe}" type="number" step="0.01" value="${item.pe}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${item.currentPrice}" type="number" step="0.01" value="${item.currentPrice}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="targetPrice" data-resolved-value="${item.targetPrice}" type="number" step="0.01" value="${item.targetPrice}"></td>
       <td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">
         ${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%
       </td>
-      <td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability">${item.stability}</textarea></td>
+      <td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${item.stability.replace(/"/g,'&quot;')}">${item.stability}</textarea></td>
       <td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>
       <td><button class="row-delete-btn" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button></td>
     `;
@@ -554,6 +559,12 @@ function wireUpEditableCells(){
         value = parseFloat(value);
         if(isNaN(value)) return; // ignore invalid numeric input rather than corrupting the override
       }
+
+      const resolvedRaw = e.target.getAttribute('data-resolved-value');
+      const resolvedValue = isNum ? parseFloat(resolvedRaw) : resolvedRaw;
+      const unchanged = isNum ? (value === resolvedValue) : (String(value) === String(resolvedValue));
+      if(unchanged) return; // change event fired but nothing actually changed — don't create a phantom override
+
       setCellOverride(ticker, field, value);
       runMatrixOptimization();
     });
