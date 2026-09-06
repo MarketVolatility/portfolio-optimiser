@@ -1,5 +1,5 @@
-// APP.JS BUILD: v4.3 (repair stuck tickers with Clear button)
-console.log("app.js loaded — build v4.3 (repair stuck tickers with Clear button)");
+// APP.JS BUILD: v4.4 (moved Clear button out of cramped ticker column)
+console.log("app.js loaded — build v4.4 (moved Clear button out of cramped ticker column)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -508,9 +508,12 @@ function runMatrixOptimization() {
 
     rowElement.innerHTML = `
       <td>
-        <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}"><br>${badge}
+        <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">
       </td>
-      <td><input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${item.name.replace(/"/g,'&quot;')}" type="text" value="${item.name.replace(/"/g,'&quot;')}"></td>
+      <td>
+        <input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${item.name.replace(/"/g,'&quot;')}" type="text" value="${item.name.replace(/"/g,'&quot;')}">
+        <div style="margin-top:4px;">${badge}</div>
+      </td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" data-resolved-value="${item.roa}" type="number" step="0.01" value="${item.roa}"></td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" data-resolved-value="${item.pe}" type="number" step="0.01" value="${item.pe}"></td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${item.currentPrice}" type="number" step="0.01" value="${item.currentPrice}"></td>
