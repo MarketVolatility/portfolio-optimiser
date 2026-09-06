@@ -103,70 +103,164 @@ async function fetchLiveDataForAllAssets(){
   statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
 }
 
-// --- Asset management (add/remove), persisted in localStorage ---
-function getCustomAssets(){
-  try{ return JSON.parse(localStorage.getItem("customAssets") || "[]"); }
-  catch(e){ return []; }
+// --- Multi-list portfolio management, persisted in localStorage ---
+// Each list: { name, customAssets: [...], removedTickers: [...], overrides: { TICKER: {field: value} } }
+const DEFAULT_LIST_ID = "list-default";
+
+function getAllLists(){
+  try{
+    const raw = localStorage.getItem("portfolioLists");
+    if(raw) return JSON.parse(raw);
+  }catch(e){ /* fall through to migration/default */ }
+
+  // Migrate any pre-existing single-list data (from before multi-list support)
+  // into a default "List 1" so nobody's customizations get silently dropped.
+  let migratedCustom = [], migratedRemoved = [];
+  try{ migratedCustom = JSON.parse(localStorage.getItem("customAssets") || "[]"); }catch(e){}
+  try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){}
+
+  const lists = {
+    [DEFAULT_LIST_ID]: { name: "List 1", customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
+  };
+  saveAllLists(lists);
+  return lists;
 }
-function saveCustomAssets(list){
-  try{ localStorage.setItem("customAssets", JSON.stringify(list)); }
+
+function saveAllLists(lists){
+  try{ localStorage.setItem("portfolioLists", JSON.stringify(lists)); }
   catch(e){ /* localStorage unavailable */ }
 }
-function getRemovedTickers(){
-  try{ return JSON.parse(localStorage.getItem("removedTickers") || "[]"); }
-  catch(e){ return []; }
+
+function getActiveListId(){
+  try{
+    const id = localStorage.getItem("activeListId");
+    const lists = getAllLists();
+    if(id && lists[id]) return id;
+  }catch(e){ /* fall through */ }
+  const lists = getAllLists();
+  const firstId = Object.keys(lists)[0] || DEFAULT_LIST_ID;
+  setActiveListId(firstId);
+  return firstId;
 }
-function saveRemovedTickers(list){
-  try{ localStorage.setItem("removedTickers", JSON.stringify(list)); }
+
+function setActiveListId(id){
+  try{ localStorage.setItem("activeListId", id); }
   catch(e){ /* localStorage unavailable */ }
+}
+
+function getActiveList(){
+  const lists = getAllLists();
+  const id = getActiveListId();
+  if(!lists[id]){
+    lists[id] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+    saveAllLists(lists);
+  }
+  return lists[id];
+}
+
+function updateActiveList(mutatorFn){
+  const lists = getAllLists();
+  const id = getActiveListId();
+  if(!lists[id]) lists[id] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+  mutatorFn(lists[id]);
+  saveAllLists(lists);
+}
+
+function createList(name){
+  const lists = getAllLists();
+  const id = "list-" + Date.now();
+  lists[id] = { name: name || "New List", customAssets: [], removedTickers: [], overrides: {} };
+  saveAllLists(lists);
+  setActiveListId(id);
+  return id;
+}
+
+function renameActiveList(newName){
+  updateActiveList(list => { list.name = newName; });
+}
+
+function deleteActiveList(){
+  const lists = getAllLists();
+  const id = getActiveListId();
+  delete lists[id];
+  const remainingIds = Object.keys(lists);
+  if(remainingIds.length === 0){
+    lists[DEFAULT_LIST_ID] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+    saveAllLists(lists);
+    setActiveListId(DEFAULT_LIST_ID);
+  } else {
+    saveAllLists(lists);
+    setActiveListId(remainingIds[0]);
+  }
 }
 
 function getWorkingData(){
-  const removed = getRemovedTickers();
+  const list = getActiveList();
+  const removed = list.removedTickers || [];
+  const overrides = list.overrides || {};
   const base = marketData.filter(a => !removed.includes(a.ticker));
-  const custom = getCustomAssets();
-  return [...base, ...custom];
+  const custom = list.customAssets || [];
+  const combined = [...base, ...custom];
+  return combined.map(asset => ({ ...asset, _overrides: overrides[asset.ticker] || {} }));
 }
 
 function addAsset({ ticker, name, targetPrice, stability, growth }){
-  const custom = getCustomAssets();
-  const removed = getRemovedTickers();
-  // If this ticker was previously removed from the base list, un-remove it
-  // instead of creating a duplicate when the user re-adds the same symbol.
-  const newRemoved = removed.filter(t => t !== ticker);
-  saveRemovedTickers(newRemoved);
-
-  const existingIdx = custom.findIndex(a => a.ticker === ticker);
-  const newAsset = {
-    ticker, name,
-    roa: 0, pe: 0, currentPrice: targetPrice || 1, // placeholders until a live fetch runs
-    targetPrice: targetPrice || 0,
-    stability: stability || "Not yet rated.",
-    growth: growth || "Unclassified"
-  };
-  if(existingIdx >= 0){
-    custom[existingIdx] = newAsset;
-  } else {
-    custom.push(newAsset);
-  }
-  saveCustomAssets(custom);
+  updateActiveList(list => {
+    list.removedTickers = (list.removedTickers || []).filter(t => t !== ticker);
+    const custom = list.customAssets || [];
+    const existingIdx = custom.findIndex(a => a.ticker === ticker);
+    const newAsset = {
+      ticker, name,
+      roa: 0, pe: 0, currentPrice: targetPrice || 1, // placeholders until a live fetch runs
+      targetPrice: targetPrice || 0,
+      stability: stability || "Not yet rated.",
+      growth: growth || "Unclassified"
+    };
+    if(existingIdx >= 0) custom[existingIdx] = newAsset;
+    else custom.push(newAsset);
+    list.customAssets = custom;
+  });
 }
 
 function removeAsset(ticker){
-  // Remove from custom list if it's a user-added asset...
-  const custom = getCustomAssets().filter(a => a.ticker !== ticker);
-  saveCustomAssets(custom);
-  // ...and also mark base-list tickers as removed so they stay hidden.
-  const removed = getRemovedTickers();
-  if(!removed.includes(ticker)){
-    removed.push(ticker);
-    saveRemovedTickers(removed);
-  }
+  updateActiveList(list => {
+    list.customAssets = (list.customAssets || []).filter(a => a.ticker !== ticker);
+    const removed = list.removedTickers || [];
+    if(!removed.includes(ticker)) removed.push(ticker);
+    list.removedTickers = removed;
+    if(list.overrides) delete list.overrides[ticker];
+  });
 }
 
 function resetAssetsToDefault(){
-  saveCustomAssets([]);
-  saveRemovedTickers([]);
+  updateActiveList(list => {
+    list.customAssets = [];
+    list.removedTickers = [];
+    list.overrides = {};
+  });
+}
+
+function setCellOverride(ticker, field, value){
+  updateActiveList(list => {
+    if(!list.overrides) list.overrides = {};
+    if(!list.overrides[ticker]) list.overrides[ticker] = {};
+    list.overrides[ticker][field] = value;
+  });
+}
+
+function renderListSelector(){
+  const selector = document.getElementById("listSelector");
+  if(!selector) return;
+  const lists = getAllLists();
+  const activeId = getActiveListId();
+  selector.innerHTML = "";
+  Object.keys(lists).forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = lists[id].name;
+    if(id === activeId) opt.selected = true;
+    selector.appendChild(opt);
+  });
 }
 
 function renderRemoveList(){
@@ -175,7 +269,7 @@ function renderRemoveList(){
   container.innerHTML = "";
   const working = getWorkingData();
   if(working.length === 0){
-    container.innerHTML = `<span style="color:var(--text-secondary);">No assets in the table.</span>`;
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets in this list.</span>`;
     return;
   }
   working.forEach(asset => {
@@ -202,32 +296,41 @@ function runMatrixOptimization() {
   const workingData = getWorkingData();
 
   let processedAssets = workingData.map(asset => {
+    const ov = asset._overrides || {};
     const live = liveDataMap[asset.ticker];
-    const currentPrice = (live && live.price !== undefined) ? live.price : asset.currentPrice;
-    const pe = (live && live.pe !== undefined) ? live.pe : asset.pe;
-    const roa = (live && live.roa !== undefined) ? live.roa : asset.roa;
-    const isLive = !!(live && live.price !== undefined);
 
-    let upsidePercentage = (asset.targetPrice - currentPrice) / currentPrice;
+    // Precedence for every editable field: manual override > live fetch > static default.
+    const name = ov.name !== undefined ? ov.name : asset.name;
+    const currentPrice = ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : asset.currentPrice);
+    const pe = ov.pe !== undefined ? ov.pe : ((live && live.pe !== undefined) ? live.pe : asset.pe);
+    const roa = ov.roa !== undefined ? ov.roa : ((live && live.roa !== undefined) ? live.roa : asset.roa);
+    const targetPrice = ov.targetPrice !== undefined ? ov.targetPrice : asset.targetPrice;
+    const stability = ov.stability !== undefined ? ov.stability : asset.stability;
+    const growth = ov.growth !== undefined ? ov.growth : asset.growth;
+
+    const isLive = !!(live && live.price !== undefined) && ov.currentPrice === undefined;
+    const isEdited = Object.keys(ov).length > 0;
+
+    let upsidePercentage = (targetPrice - currentPrice) / currentPrice;
     let attributionScore = 0;
 
     if (mandate === 'tactical') {
       attributionScore = upsidePercentage * 100;
     } else if (mandate === 'conservative') {
-      if (asset.stability.startsWith("Ultra-High")) attributionScore += 60;
-      if (asset.stability.startsWith("High Stability")) attributionScore += 35;
+      if (stability.startsWith("Ultra-High")) attributionScore += 60;
+      if (stability.startsWith("High Stability")) attributionScore += 35;
       attributionScore += (120 / (pe + 1));
-      if (asset.growth.includes("Cyclical")) attributionScore -= 20;
+      if (growth.includes("Cyclical")) attributionScore -= 20;
     } else if (mandate === 'balanced') {
       attributionScore += roa * 1.2;
       attributionScore += upsidePercentage * 80;
     } else if (mandate === 'aggressive') {
       attributionScore += upsidePercentage * 180;
       attributionScore += roa * 0.8;
-      if (asset.growth.includes("High") || asset.growth.includes("Moat")) attributionScore += 25;
+      if (growth.includes("High") || growth.includes("Moat")) attributionScore += 25;
     }
 
-    return { ...asset, currentPrice, pe, roa, isLive, finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
 
   const netMatrixScore = processedAssets.reduce((accum, item) => accum + item.finalScore, 0);
@@ -245,28 +348,111 @@ function runMatrixOptimization() {
 
   processedAssets.forEach(item => {
     const rowElement = document.createElement('tr');
-    const livenessBadge = item.isLive
-      ? `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`
-      : `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
+
+    let badge;
+    if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span>`;
+    else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
+    else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
+
     rowElement.innerHTML = `
-      <td><span class="ticker-txt">${item.ticker}</span><br>${livenessBadge}</td>
-      <td><strong>${item.name}</strong></td>
-      <td>${item.roa.toFixed(2)}%</td>
-      <td>${item.pe.toFixed(2)}&times;</td>
-      <td>$${item.currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-      <td>$${item.targetPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} <span style="color:var(--text-secondary); font-size:0.75rem;">(static)</span></td>
+      <td>
+        <span class="ticker-txt">${item.ticker}</span><br>${badge}
+      </td>
+      <td><input class="cell-input" data-ticker="${item.ticker}" data-field="name" type="text" value="${item.name.replace(/"/g,'&quot;')}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" type="number" step="0.01" value="${item.roa}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" type="number" step="0.01" value="${item.pe}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" type="number" step="0.01" value="${item.currentPrice}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="targetPrice" type="number" step="0.01" value="${item.targetPrice}"></td>
       <td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">
         ${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%
       </td>
-      <td class="moat-cell"><span style="font-size: 0.88rem; color: var(--text-secondary);">${item.stability}</span></td>
+      <td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability">${item.stability}</textarea></td>
       <td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>
     `;
     tbody.appendChild(rowElement);
+  });
+
+  wireUpEditableCells();
+}
+
+function wireUpEditableCells(){
+  document.querySelectorAll('.cell-input').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const ticker = e.target.getAttribute('data-ticker');
+      const field = e.target.getAttribute('data-field');
+      const isNum = e.target.classList.contains('cell-input-num');
+      let value = e.target.value;
+      if(isNum){
+        value = parseFloat(value);
+        if(isNaN(value)) return; // ignore invalid numeric input rather than corrupting the override
+      }
+      setCellOverride(ticker, field, value);
+      runMatrixOptimization();
+    });
+    // Prevent Enter key in text inputs from doing anything unexpected (like submitting).
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' && el.tagName === 'INPUT'){
+        e.preventDefault();
+        el.blur();
+      }
+    });
   });
 }
 
 // Default execution initialization
 runMatrixOptimization();
+
+// --- Wire up portfolio list management ---
+try{
+  renderListSelector();
+
+  const listSelector = document.getElementById("listSelector");
+  if(listSelector){
+    listSelector.addEventListener("change", (e) => {
+      setActiveListId(e.target.value);
+      renderRemoveList();
+      runMatrixOptimization();
+    });
+  }
+
+  const newListBtn = document.getElementById("newListBtn");
+  if(newListBtn){
+    newListBtn.addEventListener("click", () => {
+      const name = prompt("Name for the new list:", "List " + (Object.keys(getAllLists()).length + 1));
+      if(name === null || name.trim() === "") return; // user cancelled
+      createList(name.trim());
+      renderListSelector();
+      renderRemoveList();
+      runMatrixOptimization();
+    });
+  }
+
+  const renameListBtn = document.getElementById("renameListBtn");
+  if(renameListBtn){
+    renameListBtn.addEventListener("click", () => {
+      const current = getActiveList();
+      const name = prompt("Rename this list:", current.name);
+      if(name === null || name.trim() === "") return;
+      renameActiveList(name.trim());
+      renderListSelector();
+    });
+  }
+
+  const deleteListBtn = document.getElementById("deleteListBtn");
+  if(deleteListBtn){
+    deleteListBtn.addEventListener("click", () => {
+      const current = getActiveList();
+      const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
+      if(!confirmed) return;
+      deleteActiveList();
+      renderListSelector();
+      renderRemoveList();
+      runMatrixOptimization();
+    });
+  }
+}catch(err){
+  console.error("Failed to wire up list management:", err);
+}
 
 // --- Wire up Add/Remove asset panel ---
 try{
