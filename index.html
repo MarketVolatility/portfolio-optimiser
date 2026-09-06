@@ -43,6 +43,17 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .form-input:focus { outline: none; border-color: var(--accent-blue); }
 .remove-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-main); border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.85rem; }
 .remove-chip button { background: transparent; border: none; color: #ef4444; padding: 0; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+.cell-input {
+  background: transparent; border: 1px solid transparent; color: var(--text-primary);
+  font-family: inherit; font-size: 0.95rem; padding: 0.35rem 0.5rem; border-radius: 6px;
+  width: 100%; box-sizing: border-box;
+}
+.cell-input:hover { border-color: var(--border-color); }
+.cell-input:focus { outline: none; border-color: var(--accent-blue); background: var(--bg-main); }
+.cell-input-num { width: 90px; }
+.cell-textarea {
+  min-height: 60px; resize: vertical; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.4;
+}
 </style>
 </head>
 <body>
@@ -63,6 +74,14 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <button id="saveKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
     <button id="fetchLiveBtn">Fetch live data</button>
     <span id="fetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="listSelector">Portfolio List:</label>
+    <select id="listSelector" class="form-input" style="min-width:180px;"></select>
+    <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
+    <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
+    <button id="deleteListBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
   </div>
 
   <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
