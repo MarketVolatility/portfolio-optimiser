@@ -1,5 +1,5 @@
-// APP.JS BUILD: v3.2 (new lists start empty)
-console.log("app.js loaded — build v3.2 (new lists start empty)");
+// APP.JS BUILD: v4.0 (global overrides, ticker rename, sticky fix)
+console.log("app.js loaded — build v4.0 (global overrides, ticker rename, sticky fix)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -107,25 +107,87 @@ async function fetchLiveDataForAllAssets(){
 }
 
 // --- Multi-list portfolio management, persisted in localStorage ---
-// Each list: { name, customAssets: [...], removedTickers: [...], overrides: { TICKER: {field: value} } }
+// Ticker DATA (name, price, targets, stability, etc.) is now stored globally,
+// shared across every list — so editing AAPL in one list updates it everywhere
+// AAPL appears. Each list only tracks WHICH tickers it includes.
+// List shape: { name, useBaseData: bool, includedCustomTickers: [...], removedTickers: [...] }
 const DEFAULT_LIST_ID = "list-default";
 
+function getGlobalOverrides(){
+  try{ return JSON.parse(localStorage.getItem("globalOverrides") || "{}"); }
+  catch(e){ return {}; }
+}
+function saveGlobalOverrides(ov){
+  try{ localStorage.setItem("globalOverrides", JSON.stringify(ov)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function setGlobalOverride(ticker, field, value){
+  const ov = getGlobalOverrides();
+  if(!ov[ticker]) ov[ticker] = {};
+  ov[ticker][field] = value;
+  saveGlobalOverrides(ov);
+}
+
 function getAllLists(){
+  let lists = null;
   try{
     const raw = localStorage.getItem("portfolioLists");
-    if(raw) return JSON.parse(raw);
-  }catch(e){ /* fall through to migration/default */ }
+    if(raw) lists = JSON.parse(raw);
+  }catch(e){ /* fall through to fresh default */ }
 
-  // Migrate any pre-existing single-list data (from before multi-list support)
-  // into a default "List 1" so nobody's customizations get silently dropped.
-  let migratedCustom = [], migratedRemoved = [];
-  try{ migratedCustom = JSON.parse(localStorage.getItem("customAssets") || "[]"); }catch(e){}
-  try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){}
+  if(!lists){
+    // Migrate any pre-existing single-list data (from before multi-list support existed at all).
+    let migratedCustom = [], migratedRemoved = [];
+    try{ migratedCustom = JSON.parse(localStorage.getItem("customAssets") || "[]"); }catch(e){}
+    try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){}
+    lists = {
+      [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
+    };
+  }
 
-  const lists = {
-    [DEFAULT_LIST_ID]: { name: "List 1", useBaseData: true, customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
-  };
-  saveAllLists(lists);
+  // One-time, self-healing migration from the older per-list overrides/customAssets
+  // schema into the global-overrides model. Runs automatically, loses nothing.
+  let changed = false;
+  const globalOv = getGlobalOverrides();
+
+  Object.keys(lists).forEach(id => {
+    const list = lists[id];
+
+    if(Array.isArray(list.customAssets) && list.customAssets.length && typeof list.customAssets[0] === 'object'){
+      list.customAssets.forEach(asset => {
+        if(!globalOv[asset.ticker]) globalOv[asset.ticker] = {};
+        Object.keys(asset).forEach(k => {
+          if(k !== 'ticker' && globalOv[asset.ticker][k] === undefined) globalOv[asset.ticker][k] = asset[k];
+        });
+      });
+      list.includedCustomTickers = [...new Set([...(list.includedCustomTickers || []), ...list.customAssets.map(a => a.ticker)])];
+      delete list.customAssets;
+      changed = true;
+    }
+
+    if(list.overrides && typeof list.overrides === 'object' && Object.keys(list.overrides).length){
+      Object.keys(list.overrides).forEach(ticker => {
+        if(!globalOv[ticker]) globalOv[ticker] = {};
+        Object.keys(list.overrides[ticker]).forEach(field => {
+          globalOv[ticker][field] = list.overrides[ticker][field];
+        });
+      });
+      delete list.overrides;
+      changed = true;
+    }
+
+    if(list.includedCustomTickers === undefined){ list.includedCustomTickers = []; changed = true; }
+    if(list.useBaseData === undefined){ list.useBaseData = (id === DEFAULT_LIST_ID); changed = true; }
+
+    // Auto-upgrade an untouched default list name; never touches a list the user renamed.
+    if(id === DEFAULT_LIST_ID && list.name === "List 1"){ list.name = "Sample List"; changed = true; }
+  });
+
+  if(changed){
+    saveGlobalOverrides(globalOv);
+    saveAllLists(lists);
+  }
+
   return lists;
 }
 
@@ -155,7 +217,7 @@ function getActiveList(){
   const lists = getAllLists();
   const id = getActiveListId();
   if(!lists[id]){
-    lists[id] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
+    lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
     saveAllLists(lists);
   }
   return lists[id];
@@ -164,7 +226,7 @@ function getActiveList(){
 function updateActiveList(mutatorFn){
   const lists = getAllLists();
   const id = getActiveListId();
-  if(!lists[id]) lists[id] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
+  if(!lists[id]) lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
   mutatorFn(lists[id]);
   saveAllLists(lists);
 }
@@ -172,7 +234,7 @@ function updateActiveList(mutatorFn){
 function createList(name){
   const lists = getAllLists();
   const id = "list-" + Date.now();
-  lists[id] = { name: name || "New List", useBaseData: false, customAssets: [], removedTickers: [], overrides: {} };
+  lists[id] = { name: name || "New List", useBaseData: false, includedCustomTickers: [], removedTickers: [] };
   saveAllLists(lists);
   setActiveListId(id);
   return id;
@@ -188,7 +250,7 @@ function deleteActiveList(){
   delete lists[id];
   const remainingIds = Object.keys(lists);
   if(remainingIds.length === 0){
-    lists[DEFAULT_LIST_ID] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
+    lists[DEFAULT_LIST_ID] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
     saveAllLists(lists);
     setActiveListId(DEFAULT_LIST_ID);
   } else {
@@ -200,55 +262,97 @@ function deleteActiveList(){
 function getWorkingData(){
   const list = getActiveList();
   const removed = list.removedTickers || [];
-  const overrides = list.overrides || {};
-  const base = list.useBaseData ? marketData.filter(a => !removed.includes(a.ticker)) : [];
-  const custom = list.customAssets || [];
-  const combined = [...base, ...custom];
-  return combined.map(asset => ({ ...asset, _overrides: overrides[asset.ticker] || {} }));
+  const overrides = getGlobalOverrides();
+  const baseTickers = list.useBaseData ? marketData.filter(a => !removed.includes(a.ticker)).map(a => a.ticker) : [];
+  const customTickers = (list.includedCustomTickers || []).filter(t => !removed.includes(t));
+  const allTickers = [...new Set([...baseTickers, ...customTickers])];
+
+  return allTickers.map(ticker => {
+    const baseAsset = marketData.find(a => a.ticker === ticker);
+    const shell = baseAsset
+      ? { ...baseAsset }
+      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Not yet rated.", growth: "Unclassified" };
+    return { ...shell, _overrides: overrides[ticker] || {} };
+  });
 }
 
 function addAsset({ ticker, name, targetPrice, stability, growth }){
+  const baseAsset = marketData.find(a => a.ticker === ticker);
+  const existingOv = getGlobalOverrides()[ticker] || {};
+  setGlobalOverride(ticker, 'name', name || existingOv.name || (baseAsset && baseAsset.name) || ticker);
+  if(targetPrice) setGlobalOverride(ticker, 'targetPrice', targetPrice);
+  if(stability) setGlobalOverride(ticker, 'stability', stability);
+  if(growth) setGlobalOverride(ticker, 'growth', growth);
+
   updateActiveList(list => {
     list.removedTickers = (list.removedTickers || []).filter(t => t !== ticker);
-    const custom = list.customAssets || [];
-    const existingIdx = custom.findIndex(a => a.ticker === ticker);
-    const newAsset = {
-      ticker, name,
-      roa: 0, pe: 0, currentPrice: targetPrice || 1, // placeholders until a live fetch runs
-      targetPrice: targetPrice || 0,
-      stability: stability || "Not yet rated.",
-      growth: growth || "Unclassified"
-    };
-    if(existingIdx >= 0) custom[existingIdx] = newAsset;
-    else custom.push(newAsset);
-    list.customAssets = custom;
+    const inc = list.includedCustomTickers || [];
+    if(!inc.includes(ticker)) inc.push(ticker);
+    list.includedCustomTickers = inc;
   });
 }
 
 function removeAsset(ticker){
+  // Removes the ticker from THIS list only — its edited data stays available
+  // globally in case it's re-added here or added to another list later.
   updateActiveList(list => {
-    list.customAssets = (list.customAssets || []).filter(a => a.ticker !== ticker);
+    list.includedCustomTickers = (list.includedCustomTickers || []).filter(t => t !== ticker);
     const removed = list.removedTickers || [];
     if(!removed.includes(ticker)) removed.push(ticker);
     list.removedTickers = removed;
-    if(list.overrides) delete list.overrides[ticker];
   });
+}
+
+function restoreAllBaseTickers(){
+  // Un-hides any base tickers previously removed from this list, WITHOUT
+  // touching custom additions — fixes "a base ticker like NVDA disappeared"
+  // without wiping anything else you've built in this list.
+  updateActiveList(list => { list.removedTickers = []; });
 }
 
 function resetAssetsToDefault(){
   updateActiveList(list => {
-    list.customAssets = [];
+    list.includedCustomTickers = [];
     list.removedTickers = [];
-    list.overrides = {};
   });
 }
 
 function setCellOverride(ticker, field, value){
+  setGlobalOverride(ticker, field, value);
+}
+
+function renameTicker(oldTicker, newTicker){
+  if(!newTicker || newTicker === oldTicker) return;
+  // Snapshot the OLD ticker's current effective values (base + any override)
+  // so nothing is lost when it becomes a new symbol.
+  const current = getWorkingData().find(a => a.ticker === oldTicker);
+  if(!current) return;
+  const ov = current._overrides || {};
+  const snapshot = {
+    name: ov.name !== undefined ? ov.name : current.name,
+    roa: ov.roa !== undefined ? ov.roa : current.roa,
+    pe: ov.pe !== undefined ? ov.pe : current.pe,
+    currentPrice: ov.currentPrice !== undefined ? ov.currentPrice : current.currentPrice,
+    targetPrice: ov.targetPrice !== undefined ? ov.targetPrice : current.targetPrice,
+    stability: ov.stability !== undefined ? ov.stability : current.stability,
+    growth: ov.growth !== undefined ? ov.growth : current.growth,
+  };
+  const globalOv = getGlobalOverrides();
+  globalOv[newTicker] = { ...(globalOv[newTicker] || {}), ...snapshot };
+  saveGlobalOverrides(globalOv);
+
+  // Swap membership in the ACTIVE list only: hide old symbol here, include new one.
   updateActiveList(list => {
-    if(!list.overrides) list.overrides = {};
-    if(!list.overrides[ticker]) list.overrides[ticker] = {};
-    list.overrides[ticker][field] = value;
+    list.includedCustomTickers = (list.includedCustomTickers || []).filter(t => t !== oldTicker);
+    if(!list.includedCustomTickers.includes(newTicker)) list.includedCustomTickers.push(newTicker);
+    const removed = list.removedTickers || [];
+    if(!removed.includes(oldTicker)) removed.push(oldTicker);
+    list.removedTickers = removed.filter(t => t !== newTicker);
   });
+
+  // Live data was fetched under the old symbol; it doesn't necessarily apply to
+  // the new one, so clear it and let the next "Fetch live data" refresh it properly.
+  delete liveDataMap[oldTicker];
 }
 
 function renderListSelector(){
@@ -375,7 +479,7 @@ function runMatrixOptimization() {
 
     rowElement.innerHTML = `
       <td>
-        <span class="ticker-txt">${item.ticker}</span><br>${badge}
+        <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}"><br>${badge}
       </td>
       <td><input class="cell-input" data-ticker="${item.ticker}" data-field="name" type="text" value="${item.name.replace(/"/g,'&quot;')}"></td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" type="number" step="0.01" value="${item.roa}"></td>
@@ -399,6 +503,27 @@ function wireUpEditableCells(){
     el.addEventListener('change', (e) => {
       const ticker = e.target.getAttribute('data-ticker');
       const field = e.target.getAttribute('data-field');
+
+      if(field === '__ticker_rename__'){
+        const newTicker = e.target.value.trim().toUpperCase();
+        if(!newTicker){
+          e.target.value = ticker; // revert empty input
+          return;
+        }
+        if(newTicker === ticker) return; // no change
+        const alreadyInList = getWorkingData().some(a => a.ticker === newTicker);
+        if(alreadyInList){
+          alert(`${newTicker} is already in this list. Remove it first if you want to replace it.`);
+          e.target.value = ticker;
+          return;
+        }
+        renameTicker(ticker, newTicker);
+        runMatrixOptimization();
+        renderRemoveList();
+        renderListSelector();
+        return;
+      }
+
       const isNum = e.target.classList.contains('cell-input-num');
       let value = e.target.value;
       if(isNum){
@@ -541,6 +666,19 @@ try{
       resetAssetsToDefault();
       renderRemoveList();
       runMatrixOptimization();
+      renderListSelector();
+      showListActionStatus("List reset to default.");
+    });
+  }
+
+  const restoreBaseBtn = document.getElementById("restoreBaseBtn");
+  if(restoreBaseBtn){
+    restoreBaseBtn.addEventListener("click", () => {
+      restoreAllBaseTickers();
+      renderRemoveList();
+      runMatrixOptimization();
+      renderListSelector();
+      showListActionStatus("Restored any missing base tickers (custom additions kept).");
     });
   }
 
