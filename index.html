@@ -29,7 +29,7 @@ pointer; outline: none; transition: border 0.2s; }
 select:focus { border-color: var(--accent-blue); }
 button { background: var(--accent-blue); color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 button:hover { background: var(--accent-hover); }
-.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: visible; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
 table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
 th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); vertical-align: top; line-height: 1.5; }
@@ -122,6 +122,10 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </select>
     <button id="optimizeBtn">Execute Allocation Logic</button>
   </div>
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+    <h2 id="activeListHeading" style="font-size:1.1rem; color:var(--text-secondary); font-weight:600;">Now viewing: —</h2>
+    <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
   <div class="table-container">
     <table id="resultsTable">
       <thead>
@@ -141,7 +145,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v3.0 (multi-list + editable cells)
+    HTML build: v3.1 (list feedback + sticky header fix)
   </div>
 </div>
 <script src="data.js"></script>
