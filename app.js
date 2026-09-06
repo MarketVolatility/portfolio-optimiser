@@ -1,5 +1,5 @@
-// APP.JS BUILD: v3.0 (multi-list + editable cells)
-console.log("app.js loaded — build v3.0 (multi-list + editable cells)");
+// APP.JS BUILD: v3.1 (list feedback + sticky header fix)
+console.log("app.js loaded — build v3.1 (list feedback + sticky header fix)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -253,17 +253,33 @@ function setCellOverride(ticker, field, value){
 
 function renderListSelector(){
   const selector = document.getElementById("listSelector");
-  if(!selector) return;
+  const heading = document.getElementById("activeListHeading");
   const lists = getAllLists();
   const activeId = getActiveListId();
-  selector.innerHTML = "";
-  Object.keys(lists).forEach(id => {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = lists[id].name;
-    if(id === activeId) opt.selected = true;
-    selector.appendChild(opt);
-  });
+
+  if(selector){
+    selector.innerHTML = "";
+    Object.keys(lists).forEach(id => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = lists[id].name;
+      if(id === activeId) opt.selected = true;
+      selector.appendChild(opt);
+    });
+  }
+
+  if(heading){
+    const activeName = lists[activeId] ? lists[activeId].name : "—";
+    const count = getWorkingData().length;
+    heading.textContent = `Now viewing: ${activeName} (${count} assets)`;
+  }
+}
+
+function showListActionStatus(message){
+  const el = document.getElementById("listActionStatus");
+  if(!el) return;
+  el.textContent = message;
+  setTimeout(() => { if(el.textContent === message) el.textContent = ""; }, 4000);
 }
 
 function renderRemoveList(){
@@ -414,7 +430,9 @@ try{
     listSelector.addEventListener("change", (e) => {
       setActiveListId(e.target.value);
       renderRemoveList();
+      renderListSelector();
       runMatrixOptimization();
+      showListActionStatus(`Switched to "${getActiveList().name}".`);
     });
   }
 
@@ -427,6 +445,7 @@ try{
       renderListSelector();
       renderRemoveList();
       runMatrixOptimization();
+      showListActionStatus(`Created and switched to "${name.trim()}". Use the dropdown above to switch between lists.`);
     });
   }
 
@@ -438,6 +457,7 @@ try{
       if(name === null || name.trim() === "") return;
       renameActiveList(name.trim());
       renderListSelector();
+      showListActionStatus(`Renamed to "${name.trim()}".`);
     });
   }
 
@@ -451,6 +471,7 @@ try{
       renderListSelector();
       renderRemoveList();
       runMatrixOptimization();
+      showListActionStatus(`Deleted "${current.name}". Now viewing "${getActiveList().name}".`);
     });
   }
 }catch(err){
