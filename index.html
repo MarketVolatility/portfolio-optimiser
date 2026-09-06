@@ -29,7 +29,7 @@ pointer; outline: none; transition: border 0.2s; }
 select:focus { border-color: var(--accent-blue); }
 button { background: var(--accent-blue); color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 button:hover { background: var(--accent-hover); }
-.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: visible; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: auto; max-height: 75vh; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
 table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 0.95rem; }
 th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: -webkit-sticky; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); vertical-align: top; line-height: 1.5; }
@@ -56,6 +56,11 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-textarea {
   min-height: 60px; resize: vertical; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.4;
 }
+.row-delete-btn {
+  background: transparent; border: 1px solid #ef4444; color: #ef4444; border-radius: 6px;
+  width: 32px; height: 32px; font-size: 1.1rem; font-weight: 700; cursor: pointer; line-height: 1;
+}
+.row-delete-btn:hover { background: rgba(239, 68, 68, 0.15); }
 </style>
 </head>
 <body>
@@ -123,6 +128,13 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
       <option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
     </select>
+    <label for="sortMode">Sort by:</label>
+    <select id="sortMode">
+      <option value="default">Optimized Weight (default)</option>
+      <option value="alpha">Alphabetical (Ticker)</option>
+      <option value="date-new">Date Added (newest first)</option>
+      <option value="date-old">Date Added (oldest first)</option>
+    </select>
     <button id="optimizeBtn">Execute Allocation Logic</button>
   </div>
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
@@ -142,13 +154,14 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
           <th>Implied Upside</th>
           <th>Strategic Moat & Stability Profile</th>
           <th>Optimized Weight Allocation</th>
+          <th>Remove</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v4.0 (global overrides, ticker rename, sticky fix)
+    HTML build: v4.1 (live badge fix, sort, row delete, sticky v2)
   </div>
 </div>
 <script src="data.js"></script>
