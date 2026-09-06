@@ -1,3 +1,6 @@
+// APP.JS BUILD: v3.0 (multi-list + editable cells)
+console.log("app.js loaded — build v3.0 (multi-list + editable cells)");
+
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
 let lastFetchTime = null;
