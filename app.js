@@ -1,5 +1,5 @@
-// APP.JS BUILD: v4.0 (global overrides, ticker rename, sticky fix)
-console.log("app.js loaded — build v4.0 (global overrides, ticker rename, sticky fix)");
+// APP.JS BUILD: v4.1 (live badge fix, sort, row delete, sticky v2)
+console.log("app.js loaded — build v4.1 (live badge fix, sort, row delete, sticky v2)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -283,6 +283,7 @@ function addAsset({ ticker, name, targetPrice, stability, growth }){
   if(targetPrice) setGlobalOverride(ticker, 'targetPrice', targetPrice);
   if(stability) setGlobalOverride(ticker, 'stability', stability);
   if(growth) setGlobalOverride(ticker, 'growth', growth);
+  if(existingOv.dateAdded === undefined) setGlobalOverride(ticker, 'dateAdded', Date.now());
 
   updateActiveList(list => {
     list.removedTickers = (list.removedTickers || []).filter(t => t !== ticker);
@@ -410,6 +411,7 @@ function renderRemoveList(){
 }
 
 document.getElementById('optimizeBtn').addEventListener('click', runMatrixOptimization);
+document.getElementById('sortMode')?.addEventListener('change', runMatrixOptimization);
 
 function runMatrixOptimization() {
   const mandate = document.getElementById('riskProfile').value;
@@ -431,8 +433,9 @@ function runMatrixOptimization() {
     const stability = ov.stability !== undefined ? ov.stability : asset.stability;
     const growth = ov.growth !== undefined ? ov.growth : asset.growth;
 
-    const isLive = !!(live && live.price !== undefined) && ov.currentPrice === undefined;
-    const isEdited = Object.keys(ov).length > 0;
+    const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
+    const isLive = !!(live && live.price !== undefined) && !priceRelevantOverride;
+    const isEdited = priceRelevantOverride;
 
     let upsidePercentage = (targetPrice - currentPrice) / currentPrice;
     let attributionScore = 0;
@@ -453,7 +456,7 @@ function runMatrixOptimization() {
       if (growth.includes("High") || growth.includes("Moat")) attributionScore += 25;
     }
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0), finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
 
   const netMatrixScore = processedAssets.reduce((accum, item) => accum + item.finalScore, 0);
@@ -463,7 +466,14 @@ function runMatrixOptimization() {
     return { ...item, allocationWeight: targetAllocationWeight };
   });
 
-  if (mandate === 'tactical') {
+  const sortMode = document.getElementById('sortMode') ? document.getElementById('sortMode').value : 'default';
+  if(sortMode === 'alpha'){
+    processedAssets.sort((a, b) => a.ticker.localeCompare(b.ticker));
+  } else if(sortMode === 'date-new'){
+    processedAssets.sort((a, b) => b.dateAdded - a.dateAdded);
+  } else if(sortMode === 'date-old'){
+    processedAssets.sort((a, b) => a.dateAdded - b.dateAdded);
+  } else if (mandate === 'tactical') {
     processedAssets.sort((a, b) => b.calculatedUpside - a.calculatedUpside);
   } else {
     processedAssets.sort((a, b) => b.allocationWeight - a.allocationWeight);
@@ -491,11 +501,25 @@ function runMatrixOptimization() {
       </td>
       <td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability">${item.stability}</textarea></td>
       <td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>
+      <td><button class="row-delete-btn" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button></td>
     `;
     tbody.appendChild(rowElement);
   });
 
   wireUpEditableCells();
+  wireUpRowDeleteButtons();
+}
+
+function wireUpRowDeleteButtons(){
+  document.querySelectorAll('.row-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const ticker = e.target.getAttribute('data-ticker');
+      removeAsset(ticker);
+      runMatrixOptimization();
+      renderRemoveList();
+      renderListSelector();
+    });
+  });
 }
 
 function wireUpEditableCells(){
