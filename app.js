@@ -47,7 +47,8 @@ async function fetchLiveDataForAllAssets(){
   let failCount = 0;
   const failedTickers = [];
 
-  for(const asset of marketData){
+  const workingAssets = getWorkingData();
+  for(const asset of workingAssets){
     try{
       const [price, metrics] = await Promise.all([
         fetchFinnhubQuote(asset.ticker, apiKey),
@@ -75,9 +76,98 @@ async function fetchLiveDataForAllAssets(){
     statusEl.textContent = `Live data updated for all ${successCount} tickers at ${lastFetchTime.toLocaleTimeString()}.`;
     statusEl.style.color = "var(--emerald)";
   } else {
-    statusEl.textContent = `Updated ${successCount}/${marketData.length} tickers at ${lastFetchTime.toLocaleTimeString()}. Fallback (static) data used for: ${failedTickers.join(", ")}.`;
+    statusEl.textContent = `Updated ${successCount}/${workingAssets.length} tickers at ${lastFetchTime.toLocaleTimeString()}. Fallback (static) data used for: ${failedTickers.join(", ")}.`;
     statusEl.style.color = "var(--amber)";
   }
+}
+
+// --- Asset management (add/remove), persisted in localStorage ---
+function getCustomAssets(){
+  try{ return JSON.parse(localStorage.getItem("customAssets") || "[]"); }
+  catch(e){ return []; }
+}
+function saveCustomAssets(list){
+  try{ localStorage.setItem("customAssets", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function getRemovedTickers(){
+  try{ return JSON.parse(localStorage.getItem("removedTickers") || "[]"); }
+  catch(e){ return []; }
+}
+function saveRemovedTickers(list){
+  try{ localStorage.setItem("removedTickers", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function getWorkingData(){
+  const removed = getRemovedTickers();
+  const base = marketData.filter(a => !removed.includes(a.ticker));
+  const custom = getCustomAssets();
+  return [...base, ...custom];
+}
+
+function addAsset({ ticker, name, targetPrice, stability, growth }){
+  const custom = getCustomAssets();
+  const removed = getRemovedTickers();
+  // If this ticker was previously removed from the base list, un-remove it
+  // instead of creating a duplicate when the user re-adds the same symbol.
+  const newRemoved = removed.filter(t => t !== ticker);
+  saveRemovedTickers(newRemoved);
+
+  const existingIdx = custom.findIndex(a => a.ticker === ticker);
+  const newAsset = {
+    ticker, name,
+    roa: 0, pe: 0, currentPrice: targetPrice || 1, // placeholders until a live fetch runs
+    targetPrice: targetPrice || 0,
+    stability: stability || "Not yet rated.",
+    growth: growth || "Unclassified"
+  };
+  if(existingIdx >= 0){
+    custom[existingIdx] = newAsset;
+  } else {
+    custom.push(newAsset);
+  }
+  saveCustomAssets(custom);
+}
+
+function removeAsset(ticker){
+  // Remove from custom list if it's a user-added asset...
+  const custom = getCustomAssets().filter(a => a.ticker !== ticker);
+  saveCustomAssets(custom);
+  // ...and also mark base-list tickers as removed so they stay hidden.
+  const removed = getRemovedTickers();
+  if(!removed.includes(ticker)){
+    removed.push(ticker);
+    saveRemovedTickers(removed);
+  }
+}
+
+function resetAssetsToDefault(){
+  saveCustomAssets([]);
+  saveRemovedTickers([]);
+}
+
+function renderRemoveList(){
+  const container = document.getElementById("removeList");
+  if(!container) return;
+  container.innerHTML = "";
+  const working = getWorkingData();
+  if(working.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets in the table.</span>`;
+    return;
+  }
+  working.forEach(asset => {
+    const chip = document.createElement("div");
+    chip.className = "remove-chip";
+    chip.innerHTML = `<span>${asset.ticker}</span><button data-ticker="${asset.ticker}" title="Remove ${asset.ticker}">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", (e) => {
+      const t = e.target.getAttribute("data-ticker");
+      removeAsset(t);
+      renderRemoveList();
+      runMatrixOptimization();
+    });
+    container.appendChild(chip);
+  });
 }
 
 document.getElementById('optimizeBtn').addEventListener('click', runMatrixOptimization);
@@ -87,7 +177,9 @@ function runMatrixOptimization() {
   const tbody = document.querySelector('#resultsTable tbody');
   tbody.innerHTML = '';
 
-  let processedAssets = marketData.map(asset => {
+  const workingData = getWorkingData();
+
+  let processedAssets = workingData.map(asset => {
     const live = liveDataMap[asset.ticker];
     const currentPrice = (live && live.price !== undefined) ? live.price : asset.currentPrice;
     const pe = (live && live.pe !== undefined) ? live.pe : asset.pe;
@@ -153,6 +245,77 @@ function runMatrixOptimization() {
 
 // Default execution initialization
 runMatrixOptimization();
+
+// --- Wire up Add/Remove asset panel ---
+try{
+  const tabAddBtn = document.getElementById("tabAddBtn");
+  const tabRemoveBtn = document.getElementById("tabRemoveBtn");
+  const addPanel = document.getElementById("addPanel");
+  const removePanel = document.getElementById("removePanel");
+
+  if(tabAddBtn && tabRemoveBtn && addPanel && removePanel){
+    tabAddBtn.addEventListener("click", () => {
+      addPanel.style.display = "block";
+      removePanel.style.display = "none";
+      tabAddBtn.classList.add("active-tab");
+      tabRemoveBtn.classList.remove("active-tab");
+    });
+    tabRemoveBtn.addEventListener("click", () => {
+      addPanel.style.display = "none";
+      removePanel.style.display = "block";
+      tabRemoveBtn.classList.add("active-tab");
+      tabAddBtn.classList.remove("active-tab");
+      renderRemoveList();
+    });
+  } else {
+    console.warn("Add/Remove tab elements missing — index.html may be out of date.");
+  }
+
+  const addAssetBtn = document.getElementById("addAssetBtn");
+  if(addAssetBtn){
+    addAssetBtn.addEventListener("click", () => {
+      const ticker = document.getElementById("newTicker").value.trim().toUpperCase();
+      const name = document.getElementById("newName").value.trim();
+      const targetPrice = parseFloat(document.getElementById("newTarget").value);
+      const stability = document.getElementById("newStability").value.trim();
+      const growth = document.getElementById("newGrowth").value.trim();
+      const statusEl = document.getElementById("addStatus");
+
+      if(!ticker || !name){
+        statusEl.textContent = "Ticker and Company Name are required.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+
+      addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability, growth });
+      runMatrixOptimization();
+
+      statusEl.textContent = `${ticker} added. Click "Fetch live data" above to pull its real price/P/E/ROA.`;
+      statusEl.style.color = "var(--emerald)";
+
+      document.getElementById("newTicker").value = "";
+      document.getElementById("newName").value = "";
+      document.getElementById("newTarget").value = "";
+      document.getElementById("newStability").value = "";
+      document.getElementById("newGrowth").value = "";
+    });
+  } else {
+    console.warn("addAssetBtn not found — index.html may be out of date.");
+  }
+
+  const resetAssetsBtn = document.getElementById("resetAssetsBtn");
+  if(resetAssetsBtn){
+    resetAssetsBtn.addEventListener("click", () => {
+      resetAssetsToDefault();
+      renderRemoveList();
+      runMatrixOptimization();
+    });
+  }
+
+  renderRemoveList();
+}catch(err){
+  console.error("Failed to wire up Add/Remove asset panel:", err);
+}
 
 // --- Wire up live-data controls (defensive: won't break if elements are missing) ---
 try{
