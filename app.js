@@ -1,5 +1,5 @@
-// APP.JS BUILD: v3.1 (list feedback + sticky header fix)
-console.log("app.js loaded — build v3.1 (list feedback + sticky header fix)");
+// APP.JS BUILD: v3.2 (new lists start empty)
+console.log("app.js loaded — build v3.2 (new lists start empty)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -123,7 +123,7 @@ function getAllLists(){
   try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){}
 
   const lists = {
-    [DEFAULT_LIST_ID]: { name: "List 1", customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
+    [DEFAULT_LIST_ID]: { name: "List 1", useBaseData: true, customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
   };
   saveAllLists(lists);
   return lists;
@@ -155,7 +155,7 @@ function getActiveList(){
   const lists = getAllLists();
   const id = getActiveListId();
   if(!lists[id]){
-    lists[id] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+    lists[id] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
     saveAllLists(lists);
   }
   return lists[id];
@@ -164,7 +164,7 @@ function getActiveList(){
 function updateActiveList(mutatorFn){
   const lists = getAllLists();
   const id = getActiveListId();
-  if(!lists[id]) lists[id] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+  if(!lists[id]) lists[id] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
   mutatorFn(lists[id]);
   saveAllLists(lists);
 }
@@ -172,7 +172,7 @@ function updateActiveList(mutatorFn){
 function createList(name){
   const lists = getAllLists();
   const id = "list-" + Date.now();
-  lists[id] = { name: name || "New List", customAssets: [], removedTickers: [], overrides: {} };
+  lists[id] = { name: name || "New List", useBaseData: false, customAssets: [], removedTickers: [], overrides: {} };
   saveAllLists(lists);
   setActiveListId(id);
   return id;
@@ -188,7 +188,7 @@ function deleteActiveList(){
   delete lists[id];
   const remainingIds = Object.keys(lists);
   if(remainingIds.length === 0){
-    lists[DEFAULT_LIST_ID] = { name: "List 1", customAssets: [], removedTickers: [], overrides: {} };
+    lists[DEFAULT_LIST_ID] = { name: "List 1", useBaseData: true, customAssets: [], removedTickers: [], overrides: {} };
     saveAllLists(lists);
     setActiveListId(DEFAULT_LIST_ID);
   } else {
@@ -201,7 +201,7 @@ function getWorkingData(){
   const list = getActiveList();
   const removed = list.removedTickers || [];
   const overrides = list.overrides || {};
-  const base = marketData.filter(a => !removed.includes(a.ticker));
+  const base = list.useBaseData ? marketData.filter(a => !removed.includes(a.ticker)) : [];
   const custom = list.customAssets || [];
   const combined = [...base, ...custom];
   return combined.map(asset => ({ ...asset, _overrides: overrides[asset.ticker] || {} }));
