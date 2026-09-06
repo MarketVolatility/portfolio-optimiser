@@ -21,14 +21,32 @@ async function fetchFinnhubQuote(ticker, apiKey){
   return data.c; // current price
 }
 
-async function fetchFinnhubMetrics(ticker, apiKey){
+async function fetchFinnhubMetrics(ticker, apiKey, livePrice){
   const res = await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${apiKey}`);
   const data = await res.json();
   if(data.error) throw new Error(data.error);
   const m = data.metric || {};
-  const pe = m.peExclExtraTTM ?? m.peTTM ?? m.peBasicExclExtraTTM;
-  const roa = m.roaTTM ?? m.roaRfy;
-  return { pe, roa };
+
+  let pe = m.peExclExtraTTM ?? m.peTTM ?? m.peBasicExclExtraTTM ?? m.peNormalizedAnnual ?? m.peInclExtraTTM;
+  let peSource = pe !== undefined ? "finnhub-ratio" : null;
+
+  // Fallback: Finnhub often has raw EPS even when it lacks a pre-computed P/E
+  // ratio (common for recent IPOs/SPACs and thinly-covered small caps).
+  if(pe === undefined || pe === null || isNaN(pe)){
+    const eps = m.epsExclExtraItemsTTM ?? m.epsInclExtraItemsTTM ?? m.epsTTM ?? m.epsNormalizedAnnual;
+    if(eps !== undefined && eps !== null && !isNaN(eps) && eps !== 0 && livePrice){
+      pe = livePrice / eps;
+      peSource = "computed-from-eps";
+    }
+  }
+
+  const roa = m.roaTTM ?? m.roaRfy ?? m.roaAnnual;
+
+  return {
+    pe: (pe !== undefined && pe !== null && !isNaN(pe)) ? pe : undefined,
+    roa: (roa !== undefined && roa !== null && !isNaN(roa)) ? roa : undefined,
+    peSource
+  };
 }
 
 async function fetchLiveDataForAllAssets(){
@@ -46,19 +64,19 @@ async function fetchLiveDataForAllAssets(){
   let successCount = 0;
   let failCount = 0;
   const failedTickers = [];
+  const noPeTickers = [];
 
   const workingAssets = getWorkingData();
   for(const asset of workingAssets){
     try{
-      const [price, metrics] = await Promise.all([
-        fetchFinnhubQuote(asset.ticker, apiKey),
-        fetchFinnhubMetrics(asset.ticker, apiKey)
-      ]);
+      const price = await fetchFinnhubQuote(asset.ticker, apiKey);
+      const metrics = await fetchFinnhubMetrics(asset.ticker, apiKey, price);
       liveDataMap[asset.ticker] = {
         price: price,
-        pe: (metrics.pe !== undefined && metrics.pe !== null && !isNaN(metrics.pe)) ? metrics.pe : undefined,
-        roa: (metrics.roa !== undefined && metrics.roa !== null && !isNaN(metrics.roa)) ? metrics.roa : undefined,
+        pe: metrics.pe,
+        roa: metrics.roa,
       };
+      if(metrics.pe === undefined) noPeTickers.push(asset.ticker);
       successCount++;
     }catch(err){
       liveDataMap[asset.ticker] = undefined;
@@ -72,13 +90,17 @@ async function fetchLiveDataForAllAssets(){
   lastFetchTime = new Date();
   runMatrixOptimization();
 
+  let msgParts = [];
   if(failCount === 0){
-    statusEl.textContent = `Live data updated for all ${successCount} tickers at ${lastFetchTime.toLocaleTimeString()}.`;
-    statusEl.style.color = "var(--emerald)";
+    msgParts.push(`Live data updated for all ${successCount} tickers at ${lastFetchTime.toLocaleTimeString()}.`);
   } else {
-    statusEl.textContent = `Updated ${successCount}/${workingAssets.length} tickers at ${lastFetchTime.toLocaleTimeString()}. Fallback (static) data used for: ${failedTickers.join(", ")}.`;
-    statusEl.style.color = "var(--amber)";
+    msgParts.push(`Updated ${successCount}/${workingAssets.length} tickers at ${lastFetchTime.toLocaleTimeString()}. Fully failed (using static fallback): ${failedTickers.join(", ")}.`);
   }
+  if(noPeTickers.length > 0){
+    msgParts.push(`No P/E data available from Finnhub for: ${noPeTickers.join(", ")} (common for recent IPOs/SPACs or thinly-covered small caps — price/ROA still updated where possible).`);
+  }
+  statusEl.textContent = msgParts.join(" ");
+  statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
 }
 
 // --- Asset management (add/remove), persisted in localStorage ---
