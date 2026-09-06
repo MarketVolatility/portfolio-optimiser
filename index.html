@@ -30,13 +30,15 @@ select:focus { border-color: var(--accent-blue); }
 button { background: var(--accent-blue); color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 button:hover { background: var(--accent-hover); }
 .table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: visible; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; }
-th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 0.95rem; }
+th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: -webkit-sticky; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); vertical-align: top; line-height: 1.5; }
 tr:hover { background: rgba(255, 255, 255, 0.02); }
 .allocation-badge { background: rgba(37, 99, 235, 0.2); color: #60a5fa; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 700; font-size: 0.9rem; display: inline-block; border: 1px solid rgba(37, 99, 235, 0.3); }
 .moat-cell { max-width: 280px; font-size: 0.88rem; }
 .ticker-txt { font-weight: 700; color: #fff; background: #1e293b; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+.cell-input-ticker { font-weight: 700; color: #fff; background: #1e293b; border-radius: 4px; font-size: 0.85rem; width: 90px; text-transform: uppercase; }
+.cell-input-ticker:hover, .cell-input-ticker:focus { border-color: var(--accent-blue); }
 .tab-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .tab-btn.active-tab { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
 .form-input { background: var(--bg-main); color: #fff; border: 1px solid var(--border-color); padding: 0.65rem 0.9rem; border-radius: 8px; font-size: 0.9rem; font-family: inherit; }
@@ -108,6 +110,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <div id="removeList" style="display:flex; flex-wrap:wrap; gap:0.5rem;"></div>
       <div style="margin-top:0.75rem;">
         <button id="resetAssetsBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Reset to default list</button>
+        <button id="restoreBaseBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Restore missing base tickers</button>
       </div>
     </div>
   </div>
@@ -145,7 +148,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v3.1 (list feedback + sticky header fix)
+    HTML build: v4.0 (global overrides, ticker rename, sticky fix)
   </div>
 </div>
 <script src="data.js"></script>
