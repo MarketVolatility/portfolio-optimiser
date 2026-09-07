@@ -46,9 +46,21 @@ async function fetchFinnhubMetrics(ticker, apiKey, livePrice){
 
   const roa = m.roaTTM ?? m.roaRfy ?? m.roaAnnual;
 
+  // Best-effort additions — Finnhub's free-tier /stock/metric endpoint often includes
+  // these ratios, but coverage varies by ticker. Each returns undefined (not a guess)
+  // if not found, so the static/manual value cleanly takes over instead.
+  const revenueGrowth = m.revenueGrowthTTMYoy ?? m.revenueGrowthQuarterlyYoy ?? m.revenueGrowth3Y ?? m.revenueGrowth5Y;
+  const netMargin = m.netProfitMarginTTM ?? m.netProfitMarginAnnual;
+  const debtToEquity = m.totalDebtToEquityQuarterly ?? m.totalDebtToEquityAnnual ?? m['totalDebt/totalEquityQuarterly'] ?? m['totalDebt/totalEquityAnnual'];
+  const beta = m.beta;
+
   return {
     pe: (pe !== undefined && pe !== null && !isNaN(pe)) ? pe : undefined,
     roa: (roa !== undefined && roa !== null && !isNaN(roa)) ? roa : undefined,
+    revenueGrowth: (revenueGrowth !== undefined && revenueGrowth !== null && !isNaN(revenueGrowth)) ? revenueGrowth : undefined,
+    netMargin: (netMargin !== undefined && netMargin !== null && !isNaN(netMargin)) ? netMargin : undefined,
+    debtToEquity: (debtToEquity !== undefined && debtToEquity !== null && !isNaN(debtToEquity)) ? debtToEquity : undefined,
+    beta: (beta !== undefined && beta !== null && !isNaN(beta)) ? beta : undefined,
     peSource
   };
 }
@@ -79,6 +91,10 @@ async function fetchLiveDataForAllAssets(){
         price: price,
         pe: metrics.pe,
         roa: metrics.roa,
+        revenueGrowth: metrics.revenueGrowth,
+        netMargin: metrics.netMargin,
+        debtToEquity: metrics.debtToEquity,
+        beta: metrics.beta,
       };
       fetchFailedTickers.delete(asset.ticker);
       if(metrics.pe === undefined) noPeTickers.push(asset.ticker);
@@ -284,7 +300,8 @@ function getWorkingData(){
     const baseAsset = marketData.find(a => a.ticker === ticker);
     const shell = baseAsset
       ? { ...baseAsset }
-      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Not yet rated.", growth: "Unclassified" };
+      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Not yet rated.", growth: "Unclassified",
+          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 999, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
@@ -360,6 +377,13 @@ function renameTicker(oldTicker, newTicker){
     targetPrice: ov.targetPrice !== undefined ? ov.targetPrice : current.targetPrice,
     stability: ov.stability !== undefined ? ov.stability : current.stability,
     growth: ov.growth !== undefined ? ov.growth : current.growth,
+    revenueGrowth: ov.revenueGrowth !== undefined ? ov.revenueGrowth : current.revenueGrowth,
+    netMargin: ov.netMargin !== undefined ? ov.netMargin : current.netMargin,
+    pegRatio: ov.pegRatio !== undefined ? ov.pegRatio : current.pegRatio,
+    debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : current.debtToEquity,
+    freeCashFlow: ov.freeCashFlow !== undefined ? ov.freeCashFlow : current.freeCashFlow,
+    cashRunway: ov.cashRunway !== undefined ? ov.cashRunway : current.cashRunway,
+    beta: ov.beta !== undefined ? ov.beta : current.beta,
   };
   const globalOv = getGlobalOverrides();
   globalOv[newTicker] = { ...(globalOv[newTicker] || {}), ...snapshot };
@@ -456,6 +480,16 @@ function runMatrixOptimization() {
     const stability = ov.stability !== undefined ? ov.stability : asset.stability;
     const growth = ov.growth !== undefined ? ov.growth : asset.growth;
 
+    // New fundamentals — live fetch (where attempted) still wins over static default,
+    // manual override still wins over everything, same pattern as the fields above.
+    const revenueGrowth = ov.revenueGrowth !== undefined ? ov.revenueGrowth : ((live && live.revenueGrowth !== undefined) ? live.revenueGrowth : asset.revenueGrowth);
+    const netMargin = ov.netMargin !== undefined ? ov.netMargin : ((live && live.netMargin !== undefined) ? live.netMargin : asset.netMargin);
+    const pegRatio = ov.pegRatio !== undefined ? ov.pegRatio : asset.pegRatio;
+    const debtToEquity = ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : asset.debtToEquity);
+    const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : asset.freeCashFlow;
+    const cashRunway = ov.cashRunway !== undefined ? ov.cashRunway : asset.cashRunway;
+    const beta = ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : asset.beta);
+
     const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
     const isLive = !!(live && live.price !== undefined) && !priceRelevantOverride;
     const isEdited = priceRelevantOverride;
@@ -466,21 +500,46 @@ function runMatrixOptimization() {
 
     if (mandate === 'tactical') {
       attributionScore = upsidePercentage * 100;
+      // Tactical still leads with upside, but gives a modest nod to growth momentum
+      // and to names already carrying volatility (beta) as tactical trades tend to.
+      attributionScore += revenueGrowth * 0.3;
+      if (beta > 1) attributionScore += (beta - 1) * 5;
     } else if (mandate === 'conservative') {
       if (stability.startsWith("Ultra-High")) attributionScore += 60;
       if (stability.startsWith("High Stability")) attributionScore += 35;
       attributionScore += (120 / (pe + 1));
       if (growth.includes("Cyclical")) attributionScore -= 20;
+      // Conservative cares about quality and safety: profitability, low leverage,
+      // low volatility, and actually generating cash rather than burning it.
+      attributionScore += netMargin * 0.5;
+      attributionScore -= debtToEquity * 8;
+      attributionScore += beta < 1 ? (1 - beta) * 20 : -(beta - 1) * 10;
+      attributionScore += freeCashFlow > 0 ? 15 : -15;
+      if (pegRatio > 0 && pegRatio < 2) attributionScore += (2 - pegRatio) * 5;
     } else if (mandate === 'balanced') {
       attributionScore += roa * 1.2;
       attributionScore += upsidePercentage * 80;
+      // Balanced blends growth-at-a-reasonable-price signals with efficiency.
+      attributionScore += revenueGrowth * 0.4;
+      attributionScore += netMargin * 0.3;
+      if (pegRatio > 0) attributionScore += Math.max(0, 3 - pegRatio) * 4;
+      attributionScore -= debtToEquity * 3;
     } else if (mandate === 'aggressive') {
       attributionScore += upsidePercentage * 180;
       attributionScore += roa * 0.8;
       if (growth.includes("High") || growth.includes("Moat")) attributionScore += 25;
+      // Aggressive leans into growth and volatility, but for cash-burning speculative
+      // names specifically, a longer cash runway is what keeps the bet alive long
+      // enough to pay off — so runway matters here more than anywhere else.
+      attributionScore += revenueGrowth * 0.6;
+      if (freeCashFlow < 0 && cashRunway < 999) attributionScore += Math.min(cashRunway, 36) * 0.5;
+      if (beta > 1.5) attributionScore += (beta - 1.5) * 8;
     }
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth, isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0), finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta,
+      isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
+      finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
 
   const netMatrixScore = processedAssets.reduce((accum, item) => accum + item.finalScore, 0);
@@ -524,6 +583,13 @@ function runMatrixOptimization() {
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" data-resolved-value="${item.pe}" type="number" step="0.01" value="${item.pe}"></td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${item.currentPrice}" type="number" step="0.01" value="${item.currentPrice}"></td>
       <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="targetPrice" data-resolved-value="${item.targetPrice}" type="number" step="0.01" value="${item.targetPrice}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="revenueGrowth" data-resolved-value="${item.revenueGrowth}" type="number" step="0.1" value="${item.revenueGrowth}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="netMargin" data-resolved-value="${item.netMargin}" type="number" step="0.1" value="${item.netMargin}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pegRatio" data-resolved-value="${item.pegRatio}" type="number" step="0.01" value="${item.pegRatio}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="debtToEquity" data-resolved-value="${item.debtToEquity}" type="number" step="0.01" value="${item.debtToEquity}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="freeCashFlow" data-resolved-value="${item.freeCashFlow}" type="number" step="1" value="${item.freeCashFlow}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="cashRunway" data-resolved-value="${item.cashRunway}" type="number" step="1" value="${item.cashRunway}"></td>
+      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="beta" data-resolved-value="${item.beta}" type="number" step="0.01" value="${item.beta}"></td>
       <td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">
         ${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%
       </td>
