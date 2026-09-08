@@ -1,5 +1,5 @@
-// APP.JS BUILD: v4.5 (block duplicate list names & duplicate tickers)
-console.log("app.js loaded — build v4.5 (block duplicate list names & duplicate tickers)");
+// APP.JS BUILD: v5.0 (custom parameters + column reordering)
+console.log("app.js loaded — build v5.0 (custom parameters + column reordering)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -123,6 +123,96 @@ async function fetchLiveDataForAllAssets(){
   }
   statusEl.textContent = msgParts.join(" ");
   statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
+}
+
+// --- Column system: built-in columns, user-defined custom parameters, and ordering ---
+// Ticker (always first, sticky) and Remove (always last) are NOT part of this reorderable
+// set — everything else, including custom parameters, can be repositioned freely.
+const BUILTIN_COLUMNS = [
+  { id: "name", label: "Company Name", type: "text", computed: false },
+  { id: "roa", label: "ROA (%)", type: "number", computed: false },
+  { id: "pe", label: "P/E Multiple", type: "number", computed: false },
+  { id: "currentPrice", label: "Current Price", type: "number", computed: false },
+  { id: "targetPrice", label: "Target Price", type: "number", computed: false },
+  { id: "revenueGrowth", label: "Rev Growth (YoY%)", type: "number", computed: false },
+  { id: "netMargin", label: "Net Margin (%)", type: "number", computed: false },
+  { id: "pegRatio", label: "PEG Ratio", type: "number", computed: false },
+  { id: "debtToEquity", label: "D/E Ratio", type: "number", computed: false },
+  { id: "freeCashFlow", label: "FCF ($M)", type: "number", computed: false },
+  { id: "cashRunway", label: "Cash Runway (mo)", type: "number", computed: false },
+  { id: "beta", label: "Beta", type: "number", computed: false },
+  { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
+  { id: "stability", label: "Strategic Moat & Stability Profile", type: "textarea", computed: false },
+  { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
+];
+
+function getCustomParams(){
+  try{ return JSON.parse(localStorage.getItem("customParams") || "[]"); }
+  catch(e){ return []; }
+}
+function saveCustomParams(list){
+  try{ localStorage.setItem("customParams", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function addCustomParam({label, type, defaultValue}){
+  const order = getColumnOrder(); // capture BEFORE saving, so its defaults don't already include the new param
+  const params = getCustomParams();
+  const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const id = "custom_" + (slug || "param") + "_" + Date.now().toString(36);
+  const isText = type === "text";
+  params.push({
+    id, label: label.trim(),
+    type: isText ? "text" : "number",
+    defaultValue: isText ? (defaultValue || "") : (parseFloat(defaultValue) || 0)
+  });
+  saveCustomParams(params);
+  if(!order.includes(id)) order.push(id); // guard against duplicates regardless
+  saveColumnOrder(order);
+  return id;
+}
+
+function removeCustomParam(id){
+  saveCustomParams(getCustomParams().filter(p => p.id !== id));
+  saveColumnOrder(getColumnOrder().filter(cid => cid !== id));
+}
+
+function getAllColumnDefs(){
+  const custom = getCustomParams().map(p => ({ id: p.id, label: p.label, type: p.type, computed: false, isCustom: true, defaultValue: p.defaultValue }));
+  return [...BUILTIN_COLUMNS, ...custom];
+}
+
+function getColumnOrder(){
+  const defs = getAllColumnDefs();
+  const defaultOrder = defs.map(d => d.id);
+  try{
+    const raw = localStorage.getItem("columnOrder");
+    if(raw){
+      const saved = JSON.parse(raw);
+      const validSaved = saved.filter(id => defs.some(d => d.id === id));
+      const savedSet = new Set(validSaved);
+      // Append any columns not yet in the saved order (new custom params, or new
+      // built-in fields added in a future update) so nothing silently disappears.
+      defaultOrder.forEach(id => { if(!savedSet.has(id)) validSaved.push(id); });
+      return validSaved;
+    }
+  }catch(e){ /* fall through to default */ }
+  return defaultOrder;
+}
+
+function saveColumnOrder(order){
+  try{ localStorage.setItem("columnOrder", JSON.stringify(order)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function moveColumn(id, direction){
+  const order = getColumnOrder();
+  const idx = order.indexOf(id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  saveColumnOrder(order);
 }
 
 // --- Multi-list portfolio management, persisted in localStorage ---
@@ -385,6 +475,10 @@ function renameTicker(oldTicker, newTicker){
     cashRunway: ov.cashRunway !== undefined ? ov.cashRunway : current.cashRunway,
     beta: ov.beta !== undefined ? ov.beta : current.beta,
   };
+  // Carry over any custom parameter values too, whatever custom params currently exist.
+  getCustomParams().forEach(p => {
+    snapshot[p.id] = ov[p.id] !== undefined ? ov[p.id] : (current.customValues ? current.customValues[p.id] : p.defaultValue);
+  });
   const globalOv = getGlobalOverrides();
   globalOv[newTicker] = { ...(globalOv[newTicker] || {}), ...snapshot };
   saveGlobalOverrides(globalOv);
@@ -434,6 +528,62 @@ function showListActionStatus(message){
   setTimeout(() => { if(el.textContent === message) el.textContent = ""; }, 4000);
 }
 
+function renderCustomParamList(){
+  const container = document.getElementById("customParamList");
+  if(!container) return;
+  container.innerHTML = "";
+  const params = getCustomParams();
+  if(params.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No custom parameters yet.</span>`;
+    return;
+  }
+  params.forEach(p => {
+    const chip = document.createElement("div");
+    chip.className = "remove-chip";
+    chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", (e) => {
+      const id = e.target.getAttribute("data-id");
+      if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
+        removeCustomParam(id);
+        renderCustomParamList();
+        runMatrixOptimization();
+      }
+    });
+    container.appendChild(chip);
+  });
+}
+
+function renderColumnOrderList(){
+  const container = document.getElementById("columnOrderList");
+  if(!container) return;
+  container.innerHTML = "";
+  const order = getColumnOrder();
+  const defsById = Object.fromEntries(getAllColumnDefs().map(d => [d.id, d]));
+
+  order.forEach((colId, idx) => {
+    const def = defsById[colId];
+    if(!def) return;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
+    row.innerHTML = `
+      <span style="flex:1;">${def.label}${def.isCustom ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(custom)</span>' : ''}${def.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
+      <button class="col-move-btn" data-id="${colId}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">←</button>
+      <button class="col-move-btn" data-id="${colId}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move right" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">→</button>
+    `;
+    container.appendChild(row);
+  });
+
+  container.querySelectorAll(".col-move-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.target.getAttribute("data-id");
+      const dir = parseInt(e.target.getAttribute("data-dir"), 10);
+      moveColumn(id, dir);
+      renderColumnOrderList();
+      runMatrixOptimization();
+    });
+  });
+}
+
 function renderRemoveList(){
   const container = document.getElementById("removeList");
   if(!container) return;
@@ -460,7 +610,59 @@ function renderRemoveList(){
 document.getElementById('optimizeBtn').addEventListener('click', runMatrixOptimization);
 document.getElementById('sortMode')?.addEventListener('change', runMatrixOptimization);
 
+function escAttr(str){
+  return String(str).replace(/"/g, '&quot;');
+}
+
+function renderCellHTML(colDef, item, badge){
+  if(!colDef) return '<td></td>'; // defensive: a stale column id with no matching def
+
+  if(colDef.id === 'name'){
+    return `<td>
+        <input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${escAttr(item.name)}" type="text" value="${escAttr(item.name)}">
+        <div style="margin-top:4px;">${badge}</div>
+      </td>`;
+  }
+  if(colDef.id === 'stability'){
+    return `<td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${escAttr(item.stability)}">${item.stability}</textarea></td>`;
+  }
+  if(colDef.id === 'calculatedUpside'){
+    return `<td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%</td>`;
+  }
+  if(colDef.id === 'allocationWeight'){
+    return `<td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>`;
+  }
+  if(colDef.isCustom){
+    const val = item.customValues[colDef.id];
+    if(colDef.type === 'text'){
+      return `<td><input class="cell-input" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
+    }
+    return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
+  }
+  // Default: built-in numeric field (roa, pe, currentPrice, targetPrice, revenueGrowth, etc.)
+  const val = item[colDef.id];
+  return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
+}
+
+function renderTableHeader(){
+  const thead = document.getElementById('resultsTableHead');
+  if(!thead) return;
+  const columnOrder = getColumnOrder();
+  const allDefs = getAllColumnDefs();
+  const defsById = Object.fromEntries(allDefs.map(d => [d.id, d]));
+
+  let html = '<tr><th>Ticker</th>';
+  columnOrder.forEach(colId => {
+    const def = defsById[colId];
+    if(!def) return;
+    html += `<th>${def.label}</th>`;
+  });
+  html += '<th>Remove</th></tr>';
+  thead.innerHTML = html;
+}
+
 function runMatrixOptimization() {
+  renderTableHeader();
   const mandate = document.getElementById('riskProfile').value;
   const tbody = document.querySelector('#resultsTable tbody');
   tbody.innerHTML = '';
@@ -536,8 +738,14 @@ function runMatrixOptimization() {
       if (beta > 1.5) attributionScore += (beta - 1.5) * 8;
     }
 
+    // Custom user-defined parameters: override value if set, else the param's default.
+    const customValues = {};
+    getCustomParams().forEach(p => {
+      customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
+    });
+
     return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth,
-      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
@@ -571,32 +779,19 @@ function runMatrixOptimization() {
     else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="Finnhub couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
 
-    rowElement.innerHTML = `
-      <td>
+    const columnOrder = getColumnOrder();
+    const allDefs = getAllColumnDefs();
+    const defsById = Object.fromEntries(allDefs.map(d => [d.id, d]));
+
+    const tickerCell = `<td>
         <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">
-      </td>
-      <td>
-        <input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${item.name.replace(/"/g,'&quot;')}" type="text" value="${item.name.replace(/"/g,'&quot;')}">
-        <div style="margin-top:4px;">${badge}</div>
-      </td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="roa" data-resolved-value="${item.roa}" type="number" step="0.01" value="${item.roa}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pe" data-resolved-value="${item.pe}" type="number" step="0.01" value="${item.pe}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${item.currentPrice}" type="number" step="0.01" value="${item.currentPrice}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="targetPrice" data-resolved-value="${item.targetPrice}" type="number" step="0.01" value="${item.targetPrice}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="revenueGrowth" data-resolved-value="${item.revenueGrowth}" type="number" step="0.1" value="${item.revenueGrowth}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="netMargin" data-resolved-value="${item.netMargin}" type="number" step="0.1" value="${item.netMargin}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="pegRatio" data-resolved-value="${item.pegRatio}" type="number" step="0.01" value="${item.pegRatio}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="debtToEquity" data-resolved-value="${item.debtToEquity}" type="number" step="0.01" value="${item.debtToEquity}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="freeCashFlow" data-resolved-value="${item.freeCashFlow}" type="number" step="1" value="${item.freeCashFlow}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="cashRunway" data-resolved-value="${item.cashRunway}" type="number" step="1" value="${item.cashRunway}"></td>
-      <td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="beta" data-resolved-value="${item.beta}" type="number" step="0.01" value="${item.beta}"></td>
-      <td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">
-        ${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%
-      </td>
-      <td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${item.stability.replace(/"/g,'&quot;')}">${item.stability}</textarea></td>
-      <td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>
-      <td><button class="row-delete-btn" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button></td>
-    `;
+      </td>`;
+
+    const middleCells = columnOrder.map(colId => renderCellHTML(defsById[colId], item, badge)).join("\n      ");
+
+    const removeCell = `<td><button class="row-delete-btn" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button></td>`;
+
+    rowElement.innerHTML = tickerCell + "\n      " + middleCells + "\n      " + removeCell;
     tbody.appendChild(rowElement);
   });
 
@@ -745,29 +940,27 @@ try{
   console.error("Failed to wire up list management:", err);
 }
 
-// --- Wire up Add/Remove asset panel ---
+// --- Wire up Add/Remove asset panel + new Add Parameter / Reorder Columns tabs ---
 try{
-  const tabAddBtn = document.getElementById("tabAddBtn");
-  const tabRemoveBtn = document.getElementById("tabRemoveBtn");
-  const addPanel = document.getElementById("addPanel");
-  const removePanel = document.getElementById("removePanel");
-
-  if(tabAddBtn && tabRemoveBtn && addPanel && removePanel){
-    tabAddBtn.addEventListener("click", () => {
-      addPanel.style.display = "block";
-      removePanel.style.display = "none";
-      tabAddBtn.classList.add("active-tab");
-      tabRemoveBtn.classList.remove("active-tab");
-    });
-    tabRemoveBtn.addEventListener("click", () => {
-      addPanel.style.display = "none";
-      removePanel.style.display = "block";
-      tabRemoveBtn.classList.add("active-tab");
-      tabAddBtn.classList.remove("active-tab");
-      renderRemoveList();
-    });
+  const tabs = [
+    { btn: "tabAddBtn", panel: "addPanel", onShow: null },
+    { btn: "tabRemoveBtn", panel: "removePanel", onShow: renderRemoveList },
+    { btn: "tabAddParamBtn", panel: "addParamPanel", onShow: renderCustomParamList },
+    { btn: "tabColumnsBtn", panel: "columnsPanel", onShow: renderColumnOrderList },
+  ];
+  const missing = tabs.some(t => !document.getElementById(t.btn) || !document.getElementById(t.panel));
+  if(missing){
+    console.warn("One or more tab elements missing — index.html may be out of date.");
   } else {
-    console.warn("Add/Remove tab elements missing — index.html may be out of date.");
+    tabs.forEach(t => {
+      document.getElementById(t.btn).addEventListener("click", () => {
+        tabs.forEach(other => {
+          document.getElementById(other.panel).style.display = (other.btn === t.btn) ? "block" : "none";
+          document.getElementById(other.btn).classList.toggle("active-tab", other.btn === t.btn);
+        });
+        if(t.onShow) t.onShow();
+      });
+    });
   }
 
   const addAssetBtn = document.getElementById("addAssetBtn");
@@ -831,6 +1024,40 @@ try{
     });
   }
 
+  const addParamBtn = document.getElementById("addParamBtn");
+  if(addParamBtn){
+    addParamBtn.addEventListener("click", () => {
+      const label = document.getElementById("newParamLabel").value.trim();
+      const type = document.getElementById("newParamType").value;
+      const defaultValue = document.getElementById("newParamDefault").value.trim();
+      const statusEl = document.getElementById("addParamStatus");
+
+      if(!label){
+        statusEl.textContent = "Parameter name is required.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      const existing = getCustomParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase());
+      if(existing){
+        statusEl.textContent = `A parameter named "${label}" already exists.`;
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+
+      addCustomParam({ label, type, defaultValue });
+      renderCustomParamList();
+      renderColumnOrderList();
+      runMatrixOptimization();
+
+      statusEl.textContent = `"${label}" added as a new column, appended to the end (reorder it from the "⇄ Reorder Columns" tab).`;
+      statusEl.style.color = "var(--emerald)";
+      document.getElementById("newParamLabel").value = "";
+      document.getElementById("newParamDefault").value = "";
+    });
+  }
+
+  renderCustomParamList();
+  renderColumnOrderList();
   renderRemoveList();
 }catch(err){
   console.error("Failed to wire up Add/Remove asset panel:", err);
