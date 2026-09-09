@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.2 (row reorder in ticker cell, Remove column deleted)
-console.log("app.js loaded — build v5.2 (row reorder in ticker cell, Remove column deleted)");
+// APP.JS BUILD: v5.4 (delete confirmation, broader auto-fetch)
+console.log("app.js loaded — build v5.4 (delete confirmation, broader auto-fetch)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -63,6 +63,30 @@ async function fetchFinnhubMetrics(ticker, apiKey, livePrice){
     beta: (beta !== undefined && beta !== null && !isNaN(beta)) ? beta : undefined,
     peSource
   };
+}
+
+async function fetchLiveDataForOneTicker(ticker){
+  const apiKey = getSavedApiKey();
+  if(!apiKey) return { ok: false, reason: "no-key" };
+  try{
+    const price = await fetchFinnhubQuote(ticker, apiKey);
+    const metrics = await fetchFinnhubMetrics(ticker, apiKey, price);
+    liveDataMap[ticker] = {
+      price: price,
+      pe: metrics.pe,
+      roa: metrics.roa,
+      revenueGrowth: metrics.revenueGrowth,
+      netMargin: metrics.netMargin,
+      debtToEquity: metrics.debtToEquity,
+      beta: metrics.beta,
+    };
+    fetchFailedTickers.delete(ticker);
+    return { ok: true };
+  }catch(err){
+    liveDataMap[ticker] = undefined;
+    fetchFailedTickers.add(ticker);
+    return { ok: false, reason: err.message };
+  }
 }
 
 async function fetchLiveDataForAllAssets(){
@@ -748,9 +772,11 @@ function renderRemoveList(){
     chip.innerHTML = `<span>${asset.ticker}</span><button data-ticker="${asset.ticker}" title="Remove ${asset.ticker}">&times;</button>`;
     chip.querySelector("button").addEventListener("click", (e) => {
       const t = e.target.getAttribute("data-ticker");
-      removeAsset(t);
-      renderRemoveList();
-      runMatrixOptimization();
+      if(confirm(`Remove the "${t}" row? This deletes the entire row.`)){
+        removeAsset(t);
+        renderRemoveList();
+        runMatrixOptimization();
+      }
     });
     container.appendChild(chip);
   });
@@ -991,10 +1017,12 @@ function wireUpRowControls(){
       const ticker = btn.getAttribute('data-ticker');
       const action = btn.getAttribute('data-action');
       if(action === 'delete'){
-        removeAsset(ticker);
-        runMatrixOptimization();
-        renderRemoveList();
-        renderListSelector();
+        if(confirm(`Remove the "${ticker}" row? This deletes the entire row.`)){
+          removeAsset(ticker);
+          runMatrixOptimization();
+          renderRemoveList();
+          renderListSelector();
+        }
       } else if(action === 'up'){
         moveRowInList(ticker, -1);
         runMatrixOptimization();
@@ -1076,11 +1104,13 @@ try{
 
   const listSelector = document.getElementById("listSelector");
   if(listSelector){
-    listSelector.addEventListener("change", (e) => {
+    listSelector.addEventListener("change", async (e) => {
       setActiveListId(e.target.value);
       renderRemoveList();
       renderListSelector();
       runMatrixOptimization();
+      showListActionStatus(`Switched to "${getActiveList().name}". Fetching live data…`);
+      await fetchLiveDataForAllAssets();
       showListActionStatus(`Switched to "${getActiveList().name}".`);
     });
   }
@@ -1159,7 +1189,7 @@ try{
 
   const addAssetBtn = document.getElementById("addAssetBtn");
   if(addAssetBtn){
-    addAssetBtn.addEventListener("click", () => {
+    addAssetBtn.addEventListener("click", async () => {
       const ticker = document.getElementById("newTicker").value.trim().toUpperCase();
       const name = document.getElementById("newName").value.trim();
       const targetPrice = parseFloat(document.getElementById("newTarget").value);
@@ -1183,8 +1213,22 @@ try{
       addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability, growth });
       runMatrixOptimization();
 
-      statusEl.textContent = `${ticker} added. Click "Fetch live data" above to pull its real price/P/E/ROA.`;
-      statusEl.style.color = "var(--emerald)";
+      statusEl.textContent = `${ticker} added. Fetching live price/P-E/ROA…`;
+      statusEl.style.color = "var(--sub)";
+
+      const result = await fetchLiveDataForOneTicker(ticker);
+      runMatrixOptimization();
+
+      if(result.ok){
+        statusEl.textContent = `${ticker} added and live data fetched successfully.`;
+        statusEl.style.color = "var(--emerald)";
+      } else if(result.reason === "no-key"){
+        statusEl.textContent = `${ticker} added. Save a Finnhub API key above, then click "Fetch live data" to pull its real numbers.`;
+        statusEl.style.color = "var(--amber)";
+      } else {
+        statusEl.textContent = `${ticker} added, but the live fetch failed: ${result.reason}. It'll show as static data — edit the cells manually or try "Fetch live data" again later.`;
+        statusEl.style.color = "var(--amber)";
+      }
 
       document.getElementById("newTicker").value = "";
       document.getElementById("newName").value = "";
@@ -1239,7 +1283,7 @@ try{
 
   const addParamBtn = document.getElementById("addParamBtn");
   if(addParamBtn){
-    addParamBtn.addEventListener("click", () => {
+    addParamBtn.addEventListener("click", async () => {
       const label = document.getElementById("newParamLabel").value.trim();
       const type = document.getElementById("newParamType").value;
       const defaultValue = document.getElementById("newParamDefault").value.trim();
@@ -1262,11 +1306,15 @@ try{
       renderColumnOrderList();
       runMatrixOptimization();
 
-      statusEl.textContent = `"${label}" added as a new column, appended to the end (reorder it from the "⇄ Reorder Columns" tab, or with the < > arrows in the table header).`;
-      statusEl.style.color = "var(--emerald)";
+      statusEl.textContent = `"${label}" added as a new column. Refreshing live data…`;
+      statusEl.style.color = "var(--sub)";
       document.getElementById("newParamLabel").value = "";
       document.getElementById("newParamDefault").value = "";
       if(newParamPreset) newParamPreset.value = "__custom__";
+
+      await fetchLiveDataForAllAssets();
+      statusEl.textContent = `"${label}" added as a new column, appended to the end (reorder it from the "⇄ Reorder Columns" tab, or with the < > arrows in the table header).`;
+      statusEl.style.color = "var(--emerald)";
     });
   }
 
