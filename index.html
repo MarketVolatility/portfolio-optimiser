@@ -79,15 +79,23 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-textarea {
   min-height: 60px; resize: vertical; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.4;
 }
-.row-delete-btn {
-  background: transparent; border: 1px solid #ef4444; color: #ef4444; border-radius: 6px;
-  width: 32px; height: 32px; font-size: 1.1rem; font-weight: 700; cursor: pointer; line-height: 1;
+.row-ctrl-controls { display: flex; gap: 0.3rem; margin-top: 0.5rem; }
+.row-ctrl-btn {
+  background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);
+  width: 26px; height: 26px; border-radius: 6px; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center;
 }
-.row-delete-btn:hover { background: rgba(239, 68, 68, 0.15); }
+.row-ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+.row-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+.row-ctrl-remove { border-color: #ef4444; color: #ef4444; }
+.row-ctrl-remove:hover { background: rgba(239, 68, 68, 0.15); }
 </style>
 </head>
 <body>
 <div class="container">
+  <div style="background:#7c3aed; color:#fff; text-align:center; padding:0.6rem; border-radius:8px; margin-bottom:1rem; font-weight:700; font-size:0.95rem;">
+    BUILD CHECK: v5.2 (row reorder in ticker cell, Remove column deleted) — if you don't see this exact text at the top of the page, the file didn't update.
+  </div>
   <div class="disclaimer">
     <strong>⚠ Not financial advice / not live data.</strong> Prices, P/E, ROA, target prices, and "stability" ratings below are manually entered placeholder figures used to demonstrate a weighting formula — they are not sourced from a real-time market feed or professional research, and may be outdated or inaccurate. Do not use this tool to make actual investment decisions. Verify all figures independently before relying on them.
   </div>
@@ -189,6 +197,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <option value="alpha">Alphabetical (Ticker)</option>
       <option value="date-new">Date Added (newest first)</option>
       <option value="date-old">Date Added (oldest first)</option>
+      <option value="custom">Custom order (drag with ↑ ↓)</option>
     </select>
     <button id="optimizeBtn">Execute Allocation Logic</button>
   </div>
@@ -203,7 +212,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.1 (inline header controls, 40-param presets, similarity check)
+    HTML build: v5.2 (row reorder in ticker cell, Remove column deleted)
   </div>
 </div>
 <script src="data.js"></script>
