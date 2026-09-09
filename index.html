@@ -93,9 +93,6 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 </head>
 <body>
 <div class="container">
-  <div style="background:#7c3aed; color:#fff; text-align:center; padding:0.6rem; border-radius:8px; margin-bottom:1rem; font-weight:700; font-size:0.95rem;">
-    BUILD CHECK: v5.4 (delete confirmation, broader auto-fetch) — if you don't see this exact text at the top of the page, the file didn't update.
-  </div>
   <div class="disclaimer">
     <strong>⚠ Not financial advice / not live data.</strong> Prices, P/E, ROA, target prices, and "stability" ratings below are manually entered placeholder figures used to demonstrate a weighting formula — they are not sourced from a real-time market feed or professional research, and may be outdated or inaccurate. Do not use this tool to make actual investment decisions. Verify all figures independently before relying on them.
   </div>
@@ -115,7 +112,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
   </div>
 
   <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="listSelector">Portfolio List:</label>
+    <label for="listSelector" style="color:#facc15; font-size:1.3rem;">Portfolio List:</label>
     <select id="listSelector" class="form-input" style="min-width:180px;"></select>
     <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
@@ -124,9 +121,8 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 
   <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
     <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
-      <button id="tabAddBtn" class="tab-btn active-tab">+ Add Asset</button>
-      <button id="tabRemoveBtn" class="tab-btn">− Remove Assets</button>
-      <button id="tabAddParamBtn" class="tab-btn">+ Add Parameter</button>
+      <button id="tabAddBtn" class="tab-btn active-tab">+/- Asset</button>
+      <button id="tabAddParamBtn" class="tab-btn">+/- Parameter</button>
       <button id="tabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
     </div>
 
@@ -136,16 +132,20 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
         <input id="newName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
         <input id="newTarget" type="number" step="0.01" placeholder="Target Price" class="form-input" style="width:140px;">
         <input id="newGrowth" placeholder="Growth tag (e.g. High Growth)" class="form-input" style="width:200px;">
+        <select id="newStability" class="form-input" style="width:140px;">
+          <option value="Ultra-high">Ultra-high</option>
+          <option value="High">High</option>
+          <option value="Med" selected>Med</option>
+          <option value="Low">Low</option>
+        </select>
       </div>
-      <textarea id="newStability" placeholder="Stability / moat commentary..." class="form-input" style="width:100%; margin-top:0.75rem; min-height:60px; resize:vertical;"></textarea>
+      <textarea id="newStabilityNotes" placeholder="Optional: moat / stability commentary..." class="form-input" style="width:100%; margin-top:0.75rem; min-height:60px; resize:vertical;"></textarea>
       <div style="margin-top:0.75rem; display:flex; align-items:center; gap:1rem;">
         <button id="addAssetBtn">Add to table</button>
         <span id="addStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
       </div>
-    </div>
-
-    <div id="removePanel" style="display:none;">
-      <div id="removeList" style="display:flex; flex-wrap:wrap; gap:0.5rem;"></div>
+      <div class="chart-note" style="margin-top:0.75rem;">Existing assets (click × to remove):</div>
+      <div id="removeList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
       <div style="margin-top:0.75rem;">
         <button id="resetAssetsBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Reset to default list</button>
         <button id="restoreBaseBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Restore missing base tickers</button>
@@ -202,7 +202,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <button id="optimizeBtn">Execute Allocation Logic</button>
   </div>
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
-    <h2 id="activeListHeading" style="font-size:1.1rem; color:var(--text-secondary); font-weight:600;">Now viewing: —</h2>
+    <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Now viewing: —</h2>
     <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div class="table-container">
@@ -212,7 +212,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.4 (delete confirmation, broader auto-fetch)
+    HTML build: v5.5 (stability dropdown, merged asset tab, styling)
   </div>
 </div>
 <script src="data.js"></script>
