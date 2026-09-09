@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.0 (custom parameters + column reordering)
-console.log("app.js loaded — build v5.0 (custom parameters + column reordering)");
+// APP.JS BUILD: v5.1 (inline header controls, 40-param presets, similarity check)
+console.log("app.js loaded — build v5.1 (inline header controls, 40-param presets, similarity check)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -153,6 +153,127 @@ function getCustomParams(){
 function saveCustomParams(list){
   try{ localStorage.setItem("customParams", JSON.stringify(list)); }
   catch(e){ /* localStorage unavailable */ }
+}
+
+// 40 additional parameters available as presets — deliberately distinct from the
+// existing built-in fields (ROA, PE, Current/Target Price, Revenue Growth, Net
+// Margin, PEG, D/E, FCF, Cash Runway, Beta) so they add real new coverage.
+const PARAM_PRESETS = [
+  { label: "Dividend Yield (%)", type: "number", defaultValue: 0 },
+  { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
+  { label: "EPS Diluted ($)", type: "number", defaultValue: 0 },
+  { label: "EPS Growth (YoY%)", type: "number", defaultValue: 0 },
+  { label: "Forward P/E", type: "number", defaultValue: 0 },
+  { label: "Price to Book (P/B)", type: "number", defaultValue: 0 },
+  { label: "Price to Sales (P/S)", type: "number", defaultValue: 0 },
+  { label: "EV/EBITDA", type: "number", defaultValue: 0 },
+  { label: "EV/Revenue", type: "number", defaultValue: 0 },
+  { label: "Gross Margin (%)", type: "number", defaultValue: 0 },
+  { label: "Operating Margin (%)", type: "number", defaultValue: 0 },
+  { label: "Return on Equity (ROE %)", type: "number", defaultValue: 0 },
+  { label: "Return on Invested Capital (ROIC %)", type: "number", defaultValue: 0 },
+  { label: "Current Ratio", type: "number", defaultValue: 0 },
+  { label: "Quick Ratio", type: "number", defaultValue: 0 },
+  { label: "Interest Coverage Ratio", type: "number", defaultValue: 0 },
+  { label: "Asset Turnover", type: "number", defaultValue: 0 },
+  { label: "Inventory Turnover", type: "number", defaultValue: 0 },
+  { label: "Days Sales Outstanding", type: "number", defaultValue: 0 },
+  { label: "Market Cap ($B)", type: "number", defaultValue: 0 },
+  { label: "Enterprise Value ($B)", type: "number", defaultValue: 0 },
+  { label: "Shares Outstanding (M)", type: "number", defaultValue: 0 },
+  { label: "Float (%)", type: "number", defaultValue: 0 },
+  { label: "Insider Ownership (%)", type: "number", defaultValue: 0 },
+  { label: "Institutional Ownership (%)", type: "number", defaultValue: 0 },
+  { label: "Short Interest (%)", type: "number", defaultValue: 0 },
+  { label: "Analyst Rating (Consensus)", type: "text", defaultValue: "Hold" },
+  { label: "Number of Analysts Covering", type: "number", defaultValue: 0 },
+  { label: "52-Week High ($)", type: "number", defaultValue: 0 },
+  { label: "52-Week Low ($)", type: "number", defaultValue: 0 },
+  { label: "Average Volume (M)", type: "number", defaultValue: 0 },
+  { label: "RSI (14-day)", type: "number", defaultValue: 50 },
+  { label: "MACD Signal", type: "text", defaultValue: "Neutral" },
+  { label: "30-Day Volatility (%)", type: "number", defaultValue: 0 },
+  { label: "Sector", type: "text", defaultValue: "" },
+  { label: "Industry", type: "text", defaultValue: "" },
+  { label: "Country / Region", type: "text", defaultValue: "" },
+  { label: "IPO Date", type: "text", defaultValue: "" },
+  { label: "Employees", type: "number", defaultValue: 0 },
+  { label: "R&D Spend (% of Revenue)", type: "number", defaultValue: 0 },
+];
+
+const PARAM_ALIASES = [
+  [/\bd\/e\b/g, "debt to equity"],
+  [/\bp\/e\b/g, "price to earnings"],
+  [/\bpeg\b/g, "price earnings growth"],
+  [/\bfcf\b/g, "free cash flow"],
+  [/\broa\b/g, "return on assets"],
+  [/\broe\b/g, "return on equity"],
+  [/\byoy\b/g, "year over year"],
+  [/\brev\b/g, "revenue"],
+];
+
+function expandAliases(s){
+  let out = " " + String(s).toLowerCase() + " ";
+  PARAM_ALIASES.forEach(([pattern, expansion]) => { out = out.replace(pattern, expansion); });
+  return out;
+}
+
+function normalizeParamLabel(s){
+  return expandAliases(s).replace(/[^a-z0-9]+/g, "");
+}
+
+function tokenize(s){
+  return expandAliases(s).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+// Token-based overlap that also credits abbreviation-style prefix matches
+// (e.g. "rev" vs "revenue" already expands via alias, but this also catches
+// unlisted abbreviations like "yield" vs "yld" via simple prefix comparison).
+function tokenOverlapRatio(a, b){
+  const tokensA = tokenize(a), tokensB = tokenize(b);
+  if(tokensA.length === 0 || tokensB.length === 0) return 0;
+  let matches = 0;
+  tokensA.forEach(ta => {
+    if(tokensB.some(tb => ta === tb || (ta.length >= 3 && tb.length >= 3 && (ta.startsWith(tb) || tb.startsWith(ta))))){
+      matches++;
+    }
+  });
+  return matches / Math.max(tokensA.length, tokensB.length);
+}
+
+function levenshteinDistance(a, b){
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for(let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for(let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for(let i = 1; i <= a.length; i++){
+    for(let j = 1; j <= b.length; j++){
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function labelSimilarity(a, b){
+  const maxLen = Math.max(a.length, b.length);
+  if(maxLen === 0) return 1;
+  return 1 - (levenshteinDistance(a, b) / maxLen);
+}
+
+// Returns the conflicting column definition if the proposed label is too close to
+// an existing one (built-in or custom), or null if it's genuinely distinct.
+function findSimilarExistingParam(label){
+  const norm = normalizeParamLabel(label);
+  if(!norm) return null;
+  const candidates = getAllColumnDefs().filter(d => !d.computed && d.id !== "name");
+  for(const def of candidates){
+    const defNorm = normalizeParamLabel(def.label);
+    if(!defNorm) continue;
+    if(defNorm === norm) return def;
+    if(defNorm.length >= 4 && norm.length >= 4 && (defNorm.includes(norm) || norm.includes(defNorm))) return def;
+    if(labelSimilarity(norm, defNorm) >= 0.82) return def;
+    if(tokenOverlapRatio(label, def.label) >= 0.66) return def;
+  }
+  return null;
 }
 
 function addCustomParam({label, type, defaultValue}){
@@ -652,13 +773,41 @@ function renderTableHeader(){
   const defsById = Object.fromEntries(allDefs.map(d => [d.id, d]));
 
   let html = '<tr><th>Ticker</th>';
-  columnOrder.forEach(colId => {
+  columnOrder.forEach((colId, idx) => {
     const def = defsById[colId];
     if(!def) return;
-    html += `<th>${def.label}</th>`;
+    const leftDisabled = idx === 0 ? 'disabled' : '';
+    const rightDisabled = idx === columnOrder.length - 1 ? 'disabled' : '';
+    html += `<th>
+      <div>${def.label}</div>
+      <div class="col-header-controls">
+        <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="-1" ${leftDisabled} title="Move left">&lt;</button>
+        <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="1" ${rightDisabled} title="Move right">&gt;</button>
+        ${def.isCustom ? `<button class="col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${colId}" title="Remove this parameter">&times;</button>` : ''}
+      </div>
+    </th>`;
   });
   html += '<th>Remove</th></tr>';
   thead.innerHTML = html;
+
+  thead.querySelectorAll('.col-ctrl-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const action = btn.getAttribute('data-action');
+      if(action === 'move'){
+        moveColumn(id, parseInt(btn.getAttribute('data-dir'), 10));
+        runMatrixOptimization();
+      } else if(action === 'remove'){
+        const def = defsById[id];
+        if(confirm(`Remove the "${def.label}" column? This deletes its values for every ticker.`)){
+          removeCustomParam(id);
+          runMatrixOptimization();
+          renderCustomParamList();
+        }
+      }
+    });
+  });
 }
 
 function runMatrixOptimization() {
@@ -1024,6 +1173,25 @@ try{
     });
   }
 
+  const newParamPreset = document.getElementById("newParamPreset");
+  if(newParamPreset){
+    newParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
+      PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+    newParamPreset.addEventListener("change", () => {
+      const val = newParamPreset.value;
+      if(val === "__custom__"){
+        document.getElementById("newParamLabel").value = "";
+        document.getElementById("newParamType").value = "number";
+        document.getElementById("newParamDefault").value = "";
+      } else {
+        const preset = PARAM_PRESETS[parseInt(val, 10)];
+        document.getElementById("newParamLabel").value = preset.label;
+        document.getElementById("newParamType").value = preset.type;
+        document.getElementById("newParamDefault").value = preset.defaultValue;
+      }
+    });
+  }
+
   const addParamBtn = document.getElementById("addParamBtn");
   if(addParamBtn){
     addParamBtn.addEventListener("click", () => {
@@ -1037,9 +1205,9 @@ try{
         statusEl.style.color = "var(--amber)";
         return;
       }
-      const existing = getCustomParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase());
-      if(existing){
-        statusEl.textContent = `A parameter named "${label}" already exists.`;
+      const conflict = findSimilarExistingParam(label);
+      if(conflict){
+        statusEl.textContent = `"${label}" is too similar to the existing "${conflict.label}" column. Choose a more distinct name, or edit that column directly instead.`;
         statusEl.style.color = "var(--amber)";
         return;
       }
@@ -1049,10 +1217,11 @@ try{
       renderColumnOrderList();
       runMatrixOptimization();
 
-      statusEl.textContent = `"${label}" added as a new column, appended to the end (reorder it from the "⇄ Reorder Columns" tab).`;
+      statusEl.textContent = `"${label}" added as a new column, appended to the end (reorder it from the "⇄ Reorder Columns" tab, or with the < > arrows in the table header).`;
       statusEl.style.color = "var(--emerald)";
       document.getElementById("newParamLabel").value = "";
       document.getElementById("newParamDefault").value = "";
+      if(newParamPreset) newParamPreset.value = "__custom__";
     });
   }
 
