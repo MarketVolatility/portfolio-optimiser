@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.4 (delete confirmation, broader auto-fetch)
-console.log("app.js loaded — build v5.4 (delete confirmation, broader auto-fetch)");
+// APP.JS BUILD: v5.5 (stability dropdown, merged asset tab, styling)
+console.log("app.js loaded — build v5.5 (stability dropdown, merged asset tab, styling)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -166,7 +166,8 @@ const BUILTIN_COLUMNS = [
   { id: "cashRunway", label: "Cash Runway (mo)", type: "number", computed: false },
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
-  { id: "stability", label: "Strategic Moat & Stability Profile", type: "textarea", computed: false },
+  { id: "stability", label: "Strategic Moat & Stability Profile", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
+  { id: "stabilityNotes", label: "Moat Notes", type: "textarea", computed: false },
   { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
 ];
 
@@ -535,18 +536,19 @@ function getWorkingData(){
     const baseAsset = marketData.find(a => a.ticker === ticker);
     const shell = baseAsset
       ? { ...baseAsset }
-      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Not yet rated.", growth: "Unclassified",
+      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "", growth: "Unclassified",
           revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 999, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
 
-function addAsset({ ticker, name, targetPrice, stability, growth }){
+function addAsset({ ticker, name, targetPrice, stability, stabilityNotes, growth }){
   const baseAsset = marketData.find(a => a.ticker === ticker);
   const existingOv = getGlobalOverrides()[ticker] || {};
   setGlobalOverride(ticker, 'name', name || existingOv.name || (baseAsset && baseAsset.name) || ticker);
   if(targetPrice) setGlobalOverride(ticker, 'targetPrice', targetPrice);
   if(stability) setGlobalOverride(ticker, 'stability', stability);
+  if(stabilityNotes) setGlobalOverride(ticker, 'stabilityNotes', stabilityNotes);
   if(growth) setGlobalOverride(ticker, 'growth', growth);
   if(existingOv.dateAdded === undefined) setGlobalOverride(ticker, 'dateAdded', Date.now());
 
@@ -639,6 +641,7 @@ function renameTicker(oldTicker, newTicker){
     currentPrice: ov.currentPrice !== undefined ? ov.currentPrice : current.currentPrice,
     targetPrice: ov.targetPrice !== undefined ? ov.targetPrice : current.targetPrice,
     stability: ov.stability !== undefined ? ov.stability : current.stability,
+    stabilityNotes: ov.stabilityNotes !== undefined ? ov.stabilityNotes : current.stabilityNotes,
     growth: ov.growth !== undefined ? ov.growth : current.growth,
     revenueGrowth: ov.revenueGrowth !== undefined ? ov.revenueGrowth : current.revenueGrowth,
     netMargin: ov.netMargin !== undefined ? ov.netMargin : current.netMargin,
@@ -799,7 +802,13 @@ function renderCellHTML(colDef, item, badge){
       </td>`;
   }
   if(colDef.id === 'stability'){
-    return `<td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${escAttr(item.stability)}">${item.stability}</textarea></td>`;
+    const options = colDef.options.map(opt =>
+      `<option value="${opt}" ${item.stability === opt ? 'selected' : ''}>${opt}</option>`
+    ).join('');
+    return `<td><select class="cell-input" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${escAttr(item.stability)}">${options}</select></td>`;
+  }
+  if(colDef.id === 'stabilityNotes'){
+    return `<td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stabilityNotes" data-resolved-value="${escAttr(item.stabilityNotes)}">${item.stabilityNotes}</textarea></td>`;
   }
   if(colDef.id === 'calculatedUpside'){
     return `<td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%</td>`;
@@ -883,6 +892,7 @@ function runMatrixOptimization() {
     const roa = ov.roa !== undefined ? ov.roa : ((live && live.roa !== undefined) ? live.roa : asset.roa);
     const targetPrice = ov.targetPrice !== undefined ? ov.targetPrice : asset.targetPrice;
     const stability = ov.stability !== undefined ? ov.stability : asset.stability;
+    const stabilityNotes = ov.stabilityNotes !== undefined ? ov.stabilityNotes : (asset.stabilityNotes || "");
     const growth = ov.growth !== undefined ? ov.growth : asset.growth;
 
     // New fundamentals — live fetch (where attempted) still wins over static default,
@@ -910,8 +920,8 @@ function runMatrixOptimization() {
       attributionScore += revenueGrowth * 0.3;
       if (beta > 1) attributionScore += (beta - 1) * 5;
     } else if (mandate === 'conservative') {
-      if (stability.startsWith("Ultra-High")) attributionScore += 60;
-      if (stability.startsWith("High Stability")) attributionScore += 35;
+      if (stability === "Ultra-high") attributionScore += 60;
+      if (stability === "High") attributionScore += 35;
       attributionScore += (120 / (pe + 1));
       if (growth.includes("Cyclical")) attributionScore -= 20;
       // Conservative cares about quality and safety: profitability, low leverage,
@@ -947,7 +957,7 @@ function runMatrixOptimization() {
       customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
     });
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, growth,
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes, growth,
       revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
@@ -1167,8 +1177,7 @@ try{
 // --- Wire up Add/Remove asset panel + new Add Parameter / Reorder Columns tabs ---
 try{
   const tabs = [
-    { btn: "tabAddBtn", panel: "addPanel", onShow: null },
-    { btn: "tabRemoveBtn", panel: "removePanel", onShow: renderRemoveList },
+    { btn: "tabAddBtn", panel: "addPanel", onShow: renderRemoveList },
     { btn: "tabAddParamBtn", panel: "addParamPanel", onShow: renderCustomParamList },
     { btn: "tabColumnsBtn", panel: "columnsPanel", onShow: renderColumnOrderList },
   ];
@@ -1193,7 +1202,8 @@ try{
       const ticker = document.getElementById("newTicker").value.trim().toUpperCase();
       const name = document.getElementById("newName").value.trim();
       const targetPrice = parseFloat(document.getElementById("newTarget").value);
-      const stability = document.getElementById("newStability").value.trim();
+      const stability = document.getElementById("newStability").value;
+      const stabilityNotes = document.getElementById("newStabilityNotes").value.trim();
       const growth = document.getElementById("newGrowth").value.trim();
       const statusEl = document.getElementById("addStatus");
 
@@ -1210,7 +1220,7 @@ try{
         return;
       }
 
-      addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability, growth });
+      addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability, stabilityNotes, growth });
       runMatrixOptimization();
 
       statusEl.textContent = `${ticker} added. Fetching live price/P-E/ROA…`;
@@ -1233,7 +1243,7 @@ try{
       document.getElementById("newTicker").value = "";
       document.getElementById("newName").value = "";
       document.getElementById("newTarget").value = "";
-      document.getElementById("newStability").value = "";
+      document.getElementById("newStabilityNotes").value = "";
       document.getElementById("newGrowth").value = "";
     });
   } else {
