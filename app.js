@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.1 (inline header controls, 40-param presets, similarity check)
-console.log("app.js loaded — build v5.1 (inline header controls, 40-param presets, similarity check)");
+// APP.JS BUILD: v5.2 (row reorder in ticker cell, Remove column deleted)
+console.log("app.js loaded — build v5.2 (row reorder in ticker cell, Remove column deleted)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -534,6 +534,34 @@ function addAsset({ ticker, name, targetPrice, stability, growth }){
   });
 }
 
+function getRowOrder(){
+  const list = getActiveList();
+  return list.rowOrder || [];
+}
+
+function applyRowOrder(tickers){
+  const list = getActiveList();
+  const saved = list.rowOrder || [];
+  const savedValid = saved.filter(t => tickers.includes(t));
+  const savedSet = new Set(savedValid);
+  const missing = tickers.filter(t => !savedSet.has(t));
+  return [...savedValid, ...missing];
+}
+
+function moveRowInList(ticker, direction){
+  const working = getWorkingData().map(a => a.ticker);
+  const order = applyRowOrder(working);
+  const idx = order.indexOf(ticker);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  updateActiveList(list => { list.rowOrder = order; });
+  // Moving a row only makes visible sense in custom order — switch to it automatically.
+  const sortEl = document.getElementById('sortMode');
+  if(sortEl) sortEl.value = 'custom';
+}
+
 function removeAsset(ticker){
   // Removes the ticker from THIS list only — its edited data stays available
   // globally in case it's re-added here or added to another list later.
@@ -787,7 +815,7 @@ function renderTableHeader(){
       </div>
     </th>`;
   });
-  html += '<th>Remove</th></tr>';
+  html += '</tr>';
   thead.innerHTML = html;
 
   thead.querySelectorAll('.col-ctrl-btn').forEach(btn => {
@@ -913,13 +941,16 @@ function runMatrixOptimization() {
     processedAssets.sort((a, b) => b.dateAdded - a.dateAdded);
   } else if(sortMode === 'date-old'){
     processedAssets.sort((a, b) => a.dateAdded - b.dateAdded);
+  } else if(sortMode === 'custom'){
+    const order = applyRowOrder(processedAssets.map(a => a.ticker));
+    processedAssets.sort((a, b) => order.indexOf(a.ticker) - order.indexOf(b.ticker));
   } else if (mandate === 'tactical') {
     processedAssets.sort((a, b) => b.calculatedUpside - a.calculatedUpside);
   } else {
     processedAssets.sort((a, b) => b.allocationWeight - a.allocationWeight);
   }
 
-  processedAssets.forEach(item => {
+  processedAssets.forEach((item, rowIdx) => {
     const rowElement = document.createElement('tr');
 
     let badge;
@@ -932,31 +963,45 @@ function runMatrixOptimization() {
     const allDefs = getAllColumnDefs();
     const defsById = Object.fromEntries(allDefs.map(d => [d.id, d]));
 
+    const upDisabled = rowIdx === 0 ? 'disabled' : '';
+    const downDisabled = rowIdx === processedAssets.length - 1 ? 'disabled' : '';
     const tickerCell = `<td>
         <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">
+        <div class="row-ctrl-controls">
+          <button class="row-ctrl-btn" data-action="up" data-ticker="${item.ticker}" ${upDisabled} title="Move row up">&uarr;</button>
+          <button class="row-ctrl-btn" data-action="down" data-ticker="${item.ticker}" ${downDisabled} title="Move row down">&darr;</button>
+          <button class="row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button>
+        </div>
       </td>`;
 
     const middleCells = columnOrder.map(colId => renderCellHTML(defsById[colId], item, badge)).join("\n      ");
 
-    const removeCell = `<td><button class="row-delete-btn" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button></td>`;
-
-    rowElement.innerHTML = tickerCell + "\n      " + middleCells + "\n      " + removeCell;
+    rowElement.innerHTML = tickerCell + "\n      " + middleCells;
     tbody.appendChild(rowElement);
   });
 
+  wireUpRowControls();
   wireUpEditableCells();
-  wireUpRowDeleteButtons();
   wireUpClearOverrideButtons();
 }
 
-function wireUpRowDeleteButtons(){
-  document.querySelectorAll('.row-delete-btn').forEach(btn => {
+function wireUpRowControls(){
+  document.querySelectorAll('.row-ctrl-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const ticker = e.target.getAttribute('data-ticker');
-      removeAsset(ticker);
-      runMatrixOptimization();
-      renderRemoveList();
-      renderListSelector();
+      const ticker = btn.getAttribute('data-ticker');
+      const action = btn.getAttribute('data-action');
+      if(action === 'delete'){
+        removeAsset(ticker);
+        runMatrixOptimization();
+        renderRemoveList();
+        renderListSelector();
+      } else if(action === 'up'){
+        moveRowInList(ticker, -1);
+        runMatrixOptimization();
+      } else if(action === 'down'){
+        moveRowInList(ticker, 1);
+        runMatrixOptimization();
+      }
     });
   });
 }
