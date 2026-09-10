@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.5 (stability dropdown, merged asset tab, styling)
-console.log("app.js loaded — build v5.5 (stability dropdown, merged asset tab, styling)");
+// APP.JS BUILD: v5.6 (growth tag removed, Stability rename, form simplified)
+console.log("app.js loaded — build v5.6 (growth tag removed, Stability rename, form simplified)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -166,7 +166,7 @@ const BUILTIN_COLUMNS = [
   { id: "cashRunway", label: "Cash Runway (mo)", type: "number", computed: false },
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
-  { id: "stability", label: "Strategic Moat & Stability Profile", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
+  { id: "stability", label: "Stability", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
   { id: "stabilityNotes", label: "Moat Notes", type: "textarea", computed: false },
   { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
 ];
@@ -536,20 +536,19 @@ function getWorkingData(){
     const baseAsset = marketData.find(a => a.ticker === ticker);
     const shell = baseAsset
       ? { ...baseAsset }
-      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "", growth: "Unclassified",
+      : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "",
           revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 999, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
 
-function addAsset({ ticker, name, targetPrice, stability, stabilityNotes, growth }){
+function addAsset({ ticker, name, targetPrice, stability, stabilityNotes }){
   const baseAsset = marketData.find(a => a.ticker === ticker);
   const existingOv = getGlobalOverrides()[ticker] || {};
   setGlobalOverride(ticker, 'name', name || existingOv.name || (baseAsset && baseAsset.name) || ticker);
   if(targetPrice) setGlobalOverride(ticker, 'targetPrice', targetPrice);
   if(stability) setGlobalOverride(ticker, 'stability', stability);
   if(stabilityNotes) setGlobalOverride(ticker, 'stabilityNotes', stabilityNotes);
-  if(growth) setGlobalOverride(ticker, 'growth', growth);
   if(existingOv.dateAdded === undefined) setGlobalOverride(ticker, 'dateAdded', Date.now());
 
   updateActiveList(list => {
@@ -642,7 +641,6 @@ function renameTicker(oldTicker, newTicker){
     targetPrice: ov.targetPrice !== undefined ? ov.targetPrice : current.targetPrice,
     stability: ov.stability !== undefined ? ov.stability : current.stability,
     stabilityNotes: ov.stabilityNotes !== undefined ? ov.stabilityNotes : current.stabilityNotes,
-    growth: ov.growth !== undefined ? ov.growth : current.growth,
     revenueGrowth: ov.revenueGrowth !== undefined ? ov.revenueGrowth : current.revenueGrowth,
     netMargin: ov.netMargin !== undefined ? ov.netMargin : current.netMargin,
     pegRatio: ov.pegRatio !== undefined ? ov.pegRatio : current.pegRatio,
@@ -893,7 +891,6 @@ function runMatrixOptimization() {
     const targetPrice = ov.targetPrice !== undefined ? ov.targetPrice : asset.targetPrice;
     const stability = ov.stability !== undefined ? ov.stability : asset.stability;
     const stabilityNotes = ov.stabilityNotes !== undefined ? ov.stabilityNotes : (asset.stabilityNotes || "");
-    const growth = ov.growth !== undefined ? ov.growth : asset.growth;
 
     // New fundamentals — live fetch (where attempted) still wins over static default,
     // manual override still wins over everything, same pattern as the fields above.
@@ -923,7 +920,6 @@ function runMatrixOptimization() {
       if (stability === "Ultra-high") attributionScore += 60;
       if (stability === "High") attributionScore += 35;
       attributionScore += (120 / (pe + 1));
-      if (growth.includes("Cyclical")) attributionScore -= 20;
       // Conservative cares about quality and safety: profitability, low leverage,
       // low volatility, and actually generating cash rather than burning it.
       attributionScore += netMargin * 0.5;
@@ -942,7 +938,6 @@ function runMatrixOptimization() {
     } else if (mandate === 'aggressive') {
       attributionScore += upsidePercentage * 180;
       attributionScore += roa * 0.8;
-      if (growth.includes("High") || growth.includes("Moat")) attributionScore += 25;
       // Aggressive leans into growth and volatility, but for cash-burning speculative
       // names specifically, a longer cash runway is what keeps the bet alive long
       // enough to pay off — so runway matters here more than anywhere else.
@@ -957,7 +952,7 @@ function runMatrixOptimization() {
       customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
     });
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes, growth,
+    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
       revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
@@ -1203,8 +1198,6 @@ try{
       const name = document.getElementById("newName").value.trim();
       const targetPrice = parseFloat(document.getElementById("newTarget").value);
       const stability = document.getElementById("newStability").value;
-      const stabilityNotes = document.getElementById("newStabilityNotes").value.trim();
-      const growth = document.getElementById("newGrowth").value.trim();
       const statusEl = document.getElementById("addStatus");
 
       if(!ticker || !name){
@@ -1220,7 +1213,7 @@ try{
         return;
       }
 
-      addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability, stabilityNotes, growth });
+      addAsset({ ticker, name, targetPrice: isNaN(targetPrice) ? 0 : targetPrice, stability });
       runMatrixOptimization();
 
       statusEl.textContent = `${ticker} added. Fetching live price/P-E/ROA…`;
@@ -1243,8 +1236,6 @@ try{
       document.getElementById("newTicker").value = "";
       document.getElementById("newName").value = "";
       document.getElementById("newTarget").value = "";
-      document.getElementById("newStabilityNotes").value = "";
-      document.getElementById("newGrowth").value = "";
     });
   } else {
     console.warn("addAssetBtn not found — index.html may be out of date.");
