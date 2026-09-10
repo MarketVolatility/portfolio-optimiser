@@ -124,6 +124,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <button id="tabAddBtn" class="tab-btn active-tab">+/- Asset</button>
       <button id="tabAddParamBtn" class="tab-btn">+/- Parameter</button>
       <button id="tabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
+      <button id="tabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
     </div>
 
     <div id="addPanel">
@@ -181,6 +182,11 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <div class="chart-note" style="margin-bottom:0.5rem;">Reorder columns with the arrows. Ticker (always first) and Remove (always last) aren't included here.</div>
       <div id="columnOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
     </div>
+
+    <div id="rowsPanel" style="display:none;">
+      <div class="chart-note" style="margin-bottom:0.5rem;">Reorder tickers with the arrows. This automatically switches "Sort by" to "Custom order" so your arrangement actually shows in the table.</div>
+      <div id="rowOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+    </div>
   </div>
 
   <div class="control-panel">
@@ -212,7 +218,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.6 (growth tag removed, Stability rename, form simplified)
+    HTML build: v5.7 (Reorder Rows tab, Moat Notes removed, similarity fix)
   </div>
 </div>
 <script src="data.js"></script>
