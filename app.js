@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.6 (growth tag removed, Stability rename, form simplified)
-console.log("app.js loaded — build v5.6 (growth tag removed, Stability rename, form simplified)");
+// APP.JS BUILD: v5.7 (Reorder Rows tab, Moat Notes removed, similarity fix)
+console.log("app.js loaded — build v5.7 (Reorder Rows tab, Moat Notes removed, similarity fix)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -167,7 +167,6 @@ const BUILTIN_COLUMNS = [
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
   { id: "stability", label: "Stability", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
-  { id: "stabilityNotes", label: "Moat Notes", type: "textarea", computed: false },
   { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
 ];
 
@@ -286,6 +285,18 @@ function labelSimilarity(a, b){
 
 // Returns the conflicting column definition if the proposed label is too close to
 // an existing one (built-in or custom), or null if it's genuinely distinct.
+const DISTINGUISHING_MODIFIERS = ["forward", "trailing", "ttm", "estimated", "projected", "expected", "historical"];
+
+function hasUnmatchedDistinguishingModifier(labelA, labelB){
+  const normA = " " + labelA.toLowerCase() + " ";
+  const normB = " " + labelB.toLowerCase() + " ";
+  return DISTINGUISHING_MODIFIERS.some(mod => {
+    const inA = normA.includes(mod);
+    const inB = normB.includes(mod);
+    return inA !== inB; // present in exactly one, not both and not neither
+  });
+}
+
 function findSimilarExistingParam(label){
   const norm = normalizeParamLabel(label);
   if(!norm) return null;
@@ -293,7 +304,8 @@ function findSimilarExistingParam(label){
   for(const def of candidates){
     const defNorm = normalizeParamLabel(def.label);
     if(!defNorm) continue;
-    if(defNorm === norm) return def;
+    if(defNorm === norm) return def; // exact match always counts, regardless of modifiers
+    if(hasUnmatchedDistinguishingModifier(label, def.label)) continue; // e.g. "Forward P/E" vs "P/E Multiple" — genuinely different metrics
     if(defNorm.length >= 4 && norm.length >= 4 && (defNorm.includes(norm) || norm.includes(defNorm))) return def;
     if(labelSimilarity(norm, defNorm) >= 0.82) return def;
     if(tokenOverlapRatio(label, def.label) >= 0.66) return def;
@@ -724,6 +736,35 @@ function renderCustomParamList(){
       }
     });
     container.appendChild(chip);
+  });
+}
+
+function renderRowOrderList(){
+  const container = document.getElementById("rowOrderList");
+  if(!container) return;
+  container.innerHTML = "";
+  const tickers = getWorkingData().map(a => a.ticker);
+  const order = applyRowOrder(tickers);
+
+  order.forEach((ticker, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
+    row.innerHTML = `
+      <span style="flex:1;">${ticker}</span>
+      <button class="row-move-btn" data-ticker="${ticker}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move up" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↑</button>
+      <button class="row-move-btn" data-ticker="${ticker}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move down" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↓</button>
+    `;
+    container.appendChild(row);
+  });
+
+  container.querySelectorAll(".row-move-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const ticker = e.target.getAttribute("data-ticker");
+      const dir = parseInt(e.target.getAttribute("data-dir"), 10);
+      moveRowInList(ticker, dir);
+      renderRowOrderList();
+      runMatrixOptimization();
+    });
   });
 }
 
@@ -1175,6 +1216,7 @@ try{
     { btn: "tabAddBtn", panel: "addPanel", onShow: renderRemoveList },
     { btn: "tabAddParamBtn", panel: "addParamPanel", onShow: renderCustomParamList },
     { btn: "tabColumnsBtn", panel: "columnsPanel", onShow: renderColumnOrderList },
+    { btn: "tabRowsBtn", panel: "rowsPanel", onShow: renderRowOrderList },
   ];
   const missing = tabs.some(t => !document.getElementById(t.btn) || !document.getElementById(t.panel));
   if(missing){
