@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.7 (Reorder Rows tab, Moat Notes removed, similarity fix)
-console.log("app.js loaded — build v5.7 (Reorder Rows tab, Moat Notes removed, similarity fix)");
+// APP.JS BUILD: v5.8 (live-fetch for Market Cap, Dividend Yield, Forward P-E)
+console.log("app.js loaded — build v5.8 (live-fetch for Market Cap, Dividend Yield, Forward P-E)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -55,6 +55,7 @@ async function fetchFinnhubMetrics(ticker, apiKey, livePrice){
   const beta = m.beta;
 
   return {
+    raw: m,
     pe: (pe !== undefined && pe !== null && !isNaN(pe)) ? pe : undefined,
     roa: (roa !== undefined && roa !== null && !isNaN(roa)) ? roa : undefined,
     revenueGrowth: (revenueGrowth !== undefined && revenueGrowth !== null && !isNaN(revenueGrowth)) ? revenueGrowth : undefined,
@@ -63,6 +64,25 @@ async function fetchFinnhubMetrics(ticker, apiKey, livePrice){
     beta: (beta !== undefined && beta !== null && !isNaN(beta)) ? beta : undefined,
     peSource
   };
+}
+
+function applyCustomParamLiveData(ticker, rawMetric){
+  if(!rawMetric) return;
+  getCustomParams().forEach(p => {
+    if(!p.finnhubField) return;
+    const fields = Array.isArray(p.finnhubField) ? p.finnhubField : [p.finnhubField];
+    let value;
+    for(const f of fields){
+      if(rawMetric[f] !== undefined && rawMetric[f] !== null && !isNaN(rawMetric[f])){
+        value = rawMetric[f];
+        break;
+      }
+    }
+    if(value !== undefined){
+      if(p.finnhubUnitDivisor) value = value / p.finnhubUnitDivisor;
+      setGlobalOverride(ticker, p.id, value);
+    }
+  });
 }
 
 async function fetchLiveDataForOneTicker(ticker){
@@ -80,6 +100,7 @@ async function fetchLiveDataForOneTicker(ticker){
       debtToEquity: metrics.debtToEquity,
       beta: metrics.beta,
     };
+    applyCustomParamLiveData(ticker, metrics.raw);
     fetchFailedTickers.delete(ticker);
     return { ok: true };
   }catch(err){
@@ -120,6 +141,7 @@ async function fetchLiveDataForAllAssets(){
         debtToEquity: metrics.debtToEquity,
         beta: metrics.beta,
       };
+      applyCustomParamLiveData(asset.ticker, metrics.raw);
       fetchFailedTickers.delete(asset.ticker);
       if(metrics.pe === undefined) noPeTickers.push(asset.ticker);
       successCount++;
@@ -183,11 +205,11 @@ function saveCustomParams(list){
 // existing built-in fields (ROA, PE, Current/Target Price, Revenue Growth, Net
 // Margin, PEG, D/E, FCF, Cash Runway, Beta) so they add real new coverage.
 const PARAM_PRESETS = [
-  { label: "Dividend Yield (%)", type: "number", defaultValue: 0 },
+  { label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
   { label: "EPS Diluted ($)", type: "number", defaultValue: 0 },
   { label: "EPS Growth (YoY%)", type: "number", defaultValue: 0 },
-  { label: "Forward P/E", type: "number", defaultValue: 0 },
+  { label: "Forward P/E", type: "number", defaultValue: 0, finnhubField: ["peForward", "forwardPE"] },
   { label: "Price to Book (P/B)", type: "number", defaultValue: 0 },
   { label: "Price to Sales (P/S)", type: "number", defaultValue: 0 },
   { label: "EV/EBITDA", type: "number", defaultValue: 0 },
@@ -202,7 +224,7 @@ const PARAM_PRESETS = [
   { label: "Asset Turnover", type: "number", defaultValue: 0 },
   { label: "Inventory Turnover", type: "number", defaultValue: 0 },
   { label: "Days Sales Outstanding", type: "number", defaultValue: 0 },
-  { label: "Market Cap ($B)", type: "number", defaultValue: 0 },
+  { label: "Market Cap ($B)", type: "number", defaultValue: 0, finnhubField: ["marketCapitalization"], finnhubUnitDivisor: 1000 },
   { label: "Enterprise Value ($B)", type: "number", defaultValue: 0 },
   { label: "Shares Outstanding (M)", type: "number", defaultValue: 0 },
   { label: "Float (%)", type: "number", defaultValue: 0 },
@@ -313,17 +335,20 @@ function findSimilarExistingParam(label){
   return null;
 }
 
-function addCustomParam({label, type, defaultValue}){
+function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDivisor}){
   const order = getColumnOrder(); // capture BEFORE saving, so its defaults don't already include the new param
   const params = getCustomParams();
   const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   const id = "custom_" + (slug || "param") + "_" + Date.now().toString(36);
   const isText = type === "text";
-  params.push({
+  const paramDef = {
     id, label: label.trim(),
     type: isText ? "text" : "number",
     defaultValue: isText ? (defaultValue || "") : (parseFloat(defaultValue) || 0)
-  });
+  };
+  if(finnhubField) paramDef.finnhubField = finnhubField;
+  if(finnhubUnitDivisor) paramDef.finnhubUnitDivisor = finnhubUnitDivisor;
+  params.push(paramDef);
   saveCustomParams(params);
   if(!order.includes(id)) order.push(id); // guard against duplicates regardless
   saveColumnOrder(order);
@@ -1306,6 +1331,7 @@ try{
   }
 
   const newParamPreset = document.getElementById("newParamPreset");
+  let selectedPresetMeta = null;
   if(newParamPreset){
     newParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
       PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
@@ -1315,11 +1341,13 @@ try{
         document.getElementById("newParamLabel").value = "";
         document.getElementById("newParamType").value = "number";
         document.getElementById("newParamDefault").value = "";
+        selectedPresetMeta = null;
       } else {
         const preset = PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("newParamLabel").value = preset.label;
         document.getElementById("newParamType").value = preset.type;
         document.getElementById("newParamDefault").value = preset.defaultValue;
+        selectedPresetMeta = preset.finnhubField ? { finnhubField: preset.finnhubField, finnhubUnitDivisor: preset.finnhubUnitDivisor } : null;
       }
     });
   }
@@ -1344,7 +1372,7 @@ try{
         return;
       }
 
-      addCustomParam({ label, type, defaultValue });
+      addCustomParam({ label, type, defaultValue, finnhubField: selectedPresetMeta?.finnhubField, finnhubUnitDivisor: selectedPresetMeta?.finnhubUnitDivisor });
       renderCustomParamList();
       renderColumnOrderList();
       runMatrixOptimization();
