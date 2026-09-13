@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.8 (live-fetch for Market Cap, Dividend Yield, Forward P-E)
-console.log("app.js loaded — build v5.8 (live-fetch for Market Cap, Dividend Yield, Forward P-E)");
+// APP.JS BUILD: v5.9 (import list, computed %, docs tables, styling fixes)
+console.log("app.js loaded — build v5.9 (import list, computed %, docs tables, styling fixes)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -205,6 +205,7 @@ function saveCustomParams(list){
 // existing built-in fields (ROA, PE, Current/Target Price, Revenue Growth, Net
 // Margin, PEG, D/E, FCF, Cash Runway, Beta) so they add real new coverage.
 const PARAM_PRESETS = [
+  { label: "Current/Target Price (%)", type: "number", defaultValue: 0, computed: true, formula: "currentToTargetPct" },
   { label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
   { label: "EPS Diluted ($)", type: "number", defaultValue: 0 },
@@ -335,7 +336,7 @@ function findSimilarExistingParam(label){
   return null;
 }
 
-function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDivisor}){
+function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDivisor, computed, formula}){
   const order = getColumnOrder(); // capture BEFORE saving, so its defaults don't already include the new param
   const params = getCustomParams();
   const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -348,6 +349,8 @@ function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDiv
   };
   if(finnhubField) paramDef.finnhubField = finnhubField;
   if(finnhubUnitDivisor) paramDef.finnhubUnitDivisor = finnhubUnitDivisor;
+  if(computed) paramDef.computed = true;
+  if(formula) paramDef.formula = formula;
   params.push(paramDef);
   saveCustomParams(params);
   if(!order.includes(id)) order.push(id); // guard against duplicates regardless
@@ -361,7 +364,7 @@ function removeCustomParam(id){
 }
 
 function getAllColumnDefs(){
-  const custom = getCustomParams().map(p => ({ id: p.id, label: p.label, type: p.type, computed: false, isCustom: true, defaultValue: p.defaultValue }));
+  const custom = getCustomParams().map(p => ({ id: p.id, label: p.label, type: p.type, computed: !!p.computed, formula: p.formula, isCustom: true, defaultValue: p.defaultValue }));
   return [...BUILTIN_COLUMNS, ...custom];
 }
 
@@ -561,8 +564,8 @@ function deleteActiveList(){
   }
 }
 
-function getWorkingData(){
-  const list = getActiveList();
+function getWorkingData(explicitList){
+  const list = explicitList || getActiveList();
   const removed = list.removedTickers || [];
   const overrides = getGlobalOverrides();
   const baseTickers = list.useBaseData ? marketData.filter(a => !removed.includes(a.ticker)).map(a => a.ticker) : [];
@@ -708,6 +711,52 @@ function renameTicker(oldTicker, newTicker){
   delete liveDataMap[oldTicker];
 }
 
+function importListInto(sourceListId){
+  const lists = getAllLists();
+  const sourceList = lists[sourceListId];
+  if(!sourceList) return { imported: 0 };
+
+  const sourceTickers = getWorkingData(sourceList).map(a => a.ticker);
+  let importedCount = 0;
+
+  updateActiveList(list => {
+    const inc = list.includedCustomTickers || [];
+    const removed = list.removedTickers || [];
+    sourceTickers.forEach(ticker => {
+      // Un-hide it if this list had it removed, and ensure it's included as a member.
+      const removedIdx = removed.indexOf(ticker);
+      if(removedIdx !== -1) removed.splice(removedIdx, 1);
+      const isBaseTicker = marketData.some(a => a.ticker === ticker);
+      const alreadyMember = (list.useBaseData && isBaseTicker && !removed.includes(ticker)) || inc.includes(ticker);
+      if(!alreadyMember){
+        inc.push(ticker);
+        importedCount++;
+      }
+    });
+    list.includedCustomTickers = inc;
+    list.removedTickers = removed;
+  });
+
+  return { imported: importedCount, total: sourceTickers.length };
+}
+
+function renderImportListSelect(){
+  const select = document.getElementById("importListSelect");
+  if(!select) return;
+  const lists = getAllLists();
+  const activeId = getActiveListId();
+  select.innerHTML = "";
+  Object.keys(lists).filter(id => id !== activeId).forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = lists[id].name;
+    select.appendChild(opt);
+  });
+  if(Object.keys(lists).filter(id => id !== activeId).length === 0){
+    select.innerHTML = '<option value="">No other lists yet</option>';
+  }
+}
+
 function renderListSelector(){
   const selector = document.getElementById("listSelector");
   const heading = document.getElementById("activeListHeading");
@@ -730,6 +779,8 @@ function renderListSelector(){
     const count = getWorkingData().length;
     heading.textContent = `Now viewing: ${activeName} (${count} assets)`;
   }
+
+  renderImportListSelect();
 }
 
 function showListActionStatus(message){
@@ -882,6 +933,9 @@ function renderCellHTML(colDef, item, badge){
   }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
+    if(colDef.computed){
+      return `<td>${Number(val).toFixed(1)}%</td>`;
+    }
     if(colDef.type === 'text'){
       return `<td><input class="cell-input" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
     }
@@ -1012,10 +1066,15 @@ function runMatrixOptimization() {
       if (beta > 1.5) attributionScore += (beta - 1.5) * 8;
     }
 
-    // Custom user-defined parameters: override value if set, else the param's default.
+    // Custom user-defined parameters: computed formula (if any) always wins;
+    // otherwise override value if set, else the param's default.
     const customValues = {};
     getCustomParams().forEach(p => {
-      customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
+      if(p.computed && p.formula === "currentToTargetPct"){
+        customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
+      } else {
+        customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
+      }
     });
 
     return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
@@ -1231,6 +1290,37 @@ try{
       showListActionStatus(`Deleted "${current.name}". Now viewing "${getActiveList().name}".`);
     });
   }
+
+  const importListBtn = document.getElementById("importListBtn");
+  if(importListBtn){
+    importListBtn.addEventListener("click", async () => {
+      const select = document.getElementById("importListSelect");
+      const statusEl = document.getElementById("importListStatus");
+      const sourceId = select.value;
+      if(!sourceId){
+        statusEl.textContent = "No other list available to import from.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      const lists = getAllLists();
+      const sourceName = lists[sourceId].name;
+      const result = importListInto(sourceId);
+      renderRemoveList();
+      renderListSelector();
+      runMatrixOptimization();
+
+      if(result.imported === 0){
+        statusEl.textContent = `Nothing new to import — every ticker from "${sourceName}" is already in this list.`;
+        statusEl.style.color = "var(--sub)";
+      } else {
+        statusEl.textContent = `Imported ${result.imported} ticker(s) from "${sourceName}". Fetching live data…`;
+        statusEl.style.color = "var(--sub)";
+        await fetchLiveDataForAllAssets();
+        statusEl.textContent = `Imported ${result.imported} ticker(s) from "${sourceName}".`;
+        statusEl.style.color = "var(--emerald)";
+      }
+    });
+  }
 }catch(err){
   console.error("Failed to wire up list management:", err);
 }
@@ -1347,7 +1437,10 @@ try{
         document.getElementById("newParamLabel").value = preset.label;
         document.getElementById("newParamType").value = preset.type;
         document.getElementById("newParamDefault").value = preset.defaultValue;
-        selectedPresetMeta = preset.finnhubField ? { finnhubField: preset.finnhubField, finnhubUnitDivisor: preset.finnhubUnitDivisor } : null;
+        selectedPresetMeta = (preset.finnhubField || preset.computed) ? {
+          finnhubField: preset.finnhubField, finnhubUnitDivisor: preset.finnhubUnitDivisor,
+          computed: preset.computed, formula: preset.formula
+        } : null;
       }
     });
   }
@@ -1372,7 +1465,7 @@ try{
         return;
       }
 
-      addCustomParam({ label, type, defaultValue, finnhubField: selectedPresetMeta?.finnhubField, finnhubUnitDivisor: selectedPresetMeta?.finnhubUnitDivisor });
+      addCustomParam({ label, type, defaultValue, finnhubField: selectedPresetMeta?.finnhubField, finnhubUnitDivisor: selectedPresetMeta?.finnhubUnitDivisor, computed: selectedPresetMeta?.computed, formula: selectedPresetMeta?.formula });
       renderCustomParamList();
       renderColumnOrderList();
       runMatrixOptimization();
