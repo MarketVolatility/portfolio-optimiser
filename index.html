@@ -29,7 +29,11 @@ pointer; outline: none; transition: border 0.2s; }
 select:focus { border-color: var(--accent-blue); }
 button { background: var(--accent-blue); color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 button:hover { background: var(--accent-hover); }
-.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: auto; max-height: 75vh; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+.table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; overflow-y: auto; max-height: 75vh; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); scrollbar-color: #92400e var(--bg-main); scrollbar-width: auto; }
+.table-container::-webkit-scrollbar { height: 14px; width: 14px; }
+.table-container::-webkit-scrollbar-track { background: var(--bg-main); }
+.table-container::-webkit-scrollbar-thumb { background: #92400e; border-radius: 7px; border: 2px solid var(--bg-main); }
+.table-container::-webkit-scrollbar-thumb:hover { background: #b45309; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 0.95rem; }
 th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: -webkit-sticky; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .col-header-controls { display: flex; gap: 0.3rem; margin-top: 0.5rem; text-transform: none; letter-spacing: normal; }
@@ -87,8 +91,8 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 }
 .row-ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
 .row-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-.row-ctrl-remove { border-color: #ef4444; color: #ef4444; }
-.row-ctrl-remove:hover { background: rgba(239, 68, 68, 0.15); }
+.row-ctrl-remove { border-color: rgba(252,165,165,0.3); color: #fca5a5; }
+.row-ctrl-remove:hover { background: rgba(239,68,68,0.2); }
 </style>
 </head>
 <body>
@@ -117,6 +121,13 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
     <button id="deleteListBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="importListSelect">Import list:</label>
+    <select id="importListSelect" class="form-input" style="min-width:180px;"></select>
+    <button id="importListBtn">Import into current list</button>
+    <span id="importListStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
@@ -190,20 +201,20 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
   </div>
 
   <div class="control-panel">
-    <label for="riskProfile">Target Allocation Mandate Strategy:</label>
-    <select id="riskProfile">
-      <option value="tactical">Tactical Buying Urgency (Highest Upside Target Rank)</option>
-      <option value="conservative">Conservative Profile (Moat Stability & High Yield Focus)</option>
-      <option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
-      <option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
-    </select>
-    <label for="sortMode">Sort by:</label>
+    <label for="sortMode" style="display:block; margin-bottom:4px;">Sort by:</label>
     <select id="sortMode">
       <option value="default">Optimized Weight (default)</option>
       <option value="alpha">Alphabetical (Ticker)</option>
       <option value="date-new">Date Added (newest first)</option>
       <option value="date-old">Date Added (oldest first)</option>
       <option value="custom">Custom order (drag with ↑ ↓)</option>
+    </select>
+    <label for="riskProfile" style="display:block; margin-bottom:4px;">Optimized Weight</label>
+    <select id="riskProfile">
+      <option value="tactical">Tactical Buying Urgency (Highest Upside Target Rank)</option>
+      <option value="conservative">Conservative Profile (Moat Stability & High Yield Focus)</option>
+      <option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
+      <option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
     </select>
     <button id="optimizeBtn">Execute Allocation Logic</button>
   </div>
@@ -218,7 +229,95 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.8 (live-fetch for Market Cap, Dividend Yield, Forward P-E)
+    HTML build: v5.9 (import list, computed %, docs tables)
+  </div>
+
+  <div class="table-container" style="margin-top:2rem; padding:1.5rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">How each mandate calculates Optimized Weight</h2>
+    <p class="chart-note" style="margin-bottom:1rem;">Every asset gets a raw score under whichever mandate is selected, then each asset's weight = its score ÷ the sum of all scores in the list, so weights always total 100%.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.75rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Mandate</th>
+          <th style="text-align:left; padding:0.75rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Score formula</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.9rem; color:var(--text-secondary);">
+        <tr>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600; vertical-align:top;">Tactical</td>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">Score = (Implied Upside × 100) + (Revenue Growth × 0.3) + a bonus of (Beta − 1) × 5 if Beta &gt; 1. Ranked primarily by raw upside to target price, with modest credit for growth momentum and for carrying above-market volatility.</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600; vertical-align:top;">Conservative</td>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">Score = stability bonus (+60 Ultra-high, +35 High) + 120 ÷ (P/E + 1) + (Net Margin × 0.5) − (D/E Ratio × 8) + beta adjustment (rewards Beta &lt; 1, penalizes Beta &gt; 1) + (Free Cash Flow positive: +15, negative: −15) + PEG bonus of (2 − PEG) × 5 when 0 &lt; PEG &lt; 2. Favors stable, profitable, low-leverage, low-volatility, cash-generative businesses.</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600; vertical-align:top;">Balanced</td>
+          <td style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">Score = (ROA × 1.2) + (Implied Upside × 80) + (Revenue Growth × 0.4) + (Net Margin × 0.3) + PEG bonus of max(0, 3 − PEG) × 4 − (D/E Ratio × 3). Blends efficiency, growth, reasonably-priced valuation, and modest leverage discipline.</td>
+        </tr>
+        <tr>
+          <td style="padding:0.75rem 1rem; color:#fff; font-weight:600; vertical-align:top;">Aggressive</td>
+          <td style="padding:0.75rem 1rem;">Score = (Implied Upside × 180) + (ROA × 0.8) + (Revenue Growth × 0.6) + a bonus of min(Cash Runway, 36) × 0.5 specifically when Free Cash Flow is negative and Runway &lt; 999 (rewards speculative, cash-burning names for having enough runway to survive) + a bonus of (Beta − 1.5) × 8 if Beta &gt; 1.5. Leans hardest into growth, upside, and volatility.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="chart-note" style="margin-top:1rem;">Every score has a floor of 0.1 so no asset can reach a zero or negative weight. Custom parameters you've added yourself are display/editable only — they aren't included in any of the formulas above.</p>
+  </div>
+
+  <div class="table-container" style="margin-top:1.5rem; padding:1.5rem; margin-bottom:2rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Parameter glossary (A–Z)</h2>
+    <p class="chart-note" style="margin-bottom:1rem;">Definitions for every option in the "+/- Parameter" dropdown, in alphabetical order.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase; width:220px;">Parameter</th>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Definition</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.88rem; color:var(--text-secondary);">
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">30-Day Volatility (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The standard deviation of daily price returns over the trailing 30 days; higher values mean more erratic price swings.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">52-Week High ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The highest trading price of the stock over the past 52 weeks.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">52-Week Low ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The lowest trading price of the stock over the past 52 weeks.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Analyst Rating (Consensus)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average or most common recommendation (e.g. Buy, Hold, Sell) among equity analysts covering the stock.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Asset Turnover</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Total revenue divided by total assets; measures how efficiently a company uses its assets to generate sales.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Volume (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of shares (in millions) traded per day over a recent period.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Country / Region</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The primary country or geographic region where the company is headquartered or listed.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Current assets divided by current liabilities; measures ability to cover short-term obligations.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current/Target Price (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Current Price ÷ Target Price × 100. Below 100% implies upside remaining; above 100% means the stock has passed its target.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Days Sales Outstanding</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of days a company takes to collect payment after a sale; lower is generally better.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Payout Ratio (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of net income paid out to shareholders as dividends.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Yield (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Annual dividend per share divided by current share price. Live-fetchable via Finnhub where available.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Employees</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The approximate total number of full-time employees at the company.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Enterprise Value ($B)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Market capitalization plus debt, minus cash; the theoretical cost to acquire the whole company.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EPS Diluted ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Earnings per share assuming all convertible securities (options, warrants) are exercised.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EPS Growth (YoY%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Year-over-year percentage change in diluted earnings per share.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EV/EBITDA</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Enterprise Value ÷ EBITDA; a valuation multiple that adjusts for capital structure and non-cash expenses.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EV/Revenue</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Enterprise Value ÷ annual revenue; useful for comparing companies with different profitability levels.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Float (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of total shares outstanding that are freely tradable by the public.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Forward P/E</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Price ÷ projected (estimated) earnings per share for the next fiscal year, rather than trailing actual earnings.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Gross Margin (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Gross profit (revenue minus cost of goods sold) divided by revenue.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Industry</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The specific industry classification within the company's broader sector.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Insider Ownership (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of shares held by company executives, directors, and other insiders.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Institutional Ownership (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of shares held by mutual funds, pension funds, and other institutional investors.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Interest Coverage Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Operating income (EBIT) divided by interest expense; measures ability to service debt.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Inventory Turnover</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Cost of goods sold divided by average inventory; how many times inventory is sold and replaced per period.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">IPO Date</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The date the company's shares first began trading on a public exchange.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">MACD Signal</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A qualitative read (e.g. Bullish, Bearish, Neutral) from the Moving Average Convergence Divergence technical indicator.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Market Cap ($B)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Current share price × total shares outstanding, in billions of dollars. Live-fetchable via Finnhub.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Number of Analysts Covering</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The count of equity research analysts who publish estimates or ratings on the stock.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Operating Margin (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Operating income divided by revenue.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Price to Book (P/B)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Share price divided by book value per share; compares market value to accounting net asset value.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Price to Sales (P/S)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Market cap divided by revenue; a valuation multiple often used for early-stage or low-margin companies.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Quick Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">(Current assets minus inventory) ÷ current liabilities; a stricter liquidity measure than the Current Ratio.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">R&D Spend (% of Revenue)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Research and development expenditure as a percentage of total revenue.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Equity (ROE %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net income divided by shareholder equity; profitability relative to shareholders' investment.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Invested Capital (ROIC %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net operating profit after tax divided by invested capital; efficiency of returns on deployed capital.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">RSI (14-day)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Relative Strength Index over 14 days (0–100); above 70 suggests overbought, below 30 suggests oversold.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Sector</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The broad economic sector the company operates in (e.g. Technology, Healthcare, Financials).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Shares Outstanding (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The total number of shares (in millions) currently issued and held by all shareholders.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Short Interest (%)</td><td style="padding:0.6rem 1rem;">The percentage of outstanding shares that have been sold short by investors betting on a price decline.</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <script src="data.js"></script>
