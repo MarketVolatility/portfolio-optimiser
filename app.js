@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.9 (import list, computed %, docs tables, styling fixes)
-console.log("app.js loaded — build v5.9 (import list, computed %, docs tables, styling fixes)");
+// APP.JS BUILD: v5.10 (fixed Current-Target Price % false positive)
+console.log("app.js loaded — build v5.10 (fixed Current-Target Price % false positive)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -251,7 +251,6 @@ const PARAM_PRESETS = [
 const PARAM_ALIASES = [
   [/\bd\/e\b/g, "debt to equity"],
   [/\bp\/e\b/g, "price to earnings"],
-  [/\bpeg\b/g, "price earnings growth"],
   [/\bfcf\b/g, "free cash flow"],
   [/\broa\b/g, "return on assets"],
   [/\broe\b/g, "return on equity"],
@@ -331,7 +330,6 @@ function findSimilarExistingParam(label){
     if(hasUnmatchedDistinguishingModifier(label, def.label)) continue; // e.g. "Forward P/E" vs "P/E Multiple" — genuinely different metrics
     if(defNorm.length >= 4 && norm.length >= 4 && (defNorm.includes(norm) || norm.includes(defNorm))) return def;
     if(labelSimilarity(norm, defNorm) >= 0.82) return def;
-    if(tokenOverlapRatio(label, def.label) >= 0.66) return def;
   }
   return null;
 }
@@ -1458,7 +1456,7 @@ try{
         statusEl.style.color = "var(--amber)";
         return;
       }
-      const conflict = findSimilarExistingParam(label);
+      const conflict = selectedPresetMeta?.computed ? null : findSimilarExistingParam(label);
       if(conflict){
         statusEl.textContent = `"${label}" is too similar to the existing "${conflict.label}" column. Choose a more distinct name, or edit that column directly instead.`;
         statusEl.style.color = "var(--amber)";
