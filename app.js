@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.10 (fixed Current-Target Price % false positive)
-console.log("app.js loaded — build v5.10 (fixed Current-Target Price % false positive)");
+// APP.JS BUILD: v5.11 (robust computed-param bypass, fixed version marker)
+console.log("app.js loaded — build v5.11 (robust computed-param bypass, fixed version marker)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -1456,14 +1456,20 @@ try{
         statusEl.style.color = "var(--amber)";
         return;
       }
-      const conflict = selectedPresetMeta?.computed ? null : findSimilarExistingParam(label);
+      // Bypass the similarity check for computed presets regardless of HOW the
+      // label got here (dropdown selection, or typed directly) — these are a
+      // small curated set I already know are genuinely distinct metrics.
+      const matchingComputedPreset = PARAM_PRESETS.find(p => p.computed && p.label.toLowerCase() === label.toLowerCase());
+      const effectiveMeta = selectedPresetMeta || (matchingComputedPreset ? { computed: true, formula: matchingComputedPreset.formula } : null);
+
+      const conflict = effectiveMeta?.computed ? null : findSimilarExistingParam(label);
       if(conflict){
         statusEl.textContent = `"${label}" is too similar to the existing "${conflict.label}" column. Choose a more distinct name, or edit that column directly instead.`;
         statusEl.style.color = "var(--amber)";
         return;
       }
 
-      addCustomParam({ label, type, defaultValue, finnhubField: selectedPresetMeta?.finnhubField, finnhubUnitDivisor: selectedPresetMeta?.finnhubUnitDivisor, computed: selectedPresetMeta?.computed, formula: selectedPresetMeta?.formula });
+      addCustomParam({ label, type, defaultValue, finnhubField: effectiveMeta?.finnhubField, finnhubUnitDivisor: effectiveMeta?.finnhubUnitDivisor, computed: effectiveMeta?.computed, formula: effectiveMeta?.formula });
       renderCustomParamList();
       renderColumnOrderList();
       runMatrixOptimization();
