@@ -1,8 +1,9 @@
-// APP.JS BUILD: v5.11 (robust computed-param bypass, fixed version marker)
-console.log("app.js loaded — build v5.11 (robust computed-param bypass, fixed version marker)");
+// APP.JS BUILD: v5.12 (per-column sort, duplicate fix, runway 99999, purchase tracking)
+console.log("app.js loaded — build v5.12 (per-column sort, duplicate fix, runway 99999, purchase tracking)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
+let columnSortState = null; // { colId, direction: 'asc'|'desc' } or null (falls back to the Sort-by dropdown)
 let fetchFailedTickers = new Set(); // tickers where a live fetch was attempted but errored out
 let lastFetchTime = null;
 
@@ -206,6 +207,9 @@ function saveCustomParams(list){
 // Margin, PEG, D/E, FCF, Cash Runway, Beta) so they add real new coverage.
 const PARAM_PRESETS = [
   { label: "Current/Target Price (%)", type: "number", defaultValue: 0, computed: true, formula: "currentToTargetPct" },
+  { label: "Units Purchased", type: "number", defaultValue: 0 },
+  { label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
+  { label: "Date Purchased", type: "date", defaultValue: "__today__" },
   { label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
   { label: "EPS Diluted ($)", type: "number", defaultValue: 0 },
@@ -340,10 +344,19 @@ function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDiv
   const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   const id = "custom_" + (slug || "param") + "_" + Date.now().toString(36);
   const isText = type === "text";
+  const isDate = type === "date";
+  let resolvedDefault;
+  if(isDate){
+    resolvedDefault = (!defaultValue || defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : defaultValue;
+  } else if(isText){
+    resolvedDefault = defaultValue || "";
+  } else {
+    resolvedDefault = parseFloat(defaultValue) || 0;
+  }
   const paramDef = {
     id, label: label.trim(),
-    type: isText ? "text" : "number",
-    defaultValue: isText ? (defaultValue || "") : (parseFloat(defaultValue) || 0)
+    type: isDate ? "date" : (isText ? "text" : "number"),
+    defaultValue: resolvedDefault
   };
   if(finnhubField) paramDef.finnhubField = finnhubField;
   if(finnhubUnitDivisor) paramDef.finnhubUnitDivisor = finnhubUnitDivisor;
@@ -575,7 +588,7 @@ function getWorkingData(explicitList){
     const shell = baseAsset
       ? { ...baseAsset }
       : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "",
-          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 999, beta: 1.0 };
+          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 99999, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
@@ -931,13 +944,18 @@ function renderCellHTML(colDef, item, badge){
   }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
+    const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
+    const defaultClass = isDefault ? ' cell-input-unconfirmed' : '';
     if(colDef.computed){
       return `<td>${Number(val).toFixed(1)}%</td>`;
     }
     if(colDef.type === 'text'){
-      return `<td><input class="cell-input" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
+      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
     }
-    return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
+    if(colDef.type === 'date'){
+      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="date" value="${escAttr(val)}"></td>`;
+    }
+    return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
   }
   // Default: built-in numeric field (roa, pe, currentPrice, targetPrice, revenueGrowth, etc.)
   const val = item[colDef.id];
@@ -957,9 +975,12 @@ function renderTableHeader(){
     if(!def) return;
     const leftDisabled = idx === 0 ? 'disabled' : '';
     const rightDisabled = idx === columnOrder.length - 1 ? 'disabled' : '';
+    const isSorted = columnSortState && columnSortState.colId === colId;
+    const sortIcon = isSorted ? (columnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
     html += `<th>
       <div>${def.label}</div>
       <div class="col-header-controls">
+        <button class="col-ctrl-btn ${isSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="${colId}" title="Sort by this column">${sortIcon}</button>
         <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="-1" ${leftDisabled} title="Move left">&lt;</button>
         <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="1" ${rightDisabled} title="Move right">&gt;</button>
         ${def.isCustom ? `<button class="col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${colId}" title="Remove this parameter">&times;</button>` : ''}
@@ -974,7 +995,16 @@ function renderTableHeader(){
       e.stopPropagation();
       const id = btn.getAttribute('data-id');
       const action = btn.getAttribute('data-action');
-      if(action === 'move'){
+      if(action === 'sort'){
+        if(!columnSortState || columnSortState.colId !== id){
+          columnSortState = { colId: id, direction: 'asc' };
+        } else if(columnSortState.direction === 'asc'){
+          columnSortState = { colId: id, direction: 'desc' };
+        } else {
+          columnSortState = null; // third click clears back to the Sort-by dropdown
+        }
+        runMatrixOptimization();
+      } else if(action === 'move'){
         moveColumn(id, parseInt(btn.getAttribute('data-dir'), 10));
         runMatrixOptimization();
       } else if(action === 'remove'){
@@ -1060,23 +1090,26 @@ function runMatrixOptimization() {
       // names specifically, a longer cash runway is what keeps the bet alive long
       // enough to pay off — so runway matters here more than anywhere else.
       attributionScore += revenueGrowth * 0.6;
-      if (freeCashFlow < 0 && cashRunway < 999) attributionScore += Math.min(cashRunway, 36) * 0.5;
+      if (freeCashFlow < 0 && cashRunway < 99999) attributionScore += Math.min(cashRunway, 36) * 0.5;
       if (beta > 1.5) attributionScore += (beta - 1.5) * 8;
     }
 
     // Custom user-defined parameters: computed formula (if any) always wins;
     // otherwise override value if set, else the param's default.
     const customValues = {};
+    const customIsDefault = {};
     getCustomParams().forEach(p => {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
+        customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
+        customIsDefault[p.id] = ov[p.id] === undefined;
       }
     });
 
     return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
-      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues, customIsDefault,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
@@ -1088,8 +1121,32 @@ function runMatrixOptimization() {
     return { ...item, allocationWeight: targetAllocationWeight };
   });
 
+  const STABILITY_SORT_ORDER = { "Low": 0, "Med": 1, "High": 2, "Ultra-high": 3 };
+
+  function getSortValue(item, colId){
+    if(colId === 'stability') return STABILITY_SORT_ORDER[item.stability] ?? -1;
+    if(colId === 'calculatedUpside') return item.calculatedUpside;
+    if(colId === 'allocationWeight') return item.allocationWeight;
+    if(colId === 'name') return item.name.toLowerCase();
+    if(item.customValues && colId in item.customValues){
+      const v = item.customValues[colId];
+      return typeof v === 'string' ? v.toLowerCase() : v;
+    }
+    const v = item[colId];
+    return typeof v === 'string' ? v.toLowerCase() : v;
+  }
+
   const sortMode = document.getElementById('sortMode') ? document.getElementById('sortMode').value : 'default';
-  if(sortMode === 'alpha'){
+  if(columnSortState){
+    const { colId, direction } = columnSortState;
+    processedAssets.sort((a, b) => {
+      const va = getSortValue(a, colId), vb = getSortValue(b, colId);
+      let cmp;
+      if(typeof va === 'string' || typeof vb === 'string') cmp = String(va).localeCompare(String(vb));
+      else cmp = va - vb;
+      return direction === 'asc' ? cmp : -cmp;
+    });
+  } else if(sortMode === 'alpha'){
     processedAssets.sort((a, b) => a.ticker.localeCompare(b.ticker));
   } else if(sortMode === 'date-new'){
     processedAssets.sort((a, b) => b.dateAdded - a.dateAdded);
@@ -1434,7 +1491,7 @@ try{
         const preset = PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("newParamLabel").value = preset.label;
         document.getElementById("newParamType").value = preset.type;
-        document.getElementById("newParamDefault").value = preset.defaultValue;
+        document.getElementById("newParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
         selectedPresetMeta = (preset.finnhubField || preset.computed) ? {
           finnhubField: preset.finnhubField, finnhubUnitDivisor: preset.finnhubUnitDivisor,
           computed: preset.computed, formula: preset.formula
@@ -1461,6 +1518,14 @@ try{
       // small curated set I already know are genuinely distinct metrics.
       const matchingComputedPreset = PARAM_PRESETS.find(p => p.computed && p.label.toLowerCase() === label.toLowerCase());
       const effectiveMeta = selectedPresetMeta || (matchingComputedPreset ? { computed: true, formula: matchingComputedPreset.formula } : null);
+
+      const exactDuplicate = getCustomParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase())
+        || BUILTIN_COLUMNS.some(c => c.label.trim().toLowerCase() === label.toLowerCase());
+      if(exactDuplicate){
+        statusEl.textContent = `"${label}" already exists as a column. Edit it directly in the table instead of adding it again.`;
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
 
       const conflict = effectiveMeta?.computed ? null : findSimilarExistingParam(label);
       if(conflict){
