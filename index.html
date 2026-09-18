@@ -45,6 +45,7 @@ th { background: #1e293b; color: #fff; padding: 1.25rem 1rem; font-weight: 600; 
 .col-ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 .col-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 .col-ctrl-remove { color: #fca5a5; border-color: rgba(252,165,165,0.3); }
+.col-ctrl-sort-active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
 .col-ctrl-remove:hover { background: rgba(239,68,68,0.2); }
 td { padding: 1.25rem 1rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); vertical-align: top; line-height: 1.5; }
 th:first-child, td:first-child {
@@ -80,6 +81,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-input:hover { border-color: var(--border-color); }
 .cell-input:focus { outline: none; border-color: var(--accent-blue); background: var(--bg-main); }
 .cell-input-num { width: 90px; }
+.cell-input-unconfirmed { color: #9ca3af; font-style: italic; }
 .cell-textarea {
   min-height: 60px; resize: vertical; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.4;
 }
@@ -177,6 +179,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
           <select id="newParamType" class="form-input" style="width:120px;">
             <option value="number">Number</option>
             <option value="text">Text</option>
+            <option value="date">Date</option>
           </select>
         </label>
         <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Default value
@@ -229,7 +232,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.11 (robust computed-param bypass, fixed version marker)
+    HTML build: v5.12 (per-column sort, duplicate fix, runway 99999, purchase tracking)
   </div>
 
   <div class="table-container" style="margin-top:2rem; padding:1.5rem;">
@@ -280,10 +283,12 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">52-Week Low ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The lowest trading price of the stock over the past 52 weeks.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Analyst Rating (Consensus)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average or most common recommendation (e.g. Buy, Hold, Sell) among equity analysts covering the stock.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Asset Turnover</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Total revenue divided by total assets; measures how efficiently a company uses its assets to generate sales.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the average price per share you actually paid, for your own cost-basis tracking. Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Volume (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of shares (in millions) traded per day over a recent period.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Country / Region</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The primary country or geographic region where the company is headquartered or listed.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Current assets divided by current liabilities; measures ability to cover short-term obligations.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current/Target Price (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Current Price ÷ Target Price × 100. Below 100% implies upside remaining; above 100% means the stock has passed its target.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the date you bought the position, via a calendar picker (defaults to today). Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Days Sales Outstanding</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of days a company takes to collect payment after a sale; lower is generally better.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Payout Ratio (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of net income paid out to shareholders as dividends.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Yield (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Annual dividend per share divided by current share price. Live-fetchable via Finnhub where available.</td></tr>
@@ -315,7 +320,8 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">RSI (14-day)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Relative Strength Index over 14 days (0–100); above 70 suggests overbought, below 30 suggests oversold.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Sector</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The broad economic sector the company operates in (e.g. Technology, Healthcare, Financials).</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Shares Outstanding (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The total number of shares (in millions) currently issued and held by all shareholders.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Short Interest (%)</td><td style="padding:0.6rem 1rem;">The percentage of outstanding shares that have been sold short by investors betting on a price decline.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Short Interest (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of outstanding shares that have been sold short by investors betting on a price decline.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Units Purchased</td><td style="padding:0.6rem 1rem;">Manual entry: the number of shares/units you actually hold, for your own position tracking. Not fetched from any source.</td></tr>
       </tbody>
     </table>
   </div>
