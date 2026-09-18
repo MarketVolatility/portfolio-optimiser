@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.13 (cash runway now in years, formula recalibrated)
-console.log("app.js loaded — build v5.13 (cash runway now in years, formula recalibrated)");
+// APP.JS BUILD: v5.14 (Actual Upside % column added)
+console.log("app.js loaded — build v5.14 (Actual Upside % column added)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -207,6 +207,7 @@ function saveCustomParams(list){
 // Margin, PEG, D/E, FCF, Cash Runway, Beta) so they add real new coverage.
 const PARAM_PRESETS = [
   { label: "Current/Target Price (%)", type: "number", defaultValue: 0, computed: true, formula: "currentToTargetPct" },
+  { label: "Actual Upside (%)", type: "number", defaultValue: 0, computed: true, formula: "actualUpsidePct" },
   { label: "Units Purchased", type: "number", defaultValue: 0 },
   { label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
   { label: "Date Purchased", type: "date", defaultValue: "__today__" },
@@ -947,7 +948,7 @@ function renderCellHTML(colDef, item, badge){
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
     const defaultClass = isDefault ? ' cell-input-unconfirmed' : '';
     if(colDef.computed){
-      return `<td>${Number(val).toFixed(1)}%</td>`;
+      return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
     }
     if(colDef.type === 'text'){
       return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
@@ -1098,13 +1099,30 @@ function runMatrixOptimization() {
     // otherwise override value if set, else the param's default.
     const customValues = {};
     const customIsDefault = {};
-    getCustomParams().forEach(p => {
+    const allCustomParams = getCustomParams();
+
+    // Pass 1: values that don't depend on other custom params.
+    allCustomParams.forEach(p => {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
+      } else if(p.computed && p.formula === "actualUpsidePct"){
+        // resolved in pass 2, once Average Purchase Price (if present) is available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
         customIsDefault[p.id] = ov[p.id] === undefined;
+      }
+    });
+
+    // Pass 2: values that depend on another custom param's resolved value from pass 1.
+    allCustomParams.forEach(p => {
+      if(p.computed && p.formula === "actualUpsidePct"){
+        const avgPriceParam = allCustomParams.find(cp => cp.label === "Average Purchase Price ($)");
+        const avgPrice = avgPriceParam ? customValues[avgPriceParam.id] : undefined;
+        const hasRealPurchasePrice = avgPrice !== undefined && avgPrice !== 0;
+        customValues[p.id] = hasRealPurchasePrice ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
+        // Grey it out until there's both an Average Purchase Price column AND a real (non-zero) value entered.
+        customIsDefault[p.id] = !hasRealPurchasePrice;
       }
     });
 
