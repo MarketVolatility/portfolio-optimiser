@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.12 (per-column sort, duplicate fix, runway 99999, purchase tracking)
-console.log("app.js loaded — build v5.12 (per-column sort, duplicate fix, runway 99999, purchase tracking)");
+// APP.JS BUILD: v5.13 (cash runway now in years, formula recalibrated)
+console.log("app.js loaded — build v5.13 (cash runway now in years, formula recalibrated)");
 
 // --- Live data state ---
 let liveDataMap = {}; // ticker -> { price, pe, roa, fetchedAt } or undefined if not fetched/failed
@@ -186,7 +186,7 @@ const BUILTIN_COLUMNS = [
   { id: "pegRatio", label: "PEG Ratio", type: "number", computed: false },
   { id: "debtToEquity", label: "D/E Ratio", type: "number", computed: false },
   { id: "freeCashFlow", label: "FCF ($M)", type: "number", computed: false },
-  { id: "cashRunway", label: "Cash Runway (mo)", type: "number", computed: false },
+  { id: "cashRunway", label: "Cash Runway (yr)", type: "number", computed: false },
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
   { id: "stability", label: "Stability", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
@@ -1090,7 +1090,7 @@ function runMatrixOptimization() {
       // names specifically, a longer cash runway is what keeps the bet alive long
       // enough to pay off — so runway matters here more than anywhere else.
       attributionScore += revenueGrowth * 0.6;
-      if (freeCashFlow < 0 && cashRunway < 99999) attributionScore += Math.min(cashRunway, 36) * 0.5;
+      if (freeCashFlow < 0 && cashRunway < 99999) attributionScore += Math.min(cashRunway, 3) * 6;
       if (beta > 1.5) attributionScore += (beta - 1.5) * 8;
     }
 
