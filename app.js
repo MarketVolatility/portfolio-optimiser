@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.22 (Past Purchases: repeat assets, monthly sale subtotals)
-console.log("app.js loaded — build v5.22 (Past Purchases: repeat assets, monthly sale subtotals)");
+// APP.JS BUILD: v5.23 (Parameter dropdown & glossary coverage audit)
+console.log("app.js loaded — build v5.23 (Parameter dropdown & glossary coverage audit)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1008,15 +1008,43 @@ function renderImportListSelect(){
 // AAPL) can appear on multiple rows, since a real position can be bought and sold
 // more than once and each round trip deserves its own row.
 //
-// Two preset-only additions specific to this table: "Date Sale" / "Selling
-// Price" (plain manual fields) and "Sale Profit" (computed: Units Purchased ×
-// (Selling Price − Average Purchase Price), looked up by label among this
-// table's OWN columns — mirrors how the main table's "Actual Upside %" preset
-// looks up "Average Purchase Price ($)" among ITS own custom params).
+// Preset-only additions specific to this table. Two groups:
+//
+// 1. Sale-tracking fields: "Date Sale" / "Selling Price" (plain manual fields)
+//    and "Sale Profit" (computed: Units Purchased × (Selling Price − Average
+//    Purchase Price), looked up by label among this table's OWN columns —
+//    mirrors how the main table's "Actual Upside %" preset looks up "Average
+//    Purchase Price ($)" among ITS own custom params).
+//
+// 2. Fundamentals fields that mirror the main table's BUILTIN_COLUMNS
+//    (ROA, P/E, Current Price, Target Price, Rev Growth, Net Margin, PEG,
+//    D/E, FCF, Cash Runway, Beta, Stability). The main table doesn't offer
+//    these in its own preset dropdown because they already exist there as
+//    fixed columns (adding them again would just collide with the existing
+//    column). But Past Purchases has NO fixed columns at all, so without
+//    these entries there'd be no way to record e.g. the Current Price at the
+//    time of a purchase/sale here — hence they're listed as manual-entry
+//    presets for this table only. Labels match BUILTIN_COLUMNS exactly.
+//    ("Company Name", "Implied Upside", and "Optimized Weight Allocation"
+//    are deliberately left out — the first duplicates the Asset identity
+//    column, and the other two are optimizer outputs computed for a whole
+//    Portfolio List, not something that stands alone per past purchase.)
 const PP_ONLY_PARAM_PRESETS = [
   { label: "Date Sale", type: "date", defaultValue: "" },
   { label: "Selling Price", type: "number", defaultValue: 0 },
   { label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+  { label: "ROA (%)", type: "number", defaultValue: 0 },
+  { label: "P/E Multiple", type: "number", defaultValue: 0 },
+  { label: "Current Price", type: "number", defaultValue: 0 },
+  { label: "Target Price", type: "number", defaultValue: 0 },
+  { label: "Rev Growth (YoY%)", type: "number", defaultValue: 0 },
+  { label: "Net Margin (%)", type: "number", defaultValue: 0 },
+  { label: "PEG Ratio", type: "number", defaultValue: 0 },
+  { label: "D/E Ratio", type: "number", defaultValue: 0 },
+  { label: "FCF ($M)", type: "number", defaultValue: 0 },
+  { label: "Cash Runway (yr)", type: "number", defaultValue: 0 },
+  { label: "Beta", type: "number", defaultValue: 0 },
+  { label: "Stability", type: "text", defaultValue: "" },
 ];
 const PP_PARAM_PRESETS = [...PARAM_PRESETS, ...PP_ONLY_PARAM_PRESETS];
 const PP_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -2578,8 +2606,12 @@ try{
     });
   }
 
-  // Same preset list as the main table's "+/- Parameter" panel, plus three
-  // Past-Purchases-only additions (Date Sale, Selling Price, Sale Profit).
+  // Same preset list as the main table's "+/- Parameter" panel, plus this
+  // table's own additions: sale-tracking fields (Date Sale, Selling Price,
+  // Sale Profit) and fundamentals fields that mirror the main table's fixed
+  // columns (Current Price, ROA, P/E, Target Price, Rev Growth, Net Margin,
+  // PEG, D/E, FCF, Cash Runway, Beta, Stability) — offered here since Past
+  // Purchases has no fixed columns of its own to hold them.
   // Picking a plain preset autofills name/type/default; picking "Sale Profit"
   // also flags it as computed so it gets calculated rather than typed in.
   let ppSelectedPresetMeta = null;
