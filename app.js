@@ -1,24 +1,152 @@
-// APP.JS BUILD: v5.16 (visible account panel, fixed missing CSS classes)
-console.log("app.js loaded — build v5.16 (visible account panel, fixed missing CSS classes)");
+// APP.JS BUILD: v5.18 (mandatory login gate, matching working sample)
+console.log("app.js loaded — build v5.18 (mandatory login gate, matching working sample)");
 
-// --- Supabase auth + cross-device sync ---
-// Design note: rather than rewrite every localStorage-based function in this file
-// to be async, localStorage stays the fast synchronous source of truth the rest
-// of the app already reads/writes. This layer mirrors the relevant keys to a
-// single Supabase row per user: pulling on login (overwrites local with cloud),
-// and pushing periodically + on demand while logged in.
+// --- Supabase auth (mandatory gate) + cross-device sync ---
+// Design note: localStorage stays the fast synchronous source of truth the
+// rest of the app already reads/writes. This layer mirrors the relevant keys
+// to a single Supabase row per user: pulling on login (overwrites local with
+// cloud), and pushing periodically + on demand while logged in. The whole app
+// is hidden behind #authOverlay until a session is confirmed.
 const SUPABASE_URL = "https://okbgjjnfxkbbryfgpyap.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_JsrzOaKxp0RJo2Se4MDctg_tGiG_GaD";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JsrzOaKxp0RJo2Se4MDctg_tGiG_GaD";
 const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey"];
 
-let supabaseClient = null;
-try{
-  if(typeof supabase !== "undefined"){
-    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-}catch(e){ console.error("Supabase client failed to initialize:", e); }
+let authClient;
+function getAuthClient(){
+  if(authClient) return authClient;
+  if(!window.supabase) throw new Error('The sign-in library could not load. Check your connection and reload.');
+  let storage;
+  try{ storage = window.sessionStorage; }catch(_){ /* private-browsing edge case */ }
+  authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { storage, persistSession: !!storage, autoRefreshToken: true, detectSessionInUrl: false }
+  });
+  authClient.auth.onAuthStateChange(event => {
+    if(event === 'SIGNED_OUT'){ lockDashboard(); showAuthStep('loginStep'); }
+  });
+  return authClient;
+}
 
-let syncIntervalHandle = null;
+function showAuthStep(id){
+  document.querySelectorAll('.auth-step').forEach(el => el.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  document.querySelectorAll('.auth-message').forEach(el => { el.textContent = ''; el.className = 'auth-message'; });
+}
+
+function setAuthMessage(id, message, type=''){
+  const el = document.getElementById(id);
+  if(el){ el.textContent = message; el.className = 'auth-message ' + type; }
+}
+
+function authError(error){
+  if(error.code === 'email_not_confirmed') return 'Email confirmation is still required by the server. Disable "Confirm email" in Supabase\'s Email provider settings.';
+  if(/load failed|failed to fetch|network|fetch failed/i.test(error.message || ''))
+    return 'Cannot reach the authentication service. Check your internet connection and try again.';
+  return error.message || 'Authentication failed. Please try again.';
+}
+
+async function authAction(event, messageId, action){
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  if(button?.disabled) return false;
+  if(button) button.disabled = true;
+  setAuthMessage(messageId, 'Please wait…');
+  try{ await action(getAuthClient().auth); }
+  catch(error){ setAuthMessage(messageId, authError(error), 'error'); }
+  finally{ if(button) button.disabled = false; }
+  return false;
+}
+
+function lockDashboard(){
+  const appShell = document.getElementById('appShell');
+  const overlay = document.getElementById('authOverlay');
+  if(appShell) appShell.style.display = 'none';
+  if(overlay) overlay.style.display = 'flex';
+}
+
+async function openDashboard(user){
+  if(!user?.id) throw new Error('No authenticated user was returned. Please sign in again.');
+  const emailInline = document.getElementById('loggedInEmailInline');
+  if(emailInline) emailInline.textContent = user.email || '';
+  const overlay = document.getElementById('authOverlay');
+  const appShell = document.getElementById('appShell');
+  if(overlay) overlay.style.display = 'none';
+  if(appShell) appShell.style.display = 'block';
+  document.querySelectorAll('input[type="password"]').forEach(el => { el.value = ''; });
+
+  const syncStatusEl = document.getElementById('syncStatus');
+  if(syncStatusEl){ syncStatusEl.textContent = 'Checking for cloud data…'; syncStatusEl.style.color = 'var(--sub)'; }
+
+  const pullResult = await pullSnapshotFromCloud();
+  if(pullResult.ok && pullResult.found){
+    if(syncStatusEl){ syncStatusEl.textContent = 'Loaded your saved data from the cloud.'; syncStatusEl.style.color = 'var(--emerald)'; }
+  } else if(pullResult.ok && !pullResult.found){
+    await pushSnapshotToCloud();
+    if(syncStatusEl){ syncStatusEl.textContent = "No cloud data yet — saved this device's data as your starting point."; syncStatusEl.style.color = 'var(--emerald)'; }
+  } else {
+    if(syncStatusEl){ syncStatusEl.textContent = `Could not reach cloud data: ${pullResult.reason}`; syncStatusEl.style.color = 'var(--amber)'; }
+  }
+
+  // Render the whole app now that we have (possibly cloud-restored) data.
+  renderListSelector();
+  renderRemoveList();
+  renderCustomParamList();
+  renderColumnOrderList();
+  runMatrixOptimization();
+
+  startAutoSync();
+}
+
+async function handleRegister(event){
+  return authAction(event, 'registerMessage', async auth => {
+    const email = document.getElementById('registerEmail').value.trim().toLowerCase();
+    const password = document.getElementById('registerPassword').value;
+    if(password !== document.getElementById('registerPassword2').value) throw new Error('Passwords do not match.');
+    if(password.length < 8) throw new Error('Password must contain at least 8 characters.');
+    const { data, error } = await auth.signUp({ email, password });
+    if(error) throw error;
+    if(!data.session) throw new Error('Sign-up did not return a session. Disable "Confirm email" in Supabase\'s Email provider settings, then try signing in.');
+    await openDashboard(data.user);
+  });
+}
+
+async function handleLogin(event){
+  return authAction(event, 'loginMessage', async auth => {
+    const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+    const { data, error } = await auth.signInWithPassword({ email, password: document.getElementById('loginPassword').value });
+    if(error) throw error;
+    if(!data.session) throw new Error('Sign-in did not return a session. Please try again.');
+    await openDashboard(data.user);
+  });
+}
+
+async function logoutUser(){
+  stopAutoSync();
+  lockDashboard();
+  showAuthStep('loginStep');
+  try{
+    const { error } = await getAuthClient().auth.signOut({ scope: 'local' });
+    if(error) throw error;
+    document.querySelectorAll('input[type="password"]').forEach(el => { el.value = ''; });
+  }catch(error){ setAuthMessage('loginMessage', 'Sign-out could not complete. ' + authError(error), 'error'); }
+}
+
+async function checkExistingSession(){
+  try{
+    const auth = getAuthClient().auth;
+    const { data: { session }, error } = await auth.getSession();
+    if(error) throw error;
+    if(!session) return;
+    const { data, error: userError } = await auth.getUser();
+    if(userError) throw userError;
+    await openDashboard(data.user);
+  }catch(error){ setAuthMessage('loginMessage', authError(error), 'error'); }
+}
+
+// Expose the handlers the inline HTML attributes call (onsubmit/onclick).
+window.handleLogin = handleLogin;
+window.handleRegister = handleRegister;
+window.logoutUser = logoutUser;
+window.showAuthStep = showAuthStep;
 
 function snapshotLocalData(){
   const snapshot = {};
@@ -38,12 +166,13 @@ function applyRemoteSnapshot(snapshot){
 }
 
 async function pushSnapshotToCloud(){
-  if(!supabaseClient) return { ok: false, reason: "Supabase not initialized" };
-  const { data: userData } = await supabaseClient.auth.getUser();
+  if(!window.supabase) return { ok: false, reason: "Supabase not initialized" };
+  const client = getAuthClient();
+  const { data: userData } = await client.auth.getUser();
   const user = userData && userData.user;
   if(!user) return { ok: false, reason: "not logged in" };
   const snapshot = snapshotLocalData();
-  const { error } = await supabaseClient
+  const { error } = await client
     .from("user_app_data")
     .upsert({ user_id: user.id, data: snapshot, updated_at: new Date().toISOString() });
   if(error) return { ok: false, reason: error.message };
@@ -51,11 +180,12 @@ async function pushSnapshotToCloud(){
 }
 
 async function pullSnapshotFromCloud(){
-  if(!supabaseClient) return { ok: false, reason: "Supabase not initialized" };
-  const { data: userData } = await supabaseClient.auth.getUser();
+  if(!window.supabase) return { ok: false, reason: "Supabase not initialized" };
+  const client = getAuthClient();
+  const { data: userData } = await client.auth.getUser();
   const user = userData && userData.user;
   if(!user) return { ok: false, reason: "not logged in" };
-  const { data, error } = await supabaseClient
+  const { data, error } = await client
     .from("user_app_data")
     .select("data")
     .eq("user_id", user.id)
@@ -68,6 +198,7 @@ async function pullSnapshotFromCloud(){
   return { ok: true, found: false };
 }
 
+let syncIntervalHandle = null;
 function startAutoSync(){
   if(syncIntervalHandle) clearInterval(syncIntervalHandle);
   syncIntervalHandle = setInterval(async () => {
@@ -79,24 +210,8 @@ function startAutoSync(){
     }
   }, 8000);
 }
-
 function stopAutoSync(){
   if(syncIntervalHandle){ clearInterval(syncIntervalHandle); syncIntervalHandle = null; }
-}
-
-function updateAuthUI(user){
-  const loggedOutPanel = document.getElementById("loggedOutPanel");
-  const loggedInPanel = document.getElementById("loggedInPanel");
-  const loggedInEmail = document.getElementById("loggedInEmail");
-  if(!loggedOutPanel || !loggedInPanel) return;
-  if(user){
-    loggedOutPanel.style.display = "none";
-    loggedInPanel.style.display = "flex";
-    if(loggedInEmail) loggedInEmail.textContent = user.email;
-  } else {
-    loggedOutPanel.style.display = "flex";
-    loggedInPanel.style.display = "none";
-  }
 }
 
 
@@ -1397,9 +1512,6 @@ function wireUpEditableCells(){
   });
 }
 
-// Default execution initialization
-runMatrixOptimization();
-
 // --- Wire up portfolio list management ---
 try{
   renderListSelector();
@@ -1705,88 +1817,14 @@ try{
   console.error("Failed to wire up live-data controls:", err);
 }
 
-// --- Wire up auth (sign up / log in / log out / sync) ---
+// --- Wire up the in-app sync controls (logout/sync-now, once already logged in) ---
 try{
-  function reRenderEverything(){
-    renderListSelector();
-    renderRemoveList();
-    renderCustomParamList();
-    renderColumnOrderList();
-    runMatrixOptimization();
+  const logOutBtnInline = document.getElementById("logOutBtnInline");
+  if(logOutBtnInline){
+    logOutBtnInline.addEventListener("click", logoutUser);
   }
 
-  const signUpBtn = document.getElementById("signUpBtn");
-  const logInBtn = document.getElementById("logInBtn");
-  const logOutBtn = document.getElementById("logOutBtn");
   const syncNowBtn = document.getElementById("syncNowBtn");
-
-  async function handleSuccessfulLogin(user){
-    updateAuthUI(user);
-    const statusEl = document.getElementById("authStatus");
-    const syncStatusEl = document.getElementById("syncStatus");
-    if(syncStatusEl){ syncStatusEl.textContent = "Checking for cloud data…"; syncStatusEl.style.color = "var(--sub)"; }
-
-    const pullResult = await pullSnapshotFromCloud();
-    if(pullResult.ok && pullResult.found){
-      reRenderEverything();
-      if(syncStatusEl){ syncStatusEl.textContent = "Loaded your saved data from the cloud."; syncStatusEl.style.color = "var(--emerald)"; }
-    } else if(pullResult.ok && !pullResult.found){
-      // First time this account has logged in anywhere — push what's currently on this device up as the starting point.
-      await pushSnapshotToCloud();
-      if(syncStatusEl){ syncStatusEl.textContent = "No cloud data yet — saved this device's data as your starting point."; syncStatusEl.style.color = "var(--emerald)"; }
-    } else {
-      if(syncStatusEl){ syncStatusEl.textContent = `Could not reach cloud data: ${pullResult.reason}`; syncStatusEl.style.color = "var(--amber)"; }
-    }
-    startAutoSync();
-  }
-
-  if(signUpBtn){
-    signUpBtn.addEventListener("click", async () => {
-      const statusEl = document.getElementById("authStatus");
-      if(!supabaseClient){ statusEl.textContent = "Supabase failed to load."; statusEl.style.color = "var(--amber)"; return; }
-      const email = document.getElementById("authEmail").value.trim();
-      const password = document.getElementById("authPassword").value;
-      if(!email || !password){ statusEl.textContent = "Email and password are required."; statusEl.style.color = "var(--amber)"; return; }
-      statusEl.textContent = "Signing up…"; statusEl.style.color = "var(--sub)";
-      const { data, error } = await supabaseClient.auth.signUp({ email, password });
-      if(error){ statusEl.textContent = `Sign up failed: ${error.message}`; statusEl.style.color = "var(--amber)"; return; }
-      if(data.user && !data.session){
-        // This happens if "Confirm email" is still enabled in the Supabase dashboard.
-        statusEl.textContent = "Account created, but email confirmation appears to be required — disable it in Supabase's Auth settings, or check your inbox to confirm.";
-        statusEl.style.color = "var(--amber)";
-        return;
-      }
-      statusEl.textContent = "Signed up and logged in.";
-      statusEl.style.color = "var(--emerald)";
-      await handleSuccessfulLogin(data.user);
-    });
-  }
-
-  if(logInBtn){
-    logInBtn.addEventListener("click", async () => {
-      const statusEl = document.getElementById("authStatus");
-      if(!supabaseClient){ statusEl.textContent = "Supabase failed to load."; statusEl.style.color = "var(--amber)"; return; }
-      const email = document.getElementById("authEmail").value.trim();
-      const password = document.getElementById("authPassword").value;
-      if(!email || !password){ statusEl.textContent = "Email and password are required."; statusEl.style.color = "var(--amber)"; return; }
-      statusEl.textContent = "Logging in…"; statusEl.style.color = "var(--sub)";
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if(error){ statusEl.textContent = `Log in failed: ${error.message}`; statusEl.style.color = "var(--amber)"; return; }
-      statusEl.textContent = "";
-      await handleSuccessfulLogin(data.user);
-    });
-  }
-
-  if(logOutBtn){
-    logOutBtn.addEventListener("click", async () => {
-      if(supabaseClient) await supabaseClient.auth.signOut();
-      stopAutoSync();
-      updateAuthUI(null);
-      const syncStatusEl = document.getElementById("syncStatus");
-      if(syncStatusEl) syncStatusEl.textContent = "";
-    });
-  }
-
   if(syncNowBtn){
     syncNowBtn.addEventListener("click", async () => {
       const syncStatusEl = document.getElementById("syncStatus");
@@ -1796,17 +1834,12 @@ try{
       syncStatusEl.style.color = result.ok ? "var(--emerald)" : "var(--amber)";
     });
   }
-
-  // On page load, check if a session already exists (e.g. returning to the app
-  // in the same browser) and pull the latest cloud data if so.
-  if(supabaseClient){
-    supabaseClient.auth.getSession().then(async ({ data }) => {
-      if(data && data.session && data.session.user){
-        await handleSuccessfulLogin(data.session.user);
-      }
-    });
-  }
 }catch(err){
-  console.error("Failed to wire up auth:", err);
+  console.error("Failed to wire up sync controls:", err);
 }
+
+// On page load, check if a session already exists (e.g. returning to the app
+// in the same browser) and open the dashboard automatically if so. Otherwise
+// the auth overlay (already visible by default) stays up until sign-in/sign-up.
+checkExistingSession();
 
