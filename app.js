@@ -1174,7 +1174,7 @@ function renderPastPurchasesTable(){
   const tickers = getPastPurchasesTickers();
   const values = getPastPurchasesValues();
 
-  let headHtml = '<tr><th>Ticker</th>';
+  let headHtml = '<tr><th>Past Purchases</th>';
   params.forEach((p, idx) => {
     headHtml += `<th>
       <div>${p.label}</div>
@@ -1215,8 +1215,8 @@ function renderPastPurchasesTable(){
     td.style.color = "var(--text-secondary)";
     td.style.padding = "1.25rem 1rem";
     td.textContent = tickers.length === 0
-      ? "No tickers yet — add one above, or import a list."
-      : "Add at least one parameter above to start tracking data for these tickers.";
+      ? "No assets yet — add one above, or import a list."
+      : "Add at least one parameter above to start tracking data for these assets.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
@@ -2172,10 +2172,10 @@ try{
       renderPastPurchasesTable();
 
       if(result.imported === 0){
-        statusEl.textContent = `Nothing new to import — every ticker from "${sourceName}" is already in Past Purchases.`;
+        statusEl.textContent = `Nothing new to import — every asset from "${sourceName}" is already in Past Purchases.`;
         statusEl.style.color = "var(--text-secondary)";
       } else {
-        statusEl.textContent = `Imported ${result.imported} ticker(s) from "${sourceName}".`;
+        statusEl.textContent = `Imported ${result.imported} asset(s) from "${sourceName}".`;
         statusEl.style.color = "var(--emerald)";
       }
     });
@@ -2188,7 +2188,7 @@ try{
       const statusEl = document.getElementById("ppAddTickerStatus");
       const ticker = tickerInput.value.trim().toUpperCase();
       if(!ticker){
-        statusEl.textContent = "Enter a ticker first.";
+        statusEl.textContent = "Enter an asset first.";
         statusEl.style.color = "var(--amber)";
         return;
       }
@@ -2203,6 +2203,29 @@ try{
       statusEl.textContent = `${ticker} added to Past Purchases.`;
       statusEl.style.color = "var(--emerald)";
       tickerInput.value = "";
+    });
+  }
+
+  // Same 40-parameter preset list as the main table's "+/- Parameter" panel —
+  // picking one just autofills name/type/default below; Past Purchases has no
+  // live-fetch or computed-formula engine, so those preset behaviors don't carry
+  // over, only the plain field values do.
+  const ppNewParamPreset = document.getElementById("ppNewParamPreset");
+  if(ppNewParamPreset){
+    ppNewParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
+      PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+    ppNewParamPreset.addEventListener("change", () => {
+      const val = ppNewParamPreset.value;
+      if(val === "__custom__"){
+        document.getElementById("ppNewParamLabel").value = "";
+        document.getElementById("ppNewParamType").value = "number";
+        document.getElementById("ppNewParamDefault").value = "";
+      } else {
+        const preset = PARAM_PRESETS[parseInt(val, 10)];
+        document.getElementById("ppNewParamLabel").value = preset.label;
+        document.getElementById("ppNewParamType").value = preset.type;
+        document.getElementById("ppNewParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
+      }
     });
   }
 
@@ -2234,6 +2257,7 @@ try{
       statusEl.style.color = "var(--emerald)";
       document.getElementById("ppNewParamLabel").value = "";
       document.getElementById("ppNewParamDefault").value = "";
+      if(ppNewParamPreset) ppNewParamPreset.value = "__custom__";
     });
   }
 
