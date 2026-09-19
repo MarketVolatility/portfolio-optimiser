@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.15 (Supabase login + cross-device sync)
-console.log("app.js loaded — build v5.15 (Supabase login + cross-device sync)");
+// APP.JS BUILD: v5.16 (visible account panel, fixed missing CSS classes)
+console.log("app.js loaded — build v5.16 (visible account panel, fixed missing CSS classes)");
 
 // --- Supabase auth + cross-device sync ---
 // Design note: rather than rewrite every localStorage-based function in this file
