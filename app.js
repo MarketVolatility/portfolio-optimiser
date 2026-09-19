@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.19 (corrected publishable key for right project)
-console.log("app.js loaded — build v5.19 (corrected publishable key for right project)");
+// APP.JS BUILD: v5.20 (added freeform Past Purchases table)
+console.log("app.js loaded — build v5.20 (added freeform Past Purchases table)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -9,7 +9,7 @@ console.log("app.js loaded — build v5.19 (corrected publishable key for right 
 // is hidden behind #authOverlay until a session is confirmed.
 const SUPABASE_URL = "https://okbgjjnfxkbbryfgpyap.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR";
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesTickers", "pastPurchasesParams", "pastPurchasesValues"];
 
 let authClient;
 function getAuthClient(){
@@ -92,6 +92,9 @@ async function openDashboard(user){
   renderCustomParamList();
   renderColumnOrderList();
   runMatrixOptimization();
+  renderPastPurchasesTickerList();
+  renderPastPurchasesParamList();
+  renderPastPurchasesTable();
 
   startAutoSync();
 }
@@ -983,6 +986,297 @@ function renderImportListSelect(){
   }
 }
 
+// --- Past Purchases: a second, fully freeform table with NO built-in columns.
+// Unlike the main table (BUILTIN_COLUMNS + optional custom params layered on top),
+// every column here is something the user explicitly chose to add — there is
+// nothing pre-set beyond the Ticker identity column itself. Tickers can be typed
+// in directly or imported wholesale from any existing Portfolio List above.
+function getPastPurchasesTickers(){
+  try{ return JSON.parse(localStorage.getItem("pastPurchasesTickers") || "[]"); }
+  catch(e){ return []; }
+}
+function savePastPurchasesTickers(list){
+  try{ localStorage.setItem("pastPurchasesTickers", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function getPastPurchasesParams(){
+  try{ return JSON.parse(localStorage.getItem("pastPurchasesParams") || "[]"); }
+  catch(e){ return []; }
+}
+function savePastPurchasesParams(list){
+  try{ localStorage.setItem("pastPurchasesParams", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function getPastPurchasesValues(){
+  try{ return JSON.parse(localStorage.getItem("pastPurchasesValues") || "{}"); }
+  catch(e){ return {}; }
+}
+function savePastPurchasesValues(values){
+  try{ localStorage.setItem("pastPurchasesValues", JSON.stringify(values)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function setPastPurchaseValue(ticker, paramId, value){
+  const values = getPastPurchasesValues();
+  if(!values[ticker]) values[ticker] = {};
+  values[ticker][paramId] = value;
+  savePastPurchasesValues(values);
+}
+
+function addPastPurchaseTicker(ticker){
+  const tickers = getPastPurchasesTickers();
+  if(tickers.includes(ticker)) return false;
+  tickers.push(ticker);
+  savePastPurchasesTickers(tickers);
+  return true;
+}
+
+function removePastPurchaseTicker(ticker){
+  savePastPurchasesTickers(getPastPurchasesTickers().filter(t => t !== ticker));
+  const values = getPastPurchasesValues();
+  delete values[ticker];
+  savePastPurchasesValues(values);
+}
+
+function addPastPurchaseParam({label, type, defaultValue}){
+  const params = getPastPurchasesParams();
+  const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const id = "pp_" + (slug || "param") + "_" + Date.now().toString(36);
+  const isText = type === "text";
+  const isDate = type === "date";
+  let resolvedDefault;
+  if(isDate){
+    resolvedDefault = (!defaultValue || defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : defaultValue;
+  } else if(isText){
+    resolvedDefault = defaultValue || "";
+  } else {
+    resolvedDefault = parseFloat(defaultValue) || 0;
+  }
+  params.push({ id, label: label.trim(), type: isDate ? "date" : (isText ? "text" : "number"), defaultValue: resolvedDefault });
+  savePastPurchasesParams(params);
+  return id;
+}
+
+function removePastPurchaseParam(id){
+  savePastPurchasesParams(getPastPurchasesParams().filter(p => p.id !== id));
+  const values = getPastPurchasesValues();
+  Object.keys(values).forEach(ticker => { if(values[ticker]) delete values[ticker][id]; });
+  savePastPurchasesValues(values);
+}
+
+function movePastPurchaseParam(id, direction){
+  const params = getPastPurchasesParams();
+  const idx = params.findIndex(p => p.id === id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= params.length) return;
+  [params[idx], params[newIdx]] = [params[newIdx], params[idx]];
+  savePastPurchasesParams(params);
+}
+
+// Pulls in every ticker currently visible in the chosen Portfolio List (base +
+// custom, minus anything removed there) — mirrors importListInto()'s ticker
+// resolution, but only the ticker symbols themselves come across, since Past
+// Purchases has no fixed schema for the source list's data to map onto.
+function importListIntoPastPurchases(sourceListId){
+  const lists = getAllLists();
+  const sourceList = lists[sourceListId];
+  if(!sourceList) return { imported: 0, total: 0 };
+  const sourceTickers = getWorkingData(sourceList).map(a => a.ticker);
+  const tickers = getPastPurchasesTickers();
+  let importedCount = 0;
+  sourceTickers.forEach(ticker => {
+    if(!tickers.includes(ticker)){
+      tickers.push(ticker);
+      importedCount++;
+    }
+  });
+  savePastPurchasesTickers(tickers);
+  return { imported: importedCount, total: sourceTickers.length };
+}
+
+function renderPastPurchasesImportSelect(){
+  const select = document.getElementById("ppImportListSelect");
+  if(!select) return;
+  const lists = getAllLists();
+  const ids = Object.keys(lists);
+  select.innerHTML = "";
+  if(ids.length === 0){
+    select.innerHTML = '<option value="">No lists yet</option>';
+    return;
+  }
+  ids.forEach(id => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = lists[id].name;
+    select.appendChild(opt);
+  });
+}
+
+function renderPastPurchasesTickerList(){
+  const container = document.getElementById("ppTickerList");
+  if(!container) return;
+  container.innerHTML = "";
+  const tickers = getPastPurchasesTickers();
+  if(tickers.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No tickers in Past Purchases yet.</span>`;
+    return;
+  }
+  tickers.forEach(ticker => {
+    const chip = document.createElement("div");
+    chip.className = "remove-chip";
+    chip.innerHTML = `<span>${ticker}</span><button data-ticker="${ticker}" title="Remove ${ticker}">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", (e) => {
+      const t = e.target.getAttribute("data-ticker");
+      if(confirm(`Remove "${t}" from Past Purchases? This deletes its row and all its values.`)){
+        removePastPurchaseTicker(t);
+        renderPastPurchasesTickerList();
+        renderPastPurchasesTable();
+      }
+    });
+    container.appendChild(chip);
+  });
+}
+
+function renderPastPurchasesParamList(){
+  const container = document.getElementById("ppParamList");
+  if(!container) return;
+  container.innerHTML = "";
+  const params = getPastPurchasesParams();
+  if(params.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No parameters added yet — use the form above.</span>`;
+    return;
+  }
+  params.forEach(p => {
+    const chip = document.createElement("div");
+    chip.className = "remove-chip";
+    chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", (e) => {
+      const id = e.target.getAttribute("data-id");
+      if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
+        removePastPurchaseParam(id);
+        renderPastPurchasesParamList();
+        renderPastPurchasesTable();
+      }
+    });
+    container.appendChild(chip);
+  });
+}
+
+function renderPastPurchasesTable(){
+  const thead = document.getElementById("ppTableHead");
+  const tbody = document.getElementById("ppTableBody");
+  if(!thead || !tbody) return;
+
+  const params = getPastPurchasesParams();
+  const tickers = getPastPurchasesTickers();
+  const values = getPastPurchasesValues();
+
+  let headHtml = '<tr><th>Ticker</th>';
+  params.forEach((p, idx) => {
+    headHtml += `<th>
+      <div>${p.label}</div>
+      <div class="col-header-controls">
+        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left">&lt;</button>
+        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="1" ${idx === params.length - 1 ? 'disabled' : ''} title="Move right">&gt;</button>
+        <button class="pp-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${p.id}" title="Remove this parameter">&times;</button>
+      </div>
+    </th>`;
+  });
+  headHtml += '</tr>';
+  thead.innerHTML = headHtml;
+
+  thead.querySelectorAll('.pp-col-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const action = btn.getAttribute('data-action');
+      if(action === 'move'){
+        movePastPurchaseParam(id, parseInt(btn.getAttribute('data-dir'), 10));
+        renderPastPurchasesTable();
+      } else if(action === 'remove'){
+        const def = params.find(p => p.id === id);
+        if(confirm(`Remove the "${def.label}" column? This deletes its values for every ticker.`)){
+          removePastPurchaseParam(id);
+          renderPastPurchasesTable();
+          renderPastPurchasesParamList();
+        }
+      }
+    });
+  });
+
+  tbody.innerHTML = "";
+  if(tickers.length === 0 || params.length === 0){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = params.length + 1;
+    td.style.color = "var(--text-secondary)";
+    td.style.padding = "1.25rem 1rem";
+    td.textContent = tickers.length === 0
+      ? "No tickers yet — add one above, or import a list."
+      : "Add at least one parameter above to start tracking data for these tickers.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  tickers.forEach(ticker => {
+    const tr = document.createElement('tr');
+    let rowHtml = `<td>
+      <span class="ticker-txt">${ticker}</span>
+      <div class="row-ctrl-controls">
+        <button class="pp-row-remove row-ctrl-btn row-ctrl-remove" data-ticker="${ticker}" title="Remove ${ticker}">&times;</button>
+      </div>
+    </td>`;
+    params.forEach(p => {
+      const stored = values[ticker] ? values[ticker][p.id] : undefined;
+      const val = stored !== undefined ? stored : p.defaultValue;
+      if(p.type === 'text'){
+        rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="text" type="text" value="${escAttr(val)}"></td>`;
+      } else if(p.type === 'date'){
+        rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="date" type="date" value="${escAttr(val)}"></td>`;
+      } else {
+        rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"></td>`;
+      }
+    });
+    tr.innerHTML = rowHtml;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.pp-cell-input').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const ticker = e.target.getAttribute('data-ticker');
+      const field = e.target.getAttribute('data-field');
+      const isNum = e.target.getAttribute('data-type') === 'number';
+      let value = e.target.value;
+      if(isNum){
+        value = parseFloat(value);
+        if(isNaN(value)) value = 0;
+      }
+      setPastPurchaseValue(ticker, field, value);
+    });
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' && el.tagName === 'INPUT'){
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.pp-row-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const ticker = e.target.getAttribute('data-ticker');
+      if(confirm(`Remove "${ticker}" from Past Purchases? This deletes its row and all its values.`)){
+        removePastPurchaseTicker(ticker);
+        renderPastPurchasesTickerList();
+        renderPastPurchasesTable();
+      }
+    });
+  });
+}
+
 function renderListSelector(){
   const selector = document.getElementById("listSelector");
   const heading = document.getElementById("activeListHeading");
@@ -1007,6 +1301,7 @@ function renderListSelector(){
   }
 
   renderImportListSelect();
+  renderPastPurchasesImportSelect();
 }
 
 function showListActionStatus(message){
@@ -1836,6 +2131,118 @@ try{
   }
 }catch(err){
   console.error("Failed to wire up sync controls:", err);
+}
+
+// --- Wire up the Past Purchases table (freeform tickers + freeform parameters) ---
+try{
+  const ppTabs = [
+    { btn: "ppTabTickerBtn", panel: "ppTickerPanel", onShow: renderPastPurchasesTickerList },
+    { btn: "ppTabParamBtn", panel: "ppParamPanel", onShow: renderPastPurchasesParamList },
+  ];
+  const ppTabsMissing = ppTabs.some(t => !document.getElementById(t.btn) || !document.getElementById(t.panel));
+  if(ppTabsMissing){
+    console.warn("Past Purchases tab elements missing — index.html may be out of date.");
+  } else {
+    ppTabs.forEach(t => {
+      document.getElementById(t.btn).addEventListener("click", () => {
+        ppTabs.forEach(other => {
+          document.getElementById(other.panel).style.display = (other.btn === t.btn) ? "block" : "none";
+          document.getElementById(other.btn).classList.toggle("active-tab", other.btn === t.btn);
+        });
+        if(t.onShow) t.onShow();
+      });
+    });
+  }
+
+  const ppImportListBtn = document.getElementById("ppImportListBtn");
+  if(ppImportListBtn){
+    ppImportListBtn.addEventListener("click", () => {
+      const select = document.getElementById("ppImportListSelect");
+      const statusEl = document.getElementById("ppImportStatus");
+      const sourceId = select.value;
+      if(!sourceId){
+        statusEl.textContent = "No list available to import from.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      const lists = getAllLists();
+      const sourceName = lists[sourceId].name;
+      const result = importListIntoPastPurchases(sourceId);
+      renderPastPurchasesTickerList();
+      renderPastPurchasesTable();
+
+      if(result.imported === 0){
+        statusEl.textContent = `Nothing new to import — every ticker from "${sourceName}" is already in Past Purchases.`;
+        statusEl.style.color = "var(--text-secondary)";
+      } else {
+        statusEl.textContent = `Imported ${result.imported} ticker(s) from "${sourceName}".`;
+        statusEl.style.color = "var(--emerald)";
+      }
+    });
+  }
+
+  const ppAddTickerBtn = document.getElementById("ppAddTickerBtn");
+  if(ppAddTickerBtn){
+    ppAddTickerBtn.addEventListener("click", () => {
+      const tickerInput = document.getElementById("ppNewTicker");
+      const statusEl = document.getElementById("ppAddTickerStatus");
+      const ticker = tickerInput.value.trim().toUpperCase();
+      if(!ticker){
+        statusEl.textContent = "Enter a ticker first.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      const added = addPastPurchaseTicker(ticker);
+      if(!added){
+        statusEl.textContent = `${ticker} is already in Past Purchases.`;
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      renderPastPurchasesTickerList();
+      renderPastPurchasesTable();
+      statusEl.textContent = `${ticker} added to Past Purchases.`;
+      statusEl.style.color = "var(--emerald)";
+      tickerInput.value = "";
+    });
+  }
+
+  const ppAddParamBtn = document.getElementById("ppAddParamBtn");
+  if(ppAddParamBtn){
+    ppAddParamBtn.addEventListener("click", () => {
+      const label = document.getElementById("ppNewParamLabel").value.trim();
+      const type = document.getElementById("ppNewParamType").value;
+      const defaultValue = document.getElementById("ppNewParamDefault").value.trim();
+      const statusEl = document.getElementById("ppAddParamStatus");
+
+      if(!label){
+        statusEl.textContent = "Parameter name is required.";
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+      const exactDuplicate = getPastPurchasesParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase());
+      if(exactDuplicate){
+        statusEl.textContent = `"${label}" already exists as a column in Past Purchases. Edit it directly in the table instead.`;
+        statusEl.style.color = "var(--amber)";
+        return;
+      }
+
+      addPastPurchaseParam({ label, type, defaultValue });
+      renderPastPurchasesParamList();
+      renderPastPurchasesTable();
+
+      statusEl.textContent = `"${label}" added as a new column.`;
+      statusEl.style.color = "var(--emerald)";
+      document.getElementById("ppNewParamLabel").value = "";
+      document.getElementById("ppNewParamDefault").value = "";
+    });
+  }
+
+  renderPastPurchasesImportSelect();
+  renderPastPurchasesTickerList();
+  renderPastPurchasesParamList();
+  renderPastPurchasesTable();
+}catch(err){
+  console.error("Failed to wire up Past Purchases table:", err);
 }
 
 // On page load, check if a session already exists (e.g. returning to the app
