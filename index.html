@@ -310,7 +310,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.20 (added freeform Past Purchases table)
+    HTML build: v5.21 (Past Purchases: reorder, sort, pulled-in data, Sale Profit)
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2.5rem; margin-bottom:0.75rem;">
@@ -331,6 +331,8 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
       <button id="ppTabTickerBtn" class="tab-btn active-tab">+/- Asset</button>
       <button id="ppTabParamBtn" class="tab-btn">+/- Parameter</button>
+      <button id="ppTabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
+      <button id="ppTabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
     </div>
 
     <div id="ppTickerPanel">
@@ -344,8 +346,8 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </div>
 
     <div id="ppParamPanel" style="display:none;">
-      <div class="chart-note" style="margin-bottom:0.5rem;">Adds a new column to the Past Purchases table only. Type any name, pick a type, and (optionally) a default value — or choose from the same 40 common parameters available above.</div>
-      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:0.75rem; max-width:400px;">Choose from 40 common parameters, or pick Custom to type your own
+      <div class="chart-note" style="margin-bottom:0.5rem;">Adds a new column to the Past Purchases table only. Type any name, pick a type, and (optionally) a default value — or choose from the same common parameters available above, plus a few sale-tracking ones ("Date Sale", "Selling Price", and the computed "Sale Profit").</div>
+      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:0.75rem; max-width:400px;">Choose from common parameters, or pick Custom to type your own
         <select id="ppNewParamPreset" class="form-input"></select>
       </label>
       <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
@@ -368,12 +370,33 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <div class="chart-note" style="margin-top:0.75rem;">Existing parameters (click × to remove):</div>
       <div id="ppParamList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
     </div>
+
+    <div id="ppColumnsPanel" style="display:none;">
+      <div class="chart-note" style="margin-bottom:0.5rem;">Reorder columns with the arrows. Asset (always first) isn't included here.</div>
+      <div id="ppColumnOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+    </div>
+
+    <div id="ppRowsPanel" style="display:none;">
+      <div class="chart-note" style="margin-bottom:0.5rem;">Reorder assets with the arrows. This automatically switches "Sort by" to "Custom order" so your arrangement actually shows in the table.</div>
+      <div id="ppRowOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+    </div>
+  </div>
+
+  <div class="control-panel">
+    <label for="ppSortMode" style="display:block; margin-bottom:4px;">Sort by:</label>
+    <select id="ppSortMode">
+      <option value="date-new">Date Added (newest first)</option>
+      <option value="date-old">Date Added (oldest first)</option>
+      <option value="alpha">Alphabetical (Asset)</option>
+      <option value="custom" selected>Custom order (reorder with ↑ ↓)</option>
+    </select>
   </div>
 
   <div class="table-container" style="margin-bottom:2rem;">
     <table id="ppTable">
       <thead id="ppTableHead"></thead>
       <tbody id="ppTableBody"></tbody>
+      <tfoot id="ppTableFoot"></tfoot>
     </table>
   </div>
 
