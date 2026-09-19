@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.20 (added freeform Past Purchases table)
-console.log("app.js loaded — build v5.20 (added freeform Past Purchases table)");
+// APP.JS BUILD: v5.21 (Past Purchases: reorder, sort, pulled-in data, Sale Profit)
+console.log("app.js loaded — build v5.21 (Past Purchases: reorder, sort, pulled-in data, Sale Profit)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -9,7 +9,7 @@ console.log("app.js loaded — build v5.20 (added freeform Past Purchases table)
 // is hidden behind #authOverlay until a session is confirmed.
 const SUPABASE_URL = "https://okbgjjnfxkbbryfgpyap.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR";
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesTickers", "pastPurchasesParams", "pastPurchasesValues"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesTickers", "pastPurchasesParams", "pastPurchasesValues", "pastPurchasesDateAdded"];
 
 let authClient;
 function getAuthClient(){
@@ -94,6 +94,8 @@ async function openDashboard(user){
   runMatrixOptimization();
   renderPastPurchasesTickerList();
   renderPastPurchasesParamList();
+  renderPastPurchasesColumnOrderList();
+  renderPastPurchasesRowOrderList();
   renderPastPurchasesTable();
 
   startAutoSync();
@@ -989,8 +991,23 @@ function renderImportListSelect(){
 // --- Past Purchases: a second, fully freeform table with NO built-in columns.
 // Unlike the main table (BUILTIN_COLUMNS + optional custom params layered on top),
 // every column here is something the user explicitly chose to add — there is
-// nothing pre-set beyond the Ticker identity column itself. Tickers can be typed
+// nothing pre-set beyond the Asset identity column itself. Assets can be typed
 // in directly or imported wholesale from any existing Portfolio List above.
+//
+// Two preset-only additions specific to this table: "Date Sale" / "Selling
+// Price" (plain manual fields) and "Sale Profit" (computed: Units Purchased ×
+// (Selling Price − Average Purchase Price), looked up by label among this
+// table's OWN columns — mirrors how the main table's "Actual Upside %" preset
+// looks up "Average Purchase Price ($)" among ITS own custom params).
+const PP_ONLY_PARAM_PRESETS = [
+  { label: "Date Sale", type: "date", defaultValue: "__today__" },
+  { label: "Selling Price", type: "number", defaultValue: 0 },
+  { label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+];
+const PP_PARAM_PRESETS = [...PARAM_PRESETS, ...PP_ONLY_PARAM_PRESETS];
+
+let ppColumnSortState = null; // { colId, direction: 'asc'|'desc' } or null (falls back to the Sort-by dropdown)
+
 function getPastPurchasesTickers(){
   try{ return JSON.parse(localStorage.getItem("pastPurchasesTickers") || "[]"); }
   catch(e){ return []; }
@@ -1018,6 +1035,15 @@ function savePastPurchasesValues(values){
   catch(e){ /* localStorage unavailable */ }
 }
 
+function getPastPurchasesDateAdded(){
+  try{ return JSON.parse(localStorage.getItem("pastPurchasesDateAdded") || "{}"); }
+  catch(e){ return {}; }
+}
+function savePastPurchasesDateAdded(map){
+  try{ localStorage.setItem("pastPurchasesDateAdded", JSON.stringify(map)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
 function setPastPurchaseValue(ticker, paramId, value){
   const values = getPastPurchasesValues();
   if(!values[ticker]) values[ticker] = {};
@@ -1030,6 +1056,11 @@ function addPastPurchaseTicker(ticker){
   if(tickers.includes(ticker)) return false;
   tickers.push(ticker);
   savePastPurchasesTickers(tickers);
+  const dateAdded = getPastPurchasesDateAdded();
+  if(dateAdded[ticker] === undefined){
+    dateAdded[ticker] = Date.now();
+    savePastPurchasesDateAdded(dateAdded);
+  }
   return true;
 }
 
@@ -1038,9 +1069,28 @@ function removePastPurchaseTicker(ticker){
   const values = getPastPurchasesValues();
   delete values[ticker];
   savePastPurchasesValues(values);
+  const dateAdded = getPastPurchasesDateAdded();
+  delete dateAdded[ticker];
+  savePastPurchasesDateAdded(dateAdded);
 }
 
-function addPastPurchaseParam({label, type, defaultValue}){
+// The tickers array's own order doubles as the persisted "custom order" — there's
+// no separate base+custom membership split here (unlike the main table's per-list
+// rowOrder), so reordering just swaps elements in this one array directly.
+function movePastPurchaseRow(ticker, direction){
+  const order = getPastPurchasesTickers();
+  const idx = order.indexOf(ticker);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  savePastPurchasesTickers(order);
+  // Moving a row only makes visible sense in custom order — switch to it automatically.
+  const sortEl = document.getElementById('ppSortMode');
+  if(sortEl) sortEl.value = 'custom';
+}
+
+function addPastPurchaseParam({label, type, defaultValue, computed, formula}){
   const params = getPastPurchasesParams();
   const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   const id = "pp_" + (slug || "param") + "_" + Date.now().toString(36);
@@ -1054,7 +1104,10 @@ function addPastPurchaseParam({label, type, defaultValue}){
   } else {
     resolvedDefault = parseFloat(defaultValue) || 0;
   }
-  params.push({ id, label: label.trim(), type: isDate ? "date" : (isText ? "text" : "number"), defaultValue: resolvedDefault });
+  const paramDef = { id, label: label.trim(), type: isDate ? "date" : (isText ? "text" : "number"), defaultValue: resolvedDefault };
+  if(computed) paramDef.computed = true;
+  if(formula) paramDef.formula = formula;
+  params.push(paramDef);
   savePastPurchasesParams(params);
   return id;
 }
@@ -1064,6 +1117,7 @@ function removePastPurchaseParam(id){
   const values = getPastPurchasesValues();
   Object.keys(values).forEach(ticker => { if(values[ticker]) delete values[ticker][id]; });
   savePastPurchasesValues(values);
+  if(ppColumnSortState && ppColumnSortState.colId === id) ppColumnSortState = null;
 }
 
 function movePastPurchaseParam(id, direction){
@@ -1076,25 +1130,51 @@ function movePastPurchaseParam(id, direction){
   savePastPurchasesParams(params);
 }
 
+// Carries over data the user already entered in the main table's OWN custom
+// parameters (e.g. Units Purchased, Average Purchase Price, Date Purchased) onto
+// a ticker newly entering Past Purchases, matched by parameter label. Only plain
+// (non-computed) main-table custom params are eligible — computed ones there
+// depend on currentPrice/targetPrice, which Past Purchases has no equivalent of.
+// Auto-creates a matching Past Purchases column if one doesn't exist yet.
+function pullMainTableDataIntoPastPurchases(ticker){
+  const mainParams = getCustomParams().filter(p => !p.computed);
+  if(mainParams.length === 0) return 0;
+  const ov = getGlobalOverrides()[ticker] || {};
+  let pulledCount = 0;
+  mainParams.forEach(mp => {
+    if(ov[mp.id] === undefined) return; // nothing actually entered for this ticker on the main table
+    let ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === normalizeParamLabel(mp.label));
+    let ppParamId;
+    if(!ppParam){
+      ppParamId = addPastPurchaseParam({ label: mp.label, type: mp.type, defaultValue: mp.defaultValue });
+    } else {
+      ppParamId = ppParam.id;
+    }
+    setPastPurchaseValue(ticker, ppParamId, ov[mp.id]);
+    pulledCount++;
+  });
+  return pulledCount;
+}
+
 // Pulls in every ticker currently visible in the chosen Portfolio List (base +
 // custom, minus anything removed there) — mirrors importListInto()'s ticker
-// resolution, but only the ticker symbols themselves come across, since Past
-// Purchases has no fixed schema for the source list's data to map onto.
+// resolution — and, for each ticker actually new to Past Purchases, pulls over
+// any matching data already entered on the main table.
 function importListIntoPastPurchases(sourceListId){
   const lists = getAllLists();
   const sourceList = lists[sourceListId];
-  if(!sourceList) return { imported: 0, total: 0 };
+  if(!sourceList) return { imported: 0, total: 0, pulled: 0 };
   const sourceTickers = getWorkingData(sourceList).map(a => a.ticker);
-  const tickers = getPastPurchasesTickers();
   let importedCount = 0;
+  let pulledTotal = 0;
   sourceTickers.forEach(ticker => {
-    if(!tickers.includes(ticker)){
-      tickers.push(ticker);
+    const added = addPastPurchaseTicker(ticker);
+    if(added){
       importedCount++;
+      pulledTotal += pullMainTableDataIntoPastPurchases(ticker);
     }
   });
-  savePastPurchasesTickers(tickers);
-  return { imported: importedCount, total: sourceTickers.length };
+  return { imported: importedCount, total: sourceTickers.length, pulled: pulledTotal };
 }
 
 function renderPastPurchasesImportSelect(){
@@ -1121,7 +1201,7 @@ function renderPastPurchasesTickerList(){
   container.innerHTML = "";
   const tickers = getPastPurchasesTickers();
   if(tickers.length === 0){
-    container.innerHTML = `<span style="color:var(--text-secondary);">No tickers in Past Purchases yet.</span>`;
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets in Past Purchases yet.</span>`;
     return;
   }
   tickers.forEach(ticker => {
@@ -1134,6 +1214,7 @@ function renderPastPurchasesTickerList(){
         removePastPurchaseTicker(t);
         renderPastPurchasesTickerList();
         renderPastPurchasesTable();
+        renderPastPurchasesRowOrderList();
       }
     });
     container.appendChild(chip);
@@ -1152,33 +1233,153 @@ function renderPastPurchasesParamList(){
   params.forEach(p => {
     const chip = document.createElement("div");
     chip.className = "remove-chip";
-    chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+    chip.innerHTML = `<span>${p.label} (${p.computed ? 'computed' : p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
     chip.querySelector("button").addEventListener("click", (e) => {
       const id = e.target.getAttribute("data-id");
-      if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
+      if(confirm(`Remove the "${p.label}" column? This deletes its values for every asset.`)){
         removePastPurchaseParam(id);
         renderPastPurchasesParamList();
         renderPastPurchasesTable();
+        renderPastPurchasesColumnOrderList();
       }
     });
     container.appendChild(chip);
   });
 }
 
+function renderPastPurchasesColumnOrderList(){
+  const container = document.getElementById("ppColumnOrderList");
+  if(!container) return;
+  container.innerHTML = "";
+  const params = getPastPurchasesParams();
+  if(params.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No parameters yet.</span>`;
+    return;
+  }
+  params.forEach((p, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
+    row.innerHTML = `
+      <span style="flex:1;">${p.label}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
+      <button class="pp-col-order-btn" data-id="${p.id}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&larr;</button>
+      <button class="pp-col-order-btn" data-id="${p.id}" data-dir="1" ${idx === params.length-1 ? 'disabled' : ''} title="Move right" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&rarr;</button>
+    `;
+    container.appendChild(row);
+  });
+  container.querySelectorAll(".pp-col-order-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-id");
+      const dir = parseInt(e.currentTarget.getAttribute("data-dir"), 10);
+      movePastPurchaseParam(id, dir);
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesTable();
+    });
+  });
+}
+
+function renderPastPurchasesRowOrderList(){
+  const container = document.getElementById("ppRowOrderList");
+  if(!container) return;
+  container.innerHTML = "";
+  const order = getPastPurchasesTickers();
+  if(order.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets yet.</span>`;
+    return;
+  }
+  order.forEach((ticker, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
+    row.innerHTML = `
+      <span style="flex:1;">${ticker}</span>
+      <button class="pp-row-order-btn" data-ticker="${ticker}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move up" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&uarr;</button>
+      <button class="pp-row-order-btn" data-ticker="${ticker}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move down" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&darr;</button>
+    `;
+    container.appendChild(row);
+  });
+  container.querySelectorAll(".pp-row-order-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const ticker = e.currentTarget.getAttribute("data-ticker");
+      const dir = parseInt(e.currentTarget.getAttribute("data-dir"), 10);
+      movePastPurchaseRow(ticker, dir);
+      renderPastPurchasesRowOrderList();
+      renderPastPurchasesTable();
+    });
+  });
+}
+
+// Resolves every column's effective value for one asset: stored value (or the
+// column's default) for plain columns, and a live calculation for "Sale Profit"
+// looked up by label among THIS table's own columns (Units Purchased, Average
+// Purchase Price, Selling Price) — same precedence pattern as the main table's
+// own computed presets, just scoped to Past Purchases' own data.
+function resolvePastPurchaseRowValues(ticker){
+  const params = getPastPurchasesParams();
+  const storedForTicker = getPastPurchasesValues()[ticker] || {};
+  const resolved = {};
+  params.forEach(p => {
+    if(!p.computed) resolved[p.id] = storedForTicker[p.id] !== undefined ? storedForTicker[p.id] : p.defaultValue;
+  });
+  params.forEach(p => {
+    if(p.computed && p.formula === 'salesProfitPP'){
+      const norm = s => String(s).trim().toLowerCase();
+      const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
+      const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
+      const sellParam = params.find(pp => !pp.computed && norm(pp.label) === 'selling price');
+      const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
+      const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
+      const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
+      resolved[p.id] = units * (sell - avg);
+      // "Ready" requires the three columns to exist AND at least one to hold real
+      // (non-default) data — otherwise a brand-new asset with all-zero fields
+      // would show a confident "$0.00" as if a real profit had been computed.
+      resolved['_' + p.id + '_ready'] = !!(unitsParam && avgParam && sellParam) && (units !== 0 || avg !== 0 || sell !== 0);
+    }
+  });
+  return resolved;
+}
+
+function getPastPurchasesSortedTickers(){
+  const tickers = getPastPurchasesTickers().slice(); // persisted custom order, as a starting point
+  const dateAdded = getPastPurchasesDateAdded();
+
+  if(ppColumnSortState){
+    const { colId, direction } = ppColumnSortState;
+    tickers.sort((a, b) => {
+      const va = resolvePastPurchaseRowValues(a)[colId];
+      const vb = resolvePastPurchaseRowValues(b)[colId];
+      let cmp;
+      if(typeof va === 'string' || typeof vb === 'string') cmp = String(va).localeCompare(String(vb));
+      else cmp = (va || 0) - (vb || 0);
+      return direction === 'asc' ? cmp : -cmp;
+    });
+    return tickers;
+  }
+
+  const sortMode = document.getElementById('ppSortMode') ? document.getElementById('ppSortMode').value : 'custom';
+  if(sortMode === 'alpha') tickers.sort((a, b) => a.localeCompare(b));
+  else if(sortMode === 'date-new') tickers.sort((a, b) => (dateAdded[b] || 0) - (dateAdded[a] || 0));
+  else if(sortMode === 'date-old') tickers.sort((a, b) => (dateAdded[a] || 0) - (dateAdded[b] || 0));
+  // 'custom' (or anything else): leave as the persisted order.
+  return tickers;
+}
+
 function renderPastPurchasesTable(){
   const thead = document.getElementById("ppTableHead");
   const tbody = document.getElementById("ppTableBody");
+  const tfoot = document.getElementById("ppTableFoot");
   if(!thead || !tbody) return;
 
   const params = getPastPurchasesParams();
-  const tickers = getPastPurchasesTickers();
-  const values = getPastPurchasesValues();
+  const orderedTickers = getPastPurchasesSortedTickers();
 
   let headHtml = '<tr><th>Past Purchases</th>';
   params.forEach((p, idx) => {
+    const isSorted = ppColumnSortState && ppColumnSortState.colId === p.id;
+    const sortIcon = isSorted ? (ppColumnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
     headHtml += `<th>
-      <div>${p.label}</div>
+      <div>${p.label}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.7rem;">(computed)</span>' : ''}</div>
       <div class="col-header-controls">
+        <button class="pp-col-btn col-ctrl-btn ${isSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="${p.id}" title="Sort by this column">${sortIcon}</button>
         <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left">&lt;</button>
         <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="1" ${idx === params.length - 1 ? 'disabled' : ''} title="Move right">&gt;</button>
         <button class="pp-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${p.id}" title="Remove this parameter">&times;</button>
@@ -1193,52 +1394,77 @@ function renderPastPurchasesTable(){
       e.stopPropagation();
       const id = btn.getAttribute('data-id');
       const action = btn.getAttribute('data-action');
-      if(action === 'move'){
+      if(action === 'sort'){
+        if(!ppColumnSortState || ppColumnSortState.colId !== id){
+          ppColumnSortState = { colId: id, direction: 'asc' };
+        } else if(ppColumnSortState.direction === 'asc'){
+          ppColumnSortState = { colId: id, direction: 'desc' };
+        } else {
+          ppColumnSortState = null; // third click clears back to the Sort-by dropdown
+        }
+        renderPastPurchasesTable();
+      } else if(action === 'move'){
         movePastPurchaseParam(id, parseInt(btn.getAttribute('data-dir'), 10));
         renderPastPurchasesTable();
+        renderPastPurchasesColumnOrderList();
       } else if(action === 'remove'){
         const def = params.find(p => p.id === id);
-        if(confirm(`Remove the "${def.label}" column? This deletes its values for every ticker.`)){
+        if(confirm(`Remove the "${def.label}" column? This deletes its values for every asset.`)){
           removePastPurchaseParam(id);
           renderPastPurchasesTable();
           renderPastPurchasesParamList();
+          renderPastPurchasesColumnOrderList();
         }
       }
     });
   });
 
   tbody.innerHTML = "";
-  if(tickers.length === 0 || params.length === 0){
+  if(orderedTickers.length === 0 || params.length === 0){
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = params.length + 1;
     td.style.color = "var(--text-secondary)";
     td.style.padding = "1.25rem 1rem";
-    td.textContent = tickers.length === 0
+    td.textContent = orderedTickers.length === 0
       ? "No assets yet — add one above, or import a list."
       : "Add at least one parameter above to start tracking data for these assets.";
     tr.appendChild(td);
     tbody.appendChild(tr);
+    if(tfoot) tfoot.innerHTML = "";
     return;
   }
 
-  tickers.forEach(ticker => {
+  orderedTickers.forEach((ticker, rowIdx) => {
     const tr = document.createElement('tr');
+    const resolved = resolvePastPurchaseRowValues(ticker);
+    const upDisabled = rowIdx === 0 ? 'disabled' : '';
+    const downDisabled = rowIdx === orderedTickers.length - 1 ? 'disabled' : '';
     let rowHtml = `<td>
       <span class="ticker-txt">${ticker}</span>
       <div class="row-ctrl-controls">
-        <button class="pp-row-remove row-ctrl-btn row-ctrl-remove" data-ticker="${ticker}" title="Remove ${ticker}">&times;</button>
+        <button class="pp-row-btn row-ctrl-btn" data-action="up" data-ticker="${ticker}" ${upDisabled} title="Move row up">&uarr;</button>
+        <button class="pp-row-btn row-ctrl-btn" data-action="down" data-ticker="${ticker}" ${downDisabled} title="Move row down">&darr;</button>
+        <button class="pp-row-btn row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${ticker}" title="Remove ${ticker}">&times;</button>
       </div>
     </td>`;
     params.forEach(p => {
-      const stored = values[ticker] ? values[ticker][p.id] : undefined;
-      const val = stored !== undefined ? stored : p.defaultValue;
-      if(p.type === 'text'){
-        rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="text" type="text" value="${escAttr(val)}"></td>`;
-      } else if(p.type === 'date'){
-        rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="date" type="date" value="${escAttr(val)}"></td>`;
+      if(p.computed && p.formula === 'salesProfitPP'){
+        const val = resolved[p.id] || 0;
+        const ready = resolved['_' + p.id + '_ready'];
+        const sign = val >= 0 ? '+' : '-';
+        const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : '#ef4444');
+        const titleAttr = ready ? '' : ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."`;
+        rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
       } else {
-        rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"></td>`;
+        const val = resolved[p.id];
+        if(p.type === 'text'){
+          rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="text" type="text" value="${escAttr(val)}"></td>`;
+        } else if(p.type === 'date'){
+          rowHtml += `<td><input class="cell-input pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="date" type="date" value="${escAttr(val)}"></td>`;
+        } else {
+          rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-ticker="${ticker}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"></td>`;
+        }
       }
     });
     tr.innerHTML = rowHtml;
@@ -1256,6 +1482,7 @@ function renderPastPurchasesTable(){
         if(isNaN(value)) value = 0;
       }
       setPastPurchaseValue(ticker, field, value);
+      renderPastPurchasesTable(); // refresh any computed "Sale Profit" cells + the totals row
     });
     el.addEventListener('keydown', (e) => {
       if(e.key === 'Enter' && el.tagName === 'INPUT'){
@@ -1265,16 +1492,48 @@ function renderPastPurchasesTable(){
     });
   });
 
-  tbody.querySelectorAll('.pp-row-remove').forEach(btn => {
+  tbody.querySelectorAll('.pp-row-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const ticker = e.target.getAttribute('data-ticker');
-      if(confirm(`Remove "${ticker}" from Past Purchases? This deletes its row and all its values.`)){
-        removePastPurchaseTicker(ticker);
-        renderPastPurchasesTickerList();
+      const ticker = btn.getAttribute('data-ticker');
+      const action = btn.getAttribute('data-action');
+      if(action === 'delete'){
+        if(confirm(`Remove "${ticker}" from Past Purchases? This deletes its row and all its values.`)){
+          removePastPurchaseTicker(ticker);
+          renderPastPurchasesTickerList();
+          renderPastPurchasesTable();
+          renderPastPurchasesRowOrderList();
+        }
+      } else if(action === 'up'){
+        movePastPurchaseRow(ticker, -1);
         renderPastPurchasesTable();
+        renderPastPurchasesRowOrderList();
+      } else if(action === 'down'){
+        movePastPurchaseRow(ticker, 1);
+        renderPastPurchasesTable();
+        renderPastPurchasesRowOrderList();
       }
     });
   });
+
+  if(tfoot){
+    const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
+    if(!saleProfitParam){
+      tfoot.innerHTML = "";
+    } else {
+      const total = orderedTickers.reduce((sum, t) => sum + (resolvePastPurchaseRowValues(t)[saleProfitParam.id] || 0), 0);
+      const sign = total >= 0 ? '+' : '-';
+      const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
+      const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+      let footHtml = `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Sale Profit to date</td>`;
+      params.forEach((p, idx) => {
+        footHtml += idx === colIndex
+          ? `<td style="font-weight:700; color:${color};">${sign}$${Math.abs(total).toFixed(2)}</td>`
+          : `<td></td>`;
+      });
+      footHtml += `</tr>`;
+      tfoot.innerHTML = footHtml;
+    }
+  }
 }
 
 function renderListSelector(){
@@ -2133,11 +2392,13 @@ try{
   console.error("Failed to wire up sync controls:", err);
 }
 
-// --- Wire up the Past Purchases table (freeform tickers + freeform parameters) ---
+// --- Wire up the Past Purchases table (freeform assets + freeform parameters) ---
 try{
   const ppTabs = [
     { btn: "ppTabTickerBtn", panel: "ppTickerPanel", onShow: renderPastPurchasesTickerList },
     { btn: "ppTabParamBtn", panel: "ppParamPanel", onShow: renderPastPurchasesParamList },
+    { btn: "ppTabColumnsBtn", panel: "ppColumnsPanel", onShow: renderPastPurchasesColumnOrderList },
+    { btn: "ppTabRowsBtn", panel: "ppRowsPanel", onShow: renderPastPurchasesRowOrderList },
   ];
   const ppTabsMissing = ppTabs.some(t => !document.getElementById(t.btn) || !document.getElementById(t.panel));
   if(ppTabsMissing){
@@ -2151,6 +2412,14 @@ try{
         });
         if(t.onShow) t.onShow();
       });
+    });
+  }
+
+  const ppSortMode = document.getElementById("ppSortMode");
+  if(ppSortMode){
+    ppSortMode.addEventListener("change", () => {
+      ppColumnSortState = null; // dropdown takes back over from any column-header sort
+      renderPastPurchasesTable();
     });
   }
 
@@ -2169,13 +2438,17 @@ try{
       const sourceName = lists[sourceId].name;
       const result = importListIntoPastPurchases(sourceId);
       renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
       renderPastPurchasesTable();
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
 
       if(result.imported === 0){
         statusEl.textContent = `Nothing new to import — every asset from "${sourceName}" is already in Past Purchases.`;
         statusEl.style.color = "var(--text-secondary)";
       } else {
-        statusEl.textContent = `Imported ${result.imported} asset(s) from "${sourceName}".`;
+        const pulledNote = result.pulled > 0 ? ` Pulled in ${result.pulled} field value(s) already entered on your Portfolio Lists (e.g. Units Purchased, Average Purchase Price, Date Purchased).` : "";
+        statusEl.textContent = `Imported ${result.imported} asset(s) from "${sourceName}".${pulledNote}`;
         statusEl.style.color = "var(--emerald)";
       }
     });
@@ -2198,33 +2471,40 @@ try{
         statusEl.style.color = "var(--amber)";
         return;
       }
+      const pulled = pullMainTableDataIntoPastPurchases(ticker);
       renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
       renderPastPurchasesTable();
-      statusEl.textContent = `${ticker} added to Past Purchases.`;
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
+      statusEl.textContent = `${ticker} added to Past Purchases.` + (pulled > 0 ? ` Pulled in ${pulled} field value(s) already entered on your Portfolio Lists.` : "");
       statusEl.style.color = "var(--emerald)";
       tickerInput.value = "";
     });
   }
 
-  // Same 40-parameter preset list as the main table's "+/- Parameter" panel —
-  // picking one just autofills name/type/default below; Past Purchases has no
-  // live-fetch or computed-formula engine, so those preset behaviors don't carry
-  // over, only the plain field values do.
+  // Same preset list as the main table's "+/- Parameter" panel, plus three
+  // Past-Purchases-only additions (Date Sale, Selling Price, Sale Profit).
+  // Picking a plain preset autofills name/type/default; picking "Sale Profit"
+  // also flags it as computed so it gets calculated rather than typed in.
+  let ppSelectedPresetMeta = null;
   const ppNewParamPreset = document.getElementById("ppNewParamPreset");
   if(ppNewParamPreset){
     ppNewParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
-      PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+      PP_PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
     ppNewParamPreset.addEventListener("change", () => {
       const val = ppNewParamPreset.value;
       if(val === "__custom__"){
         document.getElementById("ppNewParamLabel").value = "";
         document.getElementById("ppNewParamType").value = "number";
         document.getElementById("ppNewParamDefault").value = "";
+        ppSelectedPresetMeta = null;
       } else {
-        const preset = PARAM_PRESETS[parseInt(val, 10)];
+        const preset = PP_PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("ppNewParamLabel").value = preset.label;
         document.getElementById("ppNewParamType").value = preset.type;
         document.getElementById("ppNewParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
+        ppSelectedPresetMeta = preset.computed ? { computed: true, formula: preset.formula } : null;
       }
     });
   }
@@ -2249,14 +2529,20 @@ try{
         return;
       }
 
-      addPastPurchaseParam({ label, type, defaultValue });
+      // Bypass needing the dropdown for a computed preset's label to be typed directly.
+      const matchingComputedPreset = PP_PARAM_PRESETS.find(p => p.computed && p.label.toLowerCase() === label.toLowerCase());
+      const effectiveMeta = ppSelectedPresetMeta || (matchingComputedPreset ? { computed: true, formula: matchingComputedPreset.formula } : null);
+
+      addPastPurchaseParam({ label, type, defaultValue, computed: effectiveMeta?.computed, formula: effectiveMeta?.formula });
       renderPastPurchasesParamList();
       renderPastPurchasesTable();
+      renderPastPurchasesColumnOrderList();
 
       statusEl.textContent = `"${label}" added as a new column.`;
       statusEl.style.color = "var(--emerald)";
       document.getElementById("ppNewParamLabel").value = "";
       document.getElementById("ppNewParamDefault").value = "";
+      ppSelectedPresetMeta = null;
       if(ppNewParamPreset) ppNewParamPreset.value = "__custom__";
     });
   }
@@ -2264,6 +2550,8 @@ try{
   renderPastPurchasesImportSelect();
   renderPastPurchasesTickerList();
   renderPastPurchasesParamList();
+  renderPastPurchasesColumnOrderList();
+  renderPastPurchasesRowOrderList();
   renderPastPurchasesTable();
 }catch(err){
   console.error("Failed to wire up Past Purchases table:", err);
