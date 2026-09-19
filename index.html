@@ -96,10 +96,79 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .row-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 .row-ctrl-remove { border-color: rgba(252,165,165,0.3); color: #fca5a5; }
 .row-ctrl-remove:hover { background: rgba(239,68,68,0.2); }
+.auth-overlay{ position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(11,15,25,.98); }
+.auth-card{ width:min(430px,100%); background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.auth-card h2{ margin:0 0 8px; font-size:22px; color:#fff; }
+.auth-card p{ color:var(--text-secondary); font-size:13px; line-height:1.5; margin:0 0 20px; }
+.auth-form{ display:flex; flex-direction:column; gap:12px; }
+.auth-form label{ font-size:12px; color:var(--text-secondary); font-weight:600; }
+.auth-form input{ width:100%; background:var(--bg-main); border:1px solid var(--border-color); border-radius:7px; padding:11px 12px; color:#fff; font-size:14px; }
+.auth-form input:focus{ border-color:var(--accent-blue); outline:none; }
+.auth-message{ font-size:12px; line-height:1.45; min-height:18px; }
+.auth-message.error{ color:#ef4444; }
+.auth-message.success{ color:var(--emerald); }
+.auth-links{ display:flex; justify-content:space-between; gap:10px; margin-top:14px; }
+.auth-links button{ background:none; border:0; color:#93c5fd; padding:4px; font-size:12px; cursor:pointer; }
+.auth-step{ display:none; }
+.auth-step.active{ display:block; }
+.auth-brand{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent-blue); font-weight:800; margin-bottom:8px; }
+#appShell{ display:none; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 </head>
 <body>
+
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-brand">Institutional Equity Optimizer</div>
+
+    <div class="auth-step active" id="loginStep">
+      <h2>Sign in</h2>
+      <p>Use your email address and password to access the optimizer.</p>
+      <form class="auth-form" onsubmit="return handleLogin(event)">
+        <div>
+          <label for="loginEmail">Email address</label>
+          <input id="loginEmail" type="email" autocomplete="email" required>
+        </div>
+        <div>
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="auth-message" id="loginMessage"></div>
+        <button type="submit">Sign in</button>
+      </form>
+      <div class="auth-links">
+        <button type="button" onclick="showAuthStep('registerStep')">Create account</button>
+      </div>
+    </div>
+
+    <div class="auth-step" id="registerStep">
+      <h2>Create account</h2>
+      <p>Create an account with your email address and password.</p>
+      <form class="auth-form" onsubmit="return handleRegister(event)">
+        <div>
+          <label for="registerEmail">Email address</label>
+          <input id="registerEmail" type="email" autocomplete="email" required>
+        </div>
+        <div>
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div>
+          <label for="registerPassword2">Confirm password</label>
+          <input id="registerPassword2" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="auth-message" id="registerMessage"></div>
+        <button type="submit">Sign up</button>
+      </form>
+      <div class="auth-links">
+        <button type="button" onclick="showAuthStep('loginStep')">Back to sign in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="appShell">
 <div class="container">
   <div class="disclaimer">
     <strong>⚠ Not financial advice / not live data.</strong> Prices, P/E, ROA, target prices, and "stability" ratings below are manually entered placeholder figures used to demonstrate a weighting formula — they are not sourced from a real-time market feed or professional research, and may be outdated or inaccurate. Do not use this tool to make actual investment decisions. Verify all figures independently before relying on them.
@@ -119,27 +188,11 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <span id="fetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
-  <div class="disclaimer" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7;">
-    <strong>Account (optional).</strong> Sign up or log in below to sync your lists, custom parameters, and settings across devices. Without an account, everything still works normally but stays local to this browser only.
-  </div>
-  <div class="control-panel" style="flex-wrap: wrap; flex-direction: column; align-items: stretch;">
-    <div id="loggedOutPanel" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; width:100%;">
-      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Email
-        <input id="authEmail" type="email" placeholder="you@example.com" class="form-input" style="width:220px;">
-      </label>
-      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Password
-        <input id="authPassword" type="password" placeholder="••••••••" class="form-input" style="width:160px;">
-      </label>
-      <button id="signUpBtn">Sign Up</button>
-      <button id="logInBtn">Log In</button>
-      <span id="authStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    </div>
-    <div id="loggedInPanel" style="display:none; flex-wrap:wrap; gap:0.75rem; align-items:center; width:100%;">
-      <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmail"></strong></span>
-      <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
-      <button id="logOutBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
-      <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    </div>
+  <div class="control-panel" style="flex-wrap: wrap; align-items: center;">
+    <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
+    <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
+    <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
+    <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   <div class="control-panel" style="flex-wrap: wrap;">
@@ -257,7 +310,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.16 (visible account panel, fixed missing CSS classes)
+    HTML build: v5.18 (mandatory login gate, matching working sample)
   </div>
 
   <div class="table-container" style="margin-top:2rem; padding:1.5rem;">
@@ -351,6 +404,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       </tbody>
     </table>
   </div>
+</div>
 </div>
 <script src="data.js"></script>
 <script src="app.js"></script>
