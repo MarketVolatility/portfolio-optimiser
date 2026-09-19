@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.18 (mandatory login gate, matching working sample)
-console.log("app.js loaded — build v5.18 (mandatory login gate, matching working sample)");
+// APP.JS BUILD: v5.19 (corrected publishable key for right project)
+console.log("app.js loaded — build v5.19 (corrected publishable key for right project)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -8,7 +8,7 @@ console.log("app.js loaded — build v5.18 (mandatory login gate, matching worki
 // cloud), and pushing periodically + on demand while logged in. The whole app
 // is hidden behind #authOverlay until a session is confirmed.
 const SUPABASE_URL = "https://okbgjjnfxkbbryfgpyap.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JsrzOaKxp0RJo2Se4MDctg_tGiG_GaD";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR";
 const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey"];
 
 let authClient;
