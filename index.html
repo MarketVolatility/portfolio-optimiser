@@ -317,34 +317,37 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600;">Past Purchases</h2>
   </div>
   <div class="disclaimer" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7;">
-    <strong>Freeform tracking table — no built-in columns.</strong> This table starts completely empty of parameters. Add whichever tickers you want, and add whichever parameters you want to track for them (e.g. Units Purchased, Average Purchase Price, Date Purchased, or anything else) — nothing here is pre-set. You can also import the full ticker list from any Portfolio List above with one click.
+    <strong>Freeform tracking table — no built-in columns.</strong> This table starts completely empty of parameters. Add whichever assets you want, and add whichever parameters you want to track for them (e.g. Units Purchased, Average Purchase Price, Date Purchased, or anything else) — nothing here is pre-set. You can also import the full asset list from any Portfolio List above with one click.
   </div>
 
   <div class="control-panel" style="flex-wrap: wrap;">
     <label for="ppImportListSelect">Import list:</label>
     <select id="ppImportListSelect" class="form-input" style="min-width:180px;"></select>
-    <button id="ppImportListBtn">Import tickers into Past Purchases</button>
+    <button id="ppImportListBtn">Import list into Past Purchases</button>
     <span id="ppImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
     <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
-      <button id="ppTabTickerBtn" class="tab-btn active-tab">+/- Ticker</button>
+      <button id="ppTabTickerBtn" class="tab-btn active-tab">+/- Asset</button>
       <button id="ppTabParamBtn" class="tab-btn">+/- Parameter</button>
     </div>
 
     <div id="ppTickerPanel">
       <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
-        <input id="ppNewTicker" placeholder="Ticker (e.g. AAPL)" class="form-input" style="width:140px;">
-        <button id="ppAddTickerBtn">Add ticker</button>
+        <input id="ppNewTicker" placeholder="Asset (e.g. AAPL)" class="form-input" style="width:140px;">
+        <button id="ppAddTickerBtn">Add to Past Purchases</button>
         <span id="ppAddTickerStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
       </div>
-      <div class="chart-note" style="margin-top:0.75rem;">Existing tickers (click × to remove):</div>
+      <div class="chart-note" style="margin-top:0.75rem;">Existing assets (click × to remove):</div>
       <div id="ppTickerList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
     </div>
 
     <div id="ppParamPanel" style="display:none;">
-      <div class="chart-note" style="margin-bottom:0.5rem;">Adds a new column to the Past Purchases table only. Type any name, pick a type, and (optionally) a default value — there is no preset list here, this table has no fixed parameters.</div>
+      <div class="chart-note" style="margin-bottom:0.5rem;">Adds a new column to the Past Purchases table only. Type any name, pick a type, and (optionally) a default value — or choose from the same 40 common parameters available above.</div>
+      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:0.75rem; max-width:400px;">Choose from 40 common parameters, or pick Custom to type your own
+        <select id="ppNewParamPreset" class="form-input"></select>
+      </label>
       <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
         <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Parameter name
           <input id="ppNewParamLabel" placeholder="e.g. Units Purchased" class="form-input" style="width:220px;">
