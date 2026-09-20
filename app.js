@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.36 ("To Buy Price" preset param, fixed Buy Price rename not surviving cloud sync, emerald (not blue) Current Price at/below buy target incl. Excel/Text "At Buy Target" column, build line left-aligned)
-console.log("app.js loaded — build v5.36 (\"To Buy Price\" preset param, fixed Buy Price rename not surviving cloud sync, emerald (not blue) Current Price at/below buy target incl. Excel/Text \"At Buy Target\" column, build line left-aligned)");
+// APP.JS BUILD: v5.37 (Portfolio heading recolored to match "Portfolio List:"/"Past Purchases" amber, #facc15)
+console.log("app.js loaded — build v5.37 (Portfolio heading recolored to match \"Portfolio List:\"/\"Past Purchases\" amber, #facc15)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
