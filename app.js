@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.24 (Dropdown parity, A-Z sort, hide/restore Sample List columns)
-console.log("app.js loaded — build v5.24 (Dropdown parity, A-Z sort, hide/restore Sample List columns)");
+// APP.JS BUILD: v5.25 (Excel/Text/PDF export, one-way pull fix, refresh from Portfolio)
+console.log("app.js loaded — build v5.25 (Excel/Text/PDF export, one-way pull fix, refresh from Portfolio)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -236,6 +236,14 @@ let columnSortState = null; // { colId, direction: 'asc'|'desc' } or null (falls
 let fetchFailedTickers = new Set(); // tickers where a live fetch was attempted but errored out
 let lastFetchTime = null;
 
+// Snapshots of the exact rows currently on screen for each table (in their
+// current sort/column order, with computed values already resolved), kept up
+// to date by runMatrixOptimization()/renderPastPurchasesTable() so the export
+// functions can read off the same values the user is looking at rather than
+// recomputing anything themselves.
+let lastMainTableProcessedAssets = [];
+let lastPastPurchasesOrderedRows = [];
+
 function getSavedApiKey(){
   try{ return localStorage.getItem("finnhubApiKey") || ""; }
   catch(e){ return ""; }
@@ -387,6 +395,16 @@ async function fetchLiveDataForAllAssets(){
 
   lastFetchTime = new Date();
   runMatrixOptimization();
+
+  // Past Purchases only pulls FROM Portfolio Lists (never the reverse), and only
+  // at add/import time by default — re-pull now so any Past Purchases columns
+  // that mirror a Portfolio Lists field (e.g. Current Price) pick up what was
+  // just fetched, for every row already in that table.
+  if(typeof refreshPastPurchasesFromPortfolio === "function"){
+    refreshPastPurchasesFromPortfolio();
+    if(typeof renderPastPurchasesTable === "function") renderPastPurchasesTable();
+    if(typeof renderPastPurchasesParamList === "function") renderPastPurchasesParamList();
+  }
 
   let msgParts = [];
   if(failCount === 0){
@@ -851,6 +869,38 @@ function getWorkingData(explicitList){
   });
 }
 
+// Resolves a ticker's BUILTIN_COLUMNS values (Current Price, ROA, P/E, etc.)
+// using the exact same precedence the main table itself renders with — manual
+// override > live Finnhub fetch > static default — regardless of which list(s)
+// the ticker happens to belong to. This is what lets Past Purchases pull a
+// currently-accurate "Current Price" (etc.) rather than a stale one, including
+// right after a live "Fetch live data" run. Returns null for a ticker that has
+// never appeared on the main table at all (no base data and no overrides), so
+// callers don't fabricate values for an asset that only exists in Past Purchases.
+function getResolvedBuiltinAssetValues(ticker){
+  const baseAsset = marketData.find(a => a.ticker === ticker);
+  const ov = getGlobalOverrides()[ticker] || {};
+  if(!baseAsset && Object.keys(ov).length === 0) return null;
+  const shell = baseAsset || { name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med",
+    revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 99999, beta: 1.0 };
+  const live = liveDataMap[ticker];
+  return {
+    name: ov.name !== undefined ? ov.name : shell.name,
+    currentPrice: ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : shell.currentPrice),
+    pe: ov.pe !== undefined ? ov.pe : ((live && live.pe !== undefined) ? live.pe : shell.pe),
+    roa: ov.roa !== undefined ? ov.roa : ((live && live.roa !== undefined) ? live.roa : shell.roa),
+    targetPrice: ov.targetPrice !== undefined ? ov.targetPrice : shell.targetPrice,
+    stability: ov.stability !== undefined ? ov.stability : shell.stability,
+    revenueGrowth: ov.revenueGrowth !== undefined ? ov.revenueGrowth : ((live && live.revenueGrowth !== undefined) ? live.revenueGrowth : shell.revenueGrowth),
+    netMargin: ov.netMargin !== undefined ? ov.netMargin : ((live && live.netMargin !== undefined) ? live.netMargin : shell.netMargin),
+    pegRatio: ov.pegRatio !== undefined ? ov.pegRatio : shell.pegRatio,
+    debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : shell.debtToEquity),
+    freeCashFlow: ov.freeCashFlow !== undefined ? ov.freeCashFlow : shell.freeCashFlow,
+    cashRunway: ov.cashRunway !== undefined ? ov.cashRunway : shell.cashRunway,
+    beta: ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : shell.beta),
+  };
+}
+
 function addAsset({ ticker, name, targetPrice, stability, stabilityNotes }){
   const baseAsset = marketData.find(a => a.ticker === ticker);
   const existingOv = getGlobalOverrides()[ticker] || {};
@@ -1244,31 +1294,75 @@ function movePastPurchaseParam(id, direction){
   savePastPurchasesParams(params);
 }
 
-// Carries over data the user already entered in the main table's OWN custom
-// parameters (e.g. Units Purchased, Average Purchase Price, Date Purchased) onto
-// a row newly entering Past Purchases, matched by parameter label against the
-// main table's data for that asset SYMBOL. Only plain (non-computed) main-table
-// custom params are eligible — computed ones there depend on currentPrice/
-// targetPrice, which Past Purchases has no equivalent of. Auto-creates a
-// matching Past Purchases column if one doesn't exist yet.
+// Carries data from the Portfolio Lists (main) table onto a Past Purchases row
+// for the same asset symbol. This is the ONLY direction data ever moves between
+// the two tables — Past Purchases reads from Portfolio Lists; Portfolio Lists
+// never reads anything from Past Purchases (nothing in the main table's own
+// rendering/scoring code touches getPastPurchasesRows()/getPastPurchasesParams()
+// at all). Two tiers, on purpose:
+//
+// 1. A small fixed whitelist of purchase-record fields — Units Purchased,
+//    Average Purchase Price ($), Date Purchased — get pulled AND auto-created
+//    as a new Past Purchases column if one doesn't exist yet. This is the
+//    original intent of this feature: those three are exactly what belongs on
+//    every past-purchase row.
+//
+// 2. Everything else — any OTHER main-table custom param (e.g. Market Cap,
+//    Forward P/E, or any other preset someone added on the main table for
+//    unrelated reasons) AND the Sample List built-in fields (Current Price,
+//    ROA, P/E, Beta, etc., via getResolvedBuiltinAssetValues) — is pulled ONLY
+//    into a Past Purchases column that ALREADY exists with a matching label.
+//    Nothing here auto-creates a column. This is the fix for columns like
+//    "Market Cap" or "Forward P/E" silently showing up in Past Purchases that
+//    were never explicitly added there — that used to happen because ANY
+//    non-computed main-table custom param with a value got auto-added as a
+//    new column here, whether or not it had anything to do with a purchase.
 function pullMainTableDataIntoPastPurchases(rowId, assetSymbol){
+  const AUTO_CREATE_LABELS = ["units purchased", "average purchase price ($)", "average purchase price", "date purchased"];
   const mainParams = getCustomParams().filter(p => !p.computed);
-  if(mainParams.length === 0) return 0;
+  const builtin = getResolvedBuiltinAssetValues(assetSymbol);
   const ov = getGlobalOverrides()[assetSymbol] || {};
   let pulledCount = 0;
+
   mainParams.forEach(mp => {
     if(ov[mp.id] === undefined) return; // nothing actually entered for this asset on the main table
-    let ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === normalizeParamLabel(mp.label));
-    let ppParamId;
-    if(!ppParam){
-      ppParamId = addPastPurchaseParam({ label: mp.label, type: mp.type, defaultValue: mp.defaultValue });
-    } else {
-      ppParamId = ppParam.id;
-    }
+    const norm = normalizeParamLabel(mp.label);
+    const isAutoCreate = AUTO_CREATE_LABELS.includes(mp.label.trim().toLowerCase());
+    let ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === norm);
+    if(!ppParam && !isAutoCreate) return; // not a whitelisted field, and no matching column already added here
+    const ppParamId = ppParam ? ppParam.id : addPastPurchaseParam({ label: mp.label, type: mp.type, defaultValue: mp.defaultValue });
     setPastPurchaseValue(rowId, ppParamId, ov[mp.id]);
     pulledCount++;
   });
+
+  if(builtin){
+    BUILTIN_COLUMNS.forEach(bc => {
+      if(bc.computed) return; // Implied Upside / Optimized Weight Allocation don't stand alone per row
+      const val = builtin[bc.id];
+      if(val === undefined) return;
+      const ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === normalizeParamLabel(bc.label));
+      if(!ppParam) return; // only fill a builtin-mirroring column the user already added themselves
+      setPastPurchaseValue(rowId, ppParam.id, val);
+      pulledCount++;
+    });
+  }
+
   return pulledCount;
+}
+
+// Re-pulls fresh data (custom params + built-in fields, including the latest
+// live-fetched prices) from the Portfolio Lists table into every EXISTING Past
+// Purchases row, matched by asset symbol. Use this after fetching live data or
+// editing values on the Portfolio Lists table, since the initial pull above
+// only happens once, at the moment a row is added or a list is imported.
+function refreshPastPurchasesFromPortfolio(){
+  const rows = getPastPurchasesRows();
+  let totalPulled = 0;
+  rows.forEach(row => {
+    if(!row.asset) return;
+    totalPulled += pullMainTableDataIntoPastPurchases(row.id, row.asset.trim().toUpperCase());
+  });
+  return { rowCount: rows.length, pulled: totalPulled };
 }
 
 // Pulls in every ticker currently visible in the chosen Portfolio List (base +
@@ -1495,6 +1589,7 @@ function renderPastPurchasesTable(){
 
   const params = getPastPurchasesParams();
   const orderedRows = getPastPurchasesSortedRows();
+  lastPastPurchasesOrderedRows = orderedRows;
 
   let headHtml = '<tr><th>Past Purchases</th>';
   params.forEach((p, idx) => {
@@ -1711,6 +1806,208 @@ function renderPastPurchasesTable(){
 
     tfoot.innerHTML = footHtml;
   }
+}
+
+// --- Export: Excel / Text / PDF, for both tables ---
+// Both builders read from the snapshots kept up to date by
+// runMatrixOptimization()/renderPastPurchasesTable() (lastMainTableProcessedAssets /
+// lastPastPurchasesOrderedRows), so an export always reflects exactly what's
+// currently on screen — same sort order, same column order, same resolved
+// computed values — never a silent recompute that could drift from the view.
+// Excel and PDF need the SheetJS (XLSX) / jsPDF+autotable libraries, loaded via
+// CDN in index.html; Text needs nothing beyond the browser itself.
+
+function downloadTextBlob(filename, content, mimeType){
+  const blob = new Blob([content], { type: mimeType + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportTableAsExcel(filename, sheetName, headers, rows){
+  if(typeof XLSX === "undefined"){
+    alert('Excel export needs its helper library, which loads from a CDN the first time this page opens — please check your internet connection and reload the page, then try again.');
+    return;
+  }
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31)); // Excel sheet-name length limit
+  XLSX.writeFile(wb, filename);
+}
+
+function exportTableAsText(filename, headers, rows){
+  const escCell = (v) => {
+    const s = (v === undefined || v === null) ? "" : String(v);
+    return s.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+  };
+  const lines = [headers, ...rows].map(r => r.map(escCell).join("\t"));
+  downloadTextBlob(filename, lines.join("\n"), "text/plain");
+}
+
+function exportTableAsPdf(filename, title, headers, rows){
+  const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+  if(!jsPDFCtor || typeof jsPDFCtor.prototype.autoTable !== "function"){
+    alert('PDF export needs its helper library, which loads from a CDN the first time this page opens — please check your internet connection and reload the page, then try again.');
+    return;
+  }
+  const doc = new jsPDFCtor({ orientation: "landscape" });
+  doc.setFontSize(14);
+  doc.text(title, 14, 15);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text("Exported " + new Date().toLocaleString(), 14, 21);
+  doc.autoTable({
+    head: [headers], body: rows, startY: 26,
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [30, 41, 59] },
+    theme: "grid",
+  });
+  doc.save(filename);
+}
+
+// Renders one main-table cell to a plain export value (mirrors renderCellHTML's
+// formatting for computed/custom columns, but returns text/numbers instead of HTML).
+function getMainTableExportValue(item, colDef){
+  if(colDef.id === "stability") return item.stability;
+  if(colDef.id === "calculatedUpside") return (item.calculatedUpside >= 0 ? "+" : "") + (item.calculatedUpside * 100).toFixed(1) + "%";
+  if(colDef.id === "allocationWeight") return item.allocationWeight.toFixed(2) + "%";
+  if(colDef.isCustom){
+    const val = item.customValues[colDef.id];
+    const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
+    if(colDef.computed && colDef.formula === "salesProfitPP"){
+      if(isDefault) return "—";
+      const num = Number(val) || 0;
+      return (num >= 0 ? "+" : "-") + "$" + Math.abs(num).toFixed(2);
+    }
+    if(colDef.computed) return Number(val).toFixed(1) + "%";
+    return val;
+  }
+  return item[colDef.id];
+}
+
+function buildMainTableExportTable(){
+  const columnOrder = getColumnOrder();
+  const defsById = Object.fromEntries(getAllColumnDefs().map(d => [d.id, d]));
+  const headers = ["Ticker", ...columnOrder.map(id => (defsById[id] ? defsById[id].label : id))];
+  const rows = lastMainTableProcessedAssets.map(item => [
+    item.ticker,
+    ...columnOrder.map(id => defsById[id] ? getMainTableExportValue(item, defsById[id]) : "")
+  ]);
+  return { headers, rows };
+}
+
+// Mirrors the tfoot logic in renderPastPurchasesTable() (monthly subtotals +
+// grand total) so exports carry the same summary rows shown on screen.
+function buildPastPurchasesExportTable(){
+  const params = getPastPurchasesParams();
+  const orderedRows = lastPastPurchasesOrderedRows || [];
+  const headers = ["Past Purchases", ...params.map(p => p.label)];
+
+  const rows = orderedRows.map(row => {
+    const resolved = resolvePastPurchaseRowValues(row);
+    const cells = params.map(p => {
+      if(p.computed && p.formula === "salesProfitPP"){
+        const ready = resolved["_" + p.id + "_ready"];
+        if(!ready) return "—";
+        const val = resolved[p.id] || 0;
+        return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
+      }
+      return resolved[p.id];
+    });
+    return [row.asset, ...cells];
+  });
+
+  const saleProfitParam = params.find(p => p.computed && p.formula === "salesProfitPP");
+  const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+
+  if(saleProfitParam && dateSaleParam){
+    const groups = {};
+    orderedRows.forEach(row => {
+      const dateVal = (row.values && row.values[dateSaleParam.id]) || "";
+      const parsed = ppParseDateSale(dateVal);
+      if(!parsed) return;
+      const key = parsed.year + "-" + String(parsed.month).padStart(2, "0");
+      if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
+      groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
+    });
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    Object.keys(groups).sort((a, b) => {
+      if(groups[b].year !== groups[a].year) return groups[b].year - groups[a].year;
+      return groups[b].month - groups[a].month;
+    }).forEach(key => {
+      const g = groups[key];
+      const row = new Array(headers.length).fill("");
+      row[0] = `Sales for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      row[colIndex + 1] = (g.total >= 0 ? "+" : "-") + "$" + Math.abs(g.total).toFixed(2);
+      rows.push(row);
+    });
+  }
+
+  if(saleProfitParam){
+    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    const row = new Array(headers.length).fill("");
+    row[0] = "Total Sale Profit to date";
+    row[colIndex + 1] = (total >= 0 ? "+" : "-") + "$" + Math.abs(total).toFixed(2);
+    rows.push(row);
+  }
+
+  return { headers, rows };
+}
+
+function wireUpPastPurchasesRefreshButton(){
+  const btn = document.getElementById("ppRefreshFromPortfolioBtn");
+  const statusEl = document.getElementById("ppRefreshStatus");
+  if(!btn) return;
+  btn.addEventListener("click", () => {
+    const { rowCount, pulled } = refreshPastPurchasesFromPortfolio();
+    renderPastPurchasesTable();
+    renderPastPurchasesParamList();
+    if(statusEl){
+      statusEl.textContent = rowCount === 0
+        ? "No Past Purchases rows to refresh yet."
+        : `Refreshed ${rowCount} row(s) from Portfolio Lists (${pulled} value(s) pulled).`;
+      statusEl.style.color = "var(--emerald)";
+    }
+  });
+}
+
+function wireUpExportButtons(){
+  const activeListName = () => (getActiveList().name || "Portfolio List").replace(/[^a-z0-9]+/gi, "_");
+
+  const excelBtn = document.getElementById("exportExcelBtn");
+  if(excelBtn) excelBtn.addEventListener("click", () => {
+    const { headers, rows } = buildMainTableExportTable();
+    exportTableAsExcel(`${activeListName()}.xlsx`, getActiveList().name || "Portfolio List", headers, rows);
+  });
+  const textBtn = document.getElementById("exportTextBtn");
+  if(textBtn) textBtn.addEventListener("click", () => {
+    const { headers, rows } = buildMainTableExportTable();
+    exportTableAsText(`${activeListName()}.txt`, headers, rows);
+  });
+  const pdfBtn = document.getElementById("exportPdfBtn");
+  if(pdfBtn) pdfBtn.addEventListener("click", () => {
+    const { headers, rows } = buildMainTableExportTable();
+    exportTableAsPdf(`${activeListName()}.pdf`, getActiveList().name || "Portfolio List", headers, rows);
+  });
+
+  const ppExcelBtn = document.getElementById("ppExportExcelBtn");
+  if(ppExcelBtn) ppExcelBtn.addEventListener("click", () => {
+    const { headers, rows } = buildPastPurchasesExportTable();
+    exportTableAsExcel("Past_Purchases.xlsx", "Past Purchases", headers, rows);
+  });
+  const ppTextBtn = document.getElementById("ppExportTextBtn");
+  if(ppTextBtn) ppTextBtn.addEventListener("click", () => {
+    const { headers, rows } = buildPastPurchasesExportTable();
+    exportTableAsText("Past_Purchases.txt", headers, rows);
+  });
+  const ppPdfBtn = document.getElementById("ppExportPdfBtn");
+  if(ppPdfBtn) ppPdfBtn.addEventListener("click", () => {
+    const { headers, rows } = buildPastPurchasesExportTable();
+    exportTableAsPdf("Past_Purchases.pdf", "Past Purchases", headers, rows);
+  });
 }
 
 function renderListSelector(){
@@ -2205,6 +2502,8 @@ function runMatrixOptimization() {
   } else {
     processedAssets.sort((a, b) => b.allocationWeight - a.allocationWeight);
   }
+
+  lastMainTableProcessedAssets = processedAssets;
 
   processedAssets.forEach((item, rowIdx) => {
     const rowElement = document.createElement('tr');
@@ -2820,6 +3119,18 @@ try{
   renderPastPurchasesTable();
 }catch(err){
   console.error("Failed to wire up Past Purchases table:", err);
+}
+
+try{
+  wireUpPastPurchasesRefreshButton();
+}catch(err){
+  console.error("Failed to wire up the Past Purchases refresh button:", err);
+}
+
+try{
+  wireUpExportButtons();
+}catch(err){
+  console.error("Failed to wire up export buttons:", err);
 }
 
 // On page load, check if a session already exists (e.g. returning to the app
