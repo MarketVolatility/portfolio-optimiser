@@ -70,6 +70,10 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-input-ticker:hover, .cell-input-ticker:focus { border-color: var(--accent-blue); }
 .tab-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .tab-btn.active-tab { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.tab-btn-export-excel { color: #22c55e; }
+.tab-btn-export-text { color: var(--text-secondary); }
+.tab-btn-export-word { color: #1e3a8a; }
+.tab-btn-export-pdf { color: #991b1b; }
 .form-input { background: var(--bg-main); color: #fff; border: 1px solid var(--border-color); padding: 0.65rem 0.9rem; border-radius: 8px; font-size: 0.9rem; font-family: inherit; }
 .form-input:focus { outline: none; border-color: var(--accent-blue); }
 .remove-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-main); border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.85rem; }
@@ -220,10 +224,6 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <button id="tabAddParamBtn" class="tab-btn">+/- Parameter</button>
       <button id="tabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
       <button id="tabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
-      <span style="width:1px; background:var(--border-color); margin:0 0.25rem;"></span>
-      <button id="exportExcelBtn" class="tab-btn" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-      <button id="exportTextBtn" class="tab-btn" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-      <button id="exportPdfBtn" class="tab-btn" title="Download this table as a PDF">⬇ Export to PDF</button>
     </div>
 
     <div id="addPanel">
@@ -319,6 +319,12 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Now viewing: —</h2>
     <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <button id="exportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="exportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="exportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="exportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Download this table as a PDF">⬇ Export to PDF</button>
+  </div>
   <div class="table-container">
     <table id="resultsTable">
       <thead id="resultsTableHead"></thead>
@@ -326,13 +332,22 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.25 (Excel/Text/PDF export, one-way pull fix, refresh from Portfolio)
+    HTML build: v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600;">Past Purchases</h2>
   </div>
-  <div class="disclaimer" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7;">
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="ppListSelector" style="color:#facc15; font-size:1.3rem;">Past Purchases List:</label>
+    <select id="ppListSelector" class="form-input" style="min-width:180px;"></select>
+    <button id="ppNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
+    <button id="ppRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
+    <button id="ppDeleteListBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+  </div>
+
+  <div class="disclaimer" style="background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1;">
     <strong>Freeform tracking table — no built-in columns.</strong> This table starts completely empty of parameters. Add whichever assets you want, and add whichever parameters you want to track for them (e.g. Units Purchased, Average Purchase Price, Date Purchased, or anything else) — nothing here is pre-set. You can also import the full asset list from any Portfolio List above with one click. Data only ever flows <strong>one way</strong>, from Portfolio Lists into Past Purchases (never the reverse): adding/importing an asset here automatically carries over Units Purchased, Average Purchase Price, and Date Purchased, plus fills in any OTHER column here that matches a Portfolio Lists column by name (e.g. add a "Current Price" column here yourself, and it'll be filled from Portfolio Lists) — but it won't invent new columns for unrelated Portfolio Lists fields you never added here. Since that pull only happens once, when a row is added, use "↻ Refresh from Portfolio Lists" below any time — including after using "Fetch live data" up on the Portfolio Lists table — to re-pull the latest values into rows already here.
   </div>
 
@@ -352,10 +367,6 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
       <button id="ppTabParamBtn" class="tab-btn">+/- Parameter</button>
       <button id="ppTabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
       <button id="ppTabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
-      <span style="width:1px; background:var(--border-color); margin:0 0.25rem;"></span>
-      <button id="ppExportExcelBtn" class="tab-btn" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-      <button id="ppExportTextBtn" class="tab-btn" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-      <button id="ppExportPdfBtn" class="tab-btn" title="Download this table as a PDF">⬇ Export to PDF</button>
     </div>
 
     <div id="ppTickerPanel">
@@ -416,6 +427,16 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </select>
   </div>
 
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+    <h2 id="ppActiveListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Now viewing: —</h2>
+    <span id="ppListActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <button id="ppExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="ppExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="ppExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Download this table as a PDF">⬇ Export to PDF</button>
+  </div>
   <div class="table-container" style="margin-bottom:2rem;">
     <table id="ppTable">
       <thead id="ppTableHead"></thead>
@@ -507,6 +528,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">IPO Date</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The date the company's shares first began trading on a public exchange.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">MACD Signal</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A qualitative read (e.g. Bullish, Bearish, Neutral) from the Moving Average Convergence Divergence technical indicator.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Market Cap ($B)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Current share price × total shares outstanding, in billions of dollars. Live-fetchable via Finnhub.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Missed Gain %</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): (Current Price − Selling Price) ÷ Selling Price × 100. Requires a "Selling Price" column with a non-zero value, and the asset must have Current Price data available (from the Sample List, live fetch, or a manual override); shows 0% until then. Recalculates every time you fetch/update live data, since it always reads the latest Current Price rather than a frozen snapshot — a positive value means the price kept rising after you sold (upside you missed), a negative value means it fell below your selling price.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Net Margin (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Fixed column on the main Portfolio Lists table. Also listed in the “+/- Parameter” dropdown on both tables — selecting it on Portfolio Lists is blocked by the duplicate-column guard (the fixed column already exists), but on Past Purchases, which has no fixed columns of its own, it's addable as a manual-entry field. Net income divided by revenue.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Number of Analysts Covering</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The count of equity research analysts who publish estimates or ratings on the stock.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Operating Margin (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Operating income divided by revenue.</td></tr>
