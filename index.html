@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Institutional Equity Multi-Factor Optimizer Hub</title>
+<title>Stock Portfolio Optimizer</title>
 <style>
 :root {
   --bg-main: #0b0f19; --bg-card: #151d30; --text-primary: #f8fafc;
@@ -225,8 +225,11 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   </div>
 
   <header>
-    <h1>Institutional Equity Matrix Optimizer</h1>
+    <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
+    <div id="htmlBuildLine" style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
+      HTML build: v5.35 (Buy Price rename + blue Current Price highlight, Stock Portfolio Optimizer title, PDF export re-verified)
+    </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
     <strong>Live data panel.</strong> This can pull <em>live price, P/E, and ROA</em> from Finnhub's free API. Target prices and the stability/moat commentary are still manually written editorial content — no free API provides analyst price targets or qualitative "moat" ratings, so those stay static and are labeled as such below.
@@ -399,9 +402,6 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <thead id="resultsTableHead"></thead>
       <tbody></tbody>
     </table>
-  </div>
-  <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP "Ticker" header, footer reorder, new PP sort options, Current Holdings filter)
   </div>
 
   </div>
