@@ -266,8 +266,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:1.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:var(--emerald); font-weight:600;">Portfolio</h2>
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#50c878; font-weight:600; margin:0;">Portfolio</h2>
     <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▼</button>
   </div>
   <div id="portfolioSectionBody">
@@ -401,12 +401,12 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)
+    HTML build: v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP "Ticker" header, footer reorder, new PP sort options, Current Holdings filter)
   </div>
 
   </div>
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600;">Past Purchases</h2>
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases</h2>
     <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▼</button>
   </div>
   <div id="pastPurchasesSectionBody">
@@ -496,15 +496,20 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <option value="date-old">Date Added (oldest first)</option>
       <option value="alpha">Alphabetical (Asset)</option>
       <option value="param-date-purchased">Date Purchased (most recent first)</option>
+      <option value="param-date-purchased-old">Date Purchased (oldest first)</option>
       <option value="param-date-sale">Date Sale (most recent first)</option>
+      <option value="param-date-sale-old">Date Sale (oldest first)</option>
       <option value="param-sale-profit">Sale Profit (highest first)</option>
       <option value="param-missed-gain">Missed Gain % (highest first)</option>
       <option value="custom" selected>Custom order (reorder with ↑ ↓)</option>
     </select>
   </div>
 
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
-    <h2 id="ppActiveListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Past Purchases viewing: —</h2>
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.6rem;">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <h2 id="ppActiveListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases viewing: —</h2>
+      <button id="ppCurrentHoldingsToggle" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Show only assets that haven't been sold yet (Selling Price = 0)">Current Holdings</button>
+    </div>
     <span id="ppListActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
