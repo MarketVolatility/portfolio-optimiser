@@ -74,6 +74,39 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .tab-btn-export-text { color: var(--text-secondary); }
 .tab-btn-export-word { color: #1e3a8a; }
 .tab-btn-export-pdf { color: #991b1b; }
+
+/* --- Desktop/Mobile interface toggle ---
+   A manual override (not a @media query), so a user can force the mobile-optimized
+   layout even on a wide desktop browser (or vice versa) and have it stick, via the
+   two tabs under the top disclaimer. Selectors below use !important where the same
+   element also carries an inline style (very common in this page), since inline
+   styles otherwise beat any class rule regardless of specificity. */
+body.view-mobile { padding: 0.75rem !important; }
+body.view-mobile .container { max-width: 100% !important; }
+body.view-mobile h1 { font-size: 1.5rem !important; }
+body.view-mobile p.subtitle { font-size: 0.9rem !important; }
+body.view-mobile header { margin-bottom: 1.5rem !important; padding-bottom: 1rem !important; }
+body.view-mobile .disclaimer { font-size: 0.8rem !important; padding: 0.85rem 1rem !important; }
+body.view-mobile .control-panel { flex-direction: column !important; align-items: stretch !important; gap: 0.6rem !important; padding: 1rem !important; }
+body.view-mobile .control-panel label { font-size: 0.85rem !important; }
+body.view-mobile .control-panel > select,
+body.view-mobile .control-panel > input,
+body.view-mobile .control-panel > button,
+body.view-mobile .control-panel > .form-input { width: 100% !important; }
+body.view-mobile [style*="display:flex"] { flex-wrap: wrap !important; }
+body.view-mobile h2 { font-size: 1.05rem !important; }
+body.view-mobile .tab-btn { flex: 1 1 auto !important; font-size: 0.8rem !important; padding: 0.55rem 0.75rem !important; }
+body.view-mobile table { font-size: 0.78rem !important; }
+body.view-mobile th, body.view-mobile td { padding: 0.7rem 0.55rem !important; }
+body.view-mobile .table-container { max-height: 62vh !important; }
+body.view-mobile button { min-height: 42px; }
+body.view-mobile .row-ctrl-btn, body.view-mobile .col-ctrl-btn { width: 30px !important; height: 30px !important; font-size: 1rem !important; }
+body.view-mobile .cell-input-ticker { width: 78px !important; }
+body.view-mobile .allocation-badge { font-size: 0.8rem; }
+.view-toggle-panel { justify-content: center !important; }
+.view-toggle-panel .tab-btn { min-width: 170px; }
+body.view-mobile .view-toggle-panel { flex-direction: row !important; }
+body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-width: 0; }
 .form-input { background: var(--bg-main); color: #fff; border: 1px solid var(--border-color); padding: 0.65rem 0.9rem; border-radius: 8px; font-size: 0.9rem; font-family: inherit; }
 .form-input:focus { outline: none; border-color: var(--accent-blue); }
 .remove-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-main); border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.85rem; }
@@ -178,9 +211,16 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 
 <div id="appShell">
 <div class="container">
-  <div class="disclaimer">
+  <div class="disclaimer" style="background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1;">
     <strong>⚠ Not financial advice / not live data.</strong> Prices, P/E, ROA, target prices, and "stability" ratings below are manually entered placeholder figures used to demonstrate a weighting formula — they are not sourced from a real-time market feed or professional research, and may be outdated or inaccurate. Do not use this tool to make actual investment decisions. Verify all figures independently before relying on them.
   </div>
+
+  <div class="control-panel view-toggle-panel" style="flex-wrap: wrap;">
+    <span style="color:var(--text-secondary); font-size:0.85rem;">View as:</span>
+    <button id="viewDesktopBtn" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">🖥 Desktop interface</button>
+    <button id="viewMobileBtn" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">📱 Mobile interface</button>
+  </div>
+
   <header>
     <h1>Institutional Equity Matrix Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
@@ -332,7 +372,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)
+    HTML build: v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2.5rem; margin-bottom:0.75rem;">
