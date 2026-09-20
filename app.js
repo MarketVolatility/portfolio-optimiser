@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.23 (Parameter dropdown & glossary coverage audit)
-console.log("app.js loaded — build v5.23 (Parameter dropdown & glossary coverage audit)");
+// APP.JS BUILD: v5.24 (Dropdown parity, A-Z sort, hide/restore Sample List columns)
+console.log("app.js loaded — build v5.24 (Dropdown parity, A-Z sort, hide/restore Sample List columns)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -13,7 +13,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // Past Purchases schema — no longer read or written directly, but kept in the
 // sync list as a safety net so a device pulling an older cloud snapshot can
 // still migrate it locally (see migratePastPurchasesRowsIfNeeded).
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns"];
 
 let authClient;
 function getAuthClient(){
@@ -604,9 +604,37 @@ function removeCustomParam(id){
   saveColumnOrder(getColumnOrder().filter(cid => cid !== id));
 }
 
+// Built-in (Sample List) columns are normally fixed, but the user can delete —
+// really just hide — any of them the same way custom columns are removed. The
+// underlying data (marketData, global overrides, scoring formulas) is left
+// completely intact, since those columns are still used internally; only the
+// column's visibility in getAllColumnDefs()/the table/the dropdowns changes.
+// This makes it fully reversible via "restore" in the +/- Parameter panel.
+function getHiddenBuiltinColumns(){
+  try{ return JSON.parse(localStorage.getItem("hiddenBuiltinColumns") || "[]"); }
+  catch(e){ return []; }
+}
+function saveHiddenBuiltinColumns(list){
+  try{ localStorage.setItem("hiddenBuiltinColumns", JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function removeBuiltinColumn(id){
+  const hidden = getHiddenBuiltinColumns();
+  if(!hidden.includes(id)) hidden.push(id);
+  saveHiddenBuiltinColumns(hidden);
+  saveColumnOrder(getColumnOrder().filter(cid => cid !== id));
+}
+function restoreBuiltinColumn(id){
+  saveHiddenBuiltinColumns(getHiddenBuiltinColumns().filter(hid => hid !== id));
+  // getColumnOrder()'s "append anything missing from the saved order" logic
+  // picks the restored column back up automatically on its next call.
+}
+
 function getAllColumnDefs(){
+  const hidden = new Set(getHiddenBuiltinColumns());
+  const builtins = BUILTIN_COLUMNS.filter(c => !hidden.has(c.id));
   const custom = getCustomParams().map(p => ({ id: p.id, label: p.label, type: p.type, computed: !!p.computed, formula: p.formula, isCustom: true, defaultValue: p.defaultValue }));
-  return [...BUILTIN_COLUMNS, ...custom];
+  return [...builtins, ...custom];
 }
 
 function getColumnOrder(){
@@ -1008,27 +1036,36 @@ function renderImportListSelect(){
 // AAPL) can appear on multiple rows, since a real position can be bought and sold
 // more than once and each round trip deserves its own row.
 //
-// Preset-only additions specific to this table. Two groups:
+// Preset-only additions that originated with this table. Two groups, both of
+// which are ALSO offered in the main table's own "+/- Parameter" dropdown now
+// (both dropdowns share the exact same full preset list — see PP_PARAM_PRESETS
+// below — so nothing is Past-Purchases-exclusive by omission anymore):
 //
 // 1. Sale-tracking fields: "Date Sale" / "Selling Price" (plain manual fields)
 //    and "Sale Profit" (computed: Units Purchased × (Selling Price − Average
-//    Purchase Price), looked up by label among this table's OWN columns —
+//    Purchase Price), looked up by label among the table's OWN columns —
 //    mirrors how the main table's "Actual Upside %" preset looks up "Average
-//    Purchase Price ($)" among ITS own custom params).
+//    Purchase Price ($)" among ITS own custom params. When "Sale Profit" is
+//    added on the main table, the main table's own scoring/render code
+//    resolves it the same way, independently, among ITS custom params).
 //
 // 2. Fundamentals fields that mirror the main table's BUILTIN_COLUMNS
 //    (ROA, P/E, Current Price, Target Price, Rev Growth, Net Margin, PEG,
-//    D/E, FCF, Cash Runway, Beta, Stability). The main table doesn't offer
-//    these in its own preset dropdown because they already exist there as
-//    fixed columns (adding them again would just collide with the existing
-//    column). But Past Purchases has NO fixed columns at all, so without
-//    these entries there'd be no way to record e.g. the Current Price at the
-//    time of a purchase/sale here — hence they're listed as manual-entry
-//    presets for this table only. Labels match BUILTIN_COLUMNS exactly.
+//    D/E, FCF, Cash Runway, Beta, Stability). Selecting one of these on the
+//    MAIN table and clicking Add is blocked by the existing "already exists
+//    as a column" duplicate guard, since the main table already has each of
+//    these as a fixed column — that's expected, not a bug: the option stays
+//    in the dropdown for discoverability/documentation (and for hiding a
+//    built-in column and picking the exact same label back up as a manual
+//    custom one, if that's ever wanted), but adding it as a second column on
+//    the main table doesn't make sense while the fixed one exists. On the
+//    Past Purchases table, which has NO fixed columns at all, these are the
+//    only way to record e.g. the Current Price at the time of a purchase or
+//    sale. Labels match BUILTIN_COLUMNS exactly.
 //    ("Company Name", "Implied Upside", and "Optimized Weight Allocation"
-//    are deliberately left out — the first duplicates the Asset identity
-//    column, and the other two are optimizer outputs computed for a whole
-//    Portfolio List, not something that stands alone per past purchase.)
+//    are deliberately left out — the first duplicates the Asset/Ticker
+//    identity column, and the other two are optimizer outputs computed for
+//    a whole Portfolio List, not something that stands alone per row.)
 const PP_ONLY_PARAM_PRESETS = [
   { label: "Date Sale", type: "date", defaultValue: "" },
   { label: "Selling Price", type: "number", defaultValue: 0 },
@@ -1048,6 +1085,18 @@ const PP_ONLY_PARAM_PRESETS = [
 ];
 const PP_PARAM_PRESETS = [...PARAM_PRESETS, ...PP_ONLY_PARAM_PRESETS];
 const PP_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Builds the <option> list for a "+/- Parameter" preset dropdown, sorted
+// alphabetically by label (A–Z) for easy scanning — while keeping each
+// option's value equal to its index in the ORIGINAL (unsorted) presets array,
+// so existing lookup code (`PRESETS[parseInt(val, 10)]`) keeps working
+// unchanged regardless of display order.
+function buildPresetOptionsHtml(presets){
+  const withIndex = presets.map((p, i) => ({ p, i }));
+  withIndex.sort((a, b) => a.p.label.localeCompare(b.p.label, undefined, { sensitivity: "base", numeric: true }));
+  return '<option value="__custom__">— Custom (type your own) —</option>' +
+    withIndex.map(({ p, i }) => `<option value="${i}">${p.label}</option>`).join('');
+}
 
 let ppColumnSortState = null; // { colId, direction: 'asc'|'desc' } or null (falls back to the Sort-by dropdown)
 
@@ -1705,22 +1754,75 @@ function renderCustomParamList(){
   const params = getCustomParams();
   if(params.length === 0){
     container.innerHTML = `<span style="color:var(--text-secondary);">No custom parameters yet.</span>`;
-    return;
+  } else {
+    params.forEach(p => {
+      const chip = document.createElement("div");
+      chip.className = "remove-chip";
+      chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+      chip.querySelector("button").addEventListener("click", (e) => {
+        const id = e.target.getAttribute("data-id");
+        if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
+          removeCustomParam(id);
+          renderCustomParamList();
+          runMatrixOptimization();
+        }
+      });
+      container.appendChild(chip);
+    });
   }
-  params.forEach(p => {
-    const chip = document.createElement("div");
-    chip.className = "remove-chip";
-    chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
-    chip.querySelector("button").addEventListener("click", (e) => {
-      const id = e.target.getAttribute("data-id");
-      if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
-        removeCustomParam(id);
+  renderBuiltinColumnLists();
+}
+
+// Fixed (Sample List) columns can be hidden/restored the same way custom
+// columns are removed/added — this just uses two chip lists instead of one,
+// since a hidden built-in column isn't "gone", it's parked for restoring.
+function renderBuiltinColumnLists(){
+  const visibleContainer = document.getElementById("builtinColumnList");
+  const hiddenContainer = document.getElementById("hiddenBuiltinColumnList");
+  const hiddenSection = document.getElementById("hiddenBuiltinColumnSection");
+  const hidden = getHiddenBuiltinColumns();
+
+  if(visibleContainer){
+    visibleContainer.innerHTML = "";
+    const visible = BUILTIN_COLUMNS.filter(c => !hidden.includes(c.id));
+    if(visible.length === 0){
+      visibleContainer.innerHTML = `<span style="color:var(--text-secondary);">All Sample List columns are hidden.</span>`;
+    } else {
+      visible.forEach(c => {
+        const chip = document.createElement("div");
+        chip.className = "remove-chip";
+        chip.innerHTML = `<span>${c.label}</span><button data-id="${c.id}" title="Hide ${c.label}">&times;</button>`;
+        chip.querySelector("button").addEventListener("click", (e) => {
+          const id = e.target.getAttribute("data-id");
+          if(confirm(`Hide the "${c.label}" column? Its data is kept (and still used in scoring, if applicable) — restore it any time from here.`)){
+            removeBuiltinColumn(id);
+            renderCustomParamList();
+            runMatrixOptimization();
+          }
+        });
+        visibleContainer.appendChild(chip);
+      });
+    }
+  }
+
+  if(hiddenContainer && hiddenSection){
+    hiddenSection.style.display = hidden.length === 0 ? "none" : "block";
+    hiddenContainer.innerHTML = "";
+    hidden.forEach(id => {
+      const c = BUILTIN_COLUMNS.find(bc => bc.id === id);
+      if(!c) return;
+      const chip = document.createElement("div");
+      chip.className = "remove-chip";
+      chip.innerHTML = `<span>${c.label}</span><button data-id="${c.id}" title="Restore ${c.label}" style="color:var(--emerald);">+</button>`;
+      chip.querySelector("button").addEventListener("click", (e) => {
+        const restoreId = e.target.getAttribute("data-id");
+        restoreBuiltinColumn(restoreId);
         renderCustomParamList();
         runMatrixOptimization();
-      }
+      });
+      hiddenContainer.appendChild(chip);
     });
-    container.appendChild(chip);
-  });
+  }
 }
 
 function renderRowOrderList(){
@@ -1843,6 +1945,13 @@ function renderCellHTML(colDef, item, badge){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
     const defaultClass = isDefault ? ' cell-input-unconfirmed' : '';
+    if(colDef.computed && colDef.formula === 'salesProfitPP'){
+      const num = Number(val) || 0;
+      const sign = num >= 0 ? '+' : '-';
+      const color = isDefault ? 'var(--text-secondary)' : (num >= 0 ? 'var(--emerald)' : '#ef4444');
+      const titleAttr = isDefault ? ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."` : '';
+      return `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(num).toFixed(2)}</td>`;
+    }
     if(colDef.computed){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
     }
@@ -1880,7 +1989,7 @@ function renderTableHeader(){
         <button class="col-ctrl-btn ${isSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="${colId}" title="Sort by this column">${sortIcon}</button>
         <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="-1" ${leftDisabled} title="Move left">&lt;</button>
         <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="1" ${rightDisabled} title="Move right">&gt;</button>
-        ${def.isCustom ? `<button class="col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${colId}" title="Remove this parameter">&times;</button>` : ''}
+        <button class="col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${colId}" title="Remove this parameter">&times;</button>
       </div>
     </th>`;
   });
@@ -1906,10 +2015,18 @@ function renderTableHeader(){
         runMatrixOptimization();
       } else if(action === 'remove'){
         const def = defsById[id];
-        if(confirm(`Remove the "${def.label}" column? This deletes its values for every ticker.`)){
-          removeCustomParam(id);
-          runMatrixOptimization();
-          renderCustomParamList();
+        if(def.isCustom){
+          if(confirm(`Remove the "${def.label}" column? This deletes its values for every ticker.`)){
+            removeCustomParam(id);
+            runMatrixOptimization();
+            renderCustomParamList();
+          }
+        } else {
+          if(confirm(`Hide the "${def.label}" column? Its data is kept (and still used in scoring, if applicable) — restore it any time from the "+/- Parameter" panel.`)){
+            removeBuiltinColumn(id);
+            runMatrixOptimization();
+            renderCustomParamList();
+          }
         }
       }
     });
@@ -2002,8 +2119,8 @@ function runMatrixOptimization() {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
-      } else if(p.computed && p.formula === "actualUpsidePct"){
-        // resolved in pass 2, once Average Purchase Price (if present) is available
+      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP")){
+        // resolved in pass 2, once their sibling custom params (if present) are available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
         customIsDefault[p.id] = ov[p.id] === undefined;
@@ -2019,6 +2136,20 @@ function runMatrixOptimization() {
         customValues[p.id] = hasRealPurchasePrice ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
         // Grey it out until there's both an Average Purchase Price column AND a real (non-zero) value entered.
         customIsDefault[p.id] = !hasRealPurchasePrice;
+      } else if(p.computed && p.formula === "salesProfitPP"){
+        // Same formula and "ready" logic as the Past Purchases table's own Sale
+        // Profit column (see resolvePastPurchaseRowValues), just looked up among
+        // THIS table's custom params instead of a Past Purchases row's columns.
+        const norm = s => String(s).trim().toLowerCase();
+        const unitsParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "units purchased");
+        const avgParam = allCustomParams.find(cp => !cp.computed && (norm(cp.label) === "average purchase price ($)" || norm(cp.label) === "average purchase price"));
+        const sellParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "selling price");
+        const units = unitsParam ? (Number(customValues[unitsParam.id]) || 0) : 0;
+        const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
+        const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
+        const ready = !!(unitsParam && avgParam && sellParam) && units !== 0 && sell !== 0;
+        customValues[p.id] = ready ? units * (sell - avg) : 0;
+        customIsDefault[p.id] = !ready;
       }
     });
 
@@ -2389,8 +2520,13 @@ try{
   const newParamPreset = document.getElementById("newParamPreset");
   let selectedPresetMeta = null;
   if(newParamPreset){
-    newParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
-      PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+    // Same full preset list as Past Purchases (PP_PARAM_PRESETS) — every
+    // parameter that started in either table's dropdown is now offered in
+    // both, sorted A–Z. Picking one of the fields that mirror a Sample List
+    // built-in (e.g. "Current Price") is still blocked by the duplicate
+    // guard below when that built-in column is currently visible — see the
+    // comment above PP_ONLY_PARAM_PRESETS for why that's expected.
+    newParamPreset.innerHTML = buildPresetOptionsHtml(PP_PARAM_PRESETS);
     newParamPreset.addEventListener("change", () => {
       const val = newParamPreset.value;
       if(val === "__custom__"){
@@ -2399,7 +2535,7 @@ try{
         document.getElementById("newParamDefault").value = "";
         selectedPresetMeta = null;
       } else {
-        const preset = PARAM_PRESETS[parseInt(val, 10)];
+        const preset = PP_PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("newParamLabel").value = preset.label;
         document.getElementById("newParamType").value = preset.type;
         document.getElementById("newParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
@@ -2427,13 +2563,16 @@ try{
       // Bypass the similarity check for computed presets regardless of HOW the
       // label got here (dropdown selection, or typed directly) — these are a
       // small curated set I already know are genuinely distinct metrics.
-      const matchingComputedPreset = PARAM_PRESETS.find(p => p.computed && p.label.toLowerCase() === label.toLowerCase());
+      const matchingComputedPreset = PP_PARAM_PRESETS.find(p => p.computed && p.label.toLowerCase() === label.toLowerCase());
       const effectiveMeta = selectedPresetMeta || (matchingComputedPreset ? { computed: true, formula: matchingComputedPreset.formula } : null);
 
-      const exactDuplicate = getCustomParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase())
-        || BUILTIN_COLUMNS.some(c => c.label.trim().toLowerCase() === label.toLowerCase());
+      const matchingBuiltin = BUILTIN_COLUMNS.find(c => c.label.trim().toLowerCase() === label.toLowerCase());
+      const exactDuplicate = getCustomParams().some(p => p.label.trim().toLowerCase() === label.toLowerCase()) || !!matchingBuiltin;
       if(exactDuplicate){
-        statusEl.textContent = `"${label}" already exists as a column. Edit it directly in the table instead of adding it again.`;
+        const isHidden = matchingBuiltin && getHiddenBuiltinColumns().includes(matchingBuiltin.id);
+        statusEl.textContent = isHidden
+          ? `"${label}" already exists as a Sample List column — it's just hidden right now. Restore it below instead of adding a new one with the same name.`
+          : `"${label}" already exists as a column. Edit it directly in the table instead of adding it again.`;
         statusEl.style.color = "var(--amber)";
         return;
       }
@@ -2617,8 +2756,7 @@ try{
   let ppSelectedPresetMeta = null;
   const ppNewParamPreset = document.getElementById("ppNewParamPreset");
   if(ppNewParamPreset){
-    ppNewParamPreset.innerHTML = '<option value="__custom__">— Custom (type your own) —</option>' +
-      PP_PARAM_PRESETS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+    ppNewParamPreset.innerHTML = buildPresetOptionsHtml(PP_PARAM_PRESETS);
     ppNewParamPreset.addEventListener("change", () => {
       const val = ppNewParamPreset.value;
       if(val === "__custom__"){
