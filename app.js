@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.35 (Buy Price -> To Buy Price rename, blue Current Price when at/below buy target, title -> Stock Portfolio Optimizer, build line moved under dashboard subtitle)
-console.log("app.js loaded — build v5.35 (Buy Price -> To Buy Price rename, blue Current Price when at/below buy target, title -> Stock Portfolio Optimizer, build line moved under dashboard subtitle)");
+// APP.JS BUILD: v5.36 ("To Buy Price" preset param, fixed Buy Price rename not surviving cloud sync, emerald (not blue) Current Price at/below buy target incl. Excel/Text "At Buy Target" column, build line left-aligned)
+console.log("app.js loaded — build v5.36 (\"To Buy Price\" preset param, fixed Buy Price rename not surviving cloud sync, emerald (not blue) Current Price at/below buy target incl. Excel/Text \"At Buy Target\" column, build line left-aligned)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -176,6 +176,20 @@ async function openDashboard(user){
   // pastPurchasesRows isn't in that old snapshot, applyRemoteSnapshot() will have
   // just cleared it locally — re-run the migration now so nothing is lost.
   migratePastPurchasesRowsIfNeeded();
+
+  // Same reasoning applies to the "Buy Price" -> "To Buy Price" rename: the
+  // top-level call at script-load time (see renameBuyPriceParamsIfNeeded's
+  // definition) runs against whatever was in localStorage BEFORE this cloud pull
+  // just overwrote it above — so on every login, an un-renamed "Buy Price" saved
+  // to the cloud from an older session would silently reappear, undoing the
+  // rename every time. Re-running it here, against the just-pulled data, is what
+  // actually makes it stick. And since this can genuinely change data (unlike a
+  // passive migration), push the fix back up right away — otherwise it would only
+  // reach the cloud on the next 8-second auto-sync tick, or not at all if the tab
+  // closes before then, letting it "un-rename" itself again on the next pull.
+  if(renameBuyPriceParamsIfNeeded()){
+    pushSnapshotToCloud();
+  }
 
   // Render the whole app now that we have (possibly cloud-restored) data.
   renderListSelector();
@@ -700,6 +714,7 @@ const PARAM_PRESETS = [
   { label: "Actual Upside (%)", type: "number", defaultValue: 0, computed: true, formula: "actualUpsidePct" },
   { label: "Units Purchased", type: "number", defaultValue: 0 },
   { label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
+  { label: "To Buy Price", type: "number", defaultValue: 0 },
   { label: "Date Purchased", type: "date", defaultValue: "__today__" },
   { label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
@@ -1575,20 +1590,24 @@ migratePastPurchasesRowsIfNeeded();
 // since "buy price" no longer matches anything afterward — and covers BOTH the
 // Portfolio Lists table's custom params and the Past Purchases table's params
 // (they're stored separately; a user could have added it to either).
+// Returns true if it actually renamed anything, so callers (see openDashboard,
+// below) know whether the fix needs pushing back up to the cloud.
 function renameBuyPriceParamsIfNeeded(){
   const isBuyPrice = label => String(label).trim().toLowerCase() === "buy price";
+  let anyChanged = false;
   try{
     const mainParams = getCustomParams();
     let changed = false;
     mainParams.forEach(p => { if(isBuyPrice(p.label)){ p.label = "To Buy Price"; changed = true; } });
-    if(changed) saveCustomParams(mainParams);
+    if(changed){ saveCustomParams(mainParams); anyChanged = true; }
   }catch(e){ /* localStorage unavailable */ }
   try{
     const ppParams = getPastPurchasesParams();
     let changed = false;
     ppParams.forEach(p => { if(isBuyPrice(p.label)){ p.label = "To Buy Price"; changed = true; } });
-    if(changed) savePastPurchasesParams(ppParams);
+    if(changed){ savePastPurchasesParams(ppParams); anyChanged = true; }
   }catch(e){ /* localStorage unavailable */ }
+  return anyChanged;
 }
 renameBuyPriceParamsIfNeeded();
 
@@ -2229,13 +2248,13 @@ function renderPastPurchasesTable(){
         } else if(p.type === 'date'){
           rowHtml += `<td><input class="cell-input pp-cell-input" data-row-id="${row.id}" data-field="${p.id}" data-type="date" type="date" value="${escAttr(val)}"></td>`;
         } else {
-          // Same "hit your buy target" blue highlight as the main table's Current
-          // Price column, applied here whenever this row has BOTH a "Current
-          // Price" column (e.g. pulled in from Portfolio Lists) and a "To Buy
-          // Price" column of its own.
+          // Same "hit your buy target" emerald highlight as the main table's
+          // Current Price column, applied here whenever this row has BOTH a
+          // "Current Price" column (e.g. pulled in from Portfolio Lists) and a
+          // "To Buy Price" column of its own.
           const isCurrentPriceCol = String(p.label).trim().toLowerCase() === "current price";
           const isAtTarget = isCurrentPriceCol && isAtOrBelowBuyPriceTarget(val, params, resolved);
-          const styleAttr = isAtTarget ? ' style="color:#7dd3fc;"' : '';
+          const styleAttr = isAtTarget ? ' style="color:var(--emerald);"' : '';
           rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-row-id="${row.id}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
         }
       }
@@ -2635,7 +2654,7 @@ function getMainTableExportValue(item, colDef){
 function getMainTableExportColor(item, colDef){
   if(colDef.id === "calculatedUpside") return item.calculatedUpside >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
   if(colDef.id === "currentPrice"){
-    return isAtOrBelowBuyPriceTarget(item.currentPrice, getCustomParams(), item.customValues) ? EXPORT_COLORS.lightBlue : null;
+    return isAtOrBelowBuyPriceTarget(item.currentPrice, getCustomParams(), item.customValues) ? EXPORT_COLORS.emerald : null;
   }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
@@ -2701,7 +2720,7 @@ function getPastPurchasesExportRowColors(resolved, params){
       return sellVal === 0 ? EXPORT_COLORS.lightBlue : null;
     }
     if(!p.computed && String(p.label).trim().toLowerCase() === "current price"){
-      return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.lightBlue : null;
+      return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.emerald : null;
     }
     return null;
   })];
@@ -2812,6 +2831,45 @@ function buildPastPurchasesExportTable(){
   return { headers, rows, colors };
 }
 
+// Excel and Text exports have no way to show real cell color the way Word/PDF do
+// (colored via getMainTableExportColor/getPastPurchasesExportRowColors instead —
+// Excel's export library can't write cell styles, and plain text has no color at
+// all). So for those two formats only, the "hit your buy target" signal is carried
+// as a plain "At Buy Target" Yes/No column appended onto a COPY of the export
+// table instead — Word/PDF are untouched by these and keep just the color, since
+// showing both there would be redundant. Main table export rows are a 1:1 map of
+// lastMainTableProcessedAssets, so no per-row lookup is needed beyond that.
+function withBuyTargetColumnMainTable(headers, rows){
+  const params = getCustomParams();
+  const newHeaders = [...headers, "At Buy Target"];
+  const newRows = rows.map((r, idx) => {
+    const item = lastMainTableProcessedAssets[idx];
+    const hit = item ? isAtOrBelowBuyPriceTarget(item.currentPrice, params, item.customValues) : false;
+    return [...r, hit ? "Yes" : "No"];
+  });
+  return { headers: newHeaders, rows: newRows };
+}
+
+// Same idea for Past Purchases, but its export rows include summary/footer rows
+// AFTER the per-asset ones (Total Current Book Value, Total Sale Profit to date,
+// monthly breakdowns — see buildPastPurchasesExportTable above) — only the first
+// visibleRows.length rows are real assets, so only those get a Yes/No; footer
+// rows get a blank cell, matching how every other non-participating column in
+// those rows is already left blank.
+function withBuyTargetColumnPastPurchases(headers, rows){
+  const params = getPastPurchasesParams();
+  const visibleRows = lastPastPurchasesVisibleRows || lastPastPurchasesOrderedRows || [];
+  const cpParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "current price");
+  const newHeaders = [...headers, "At Buy Target"];
+  const newRows = rows.map((r, idx) => {
+    if(idx >= visibleRows.length || !cpParam) return [...r, ""]; // a footer/summary row, or no Current Price column to check
+    const resolved = resolvePastPurchaseRowValues(visibleRows[idx]);
+    const hit = isAtOrBelowBuyPriceTarget(resolved[cpParam.id], params, resolved);
+    return [...r, hit ? "Yes" : "No"];
+  });
+  return { headers: newHeaders, rows: newRows };
+}
+
 function wireUpPastPurchasesRefreshButton(){
   const btn = document.getElementById("ppRefreshFromPortfolioBtn");
   const statusEl = document.getElementById("ppRefreshStatus");
@@ -2834,12 +2892,14 @@ function wireUpExportButtons(){
 
   const excelBtn = document.getElementById("exportExcelBtn");
   if(excelBtn) excelBtn.addEventListener("click", () => {
-    const { headers, rows } = buildMainTableExportTable();
+    const built = buildMainTableExportTable();
+    const { headers, rows } = withBuyTargetColumnMainTable(built.headers, built.rows);
     exportTableAsExcel(`${activeListName()}.xlsx`, getActiveList().name || "Portfolio List", headers, rows);
   });
   const textBtn = document.getElementById("exportTextBtn");
   if(textBtn) textBtn.addEventListener("click", () => {
-    const { headers, rows } = buildMainTableExportTable();
+    const built = buildMainTableExportTable();
+    const { headers, rows } = withBuyTargetColumnMainTable(built.headers, built.rows);
     exportTableAsText(`${activeListName()}.txt`, headers, rows);
   });
   const wordBtn = document.getElementById("exportWordBtn");
@@ -2855,12 +2915,14 @@ function wireUpExportButtons(){
 
   const ppExcelBtn = document.getElementById("ppExportExcelBtn");
   if(ppExcelBtn) ppExcelBtn.addEventListener("click", () => {
-    const { headers, rows } = buildPastPurchasesExportTable();
+    const built = buildPastPurchasesExportTable();
+    const { headers, rows } = withBuyTargetColumnPastPurchases(built.headers, built.rows);
     exportTableAsExcel("Past_Purchases.xlsx", "Past Purchases", headers, rows);
   });
   const ppTextBtn = document.getElementById("ppExportTextBtn");
   if(ppTextBtn) ppTextBtn.addEventListener("click", () => {
-    const { headers, rows } = buildPastPurchasesExportTable();
+    const built = buildPastPurchasesExportTable();
+    const { headers, rows } = withBuyTargetColumnPastPurchases(built.headers, built.rows);
     exportTableAsText("Past_Purchases.txt", headers, rows);
   });
   const ppWordBtn = document.getElementById("ppExportWordBtn");
@@ -3183,13 +3245,13 @@ function renderCellHTML(colDef, item, badge){
     return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
   }
   if(colDef.id === 'currentPrice'){
-    // Blue font when Current Price has fallen to or below a user-added "To Buy
-    // Price" custom column's target for this ticker — a "hit your buy target"
-    // signal. Styled on the input itself (not just the <td>) so the number
-    // actually reads blue.
+    // Emerald font when Current Price has fallen to or below a user-added "To
+    // Buy Price" custom column's target for this ticker — a "hit your buy
+    // target" signal. Styled on the input itself (not just the <td>) so the
+    // number actually reads emerald.
     const val = item.currentPrice;
     const isAtTarget = isAtOrBelowBuyPriceTarget(val, getCustomParams(), item.customValues);
-    const styleAttr = isAtTarget ? ' style="color:#7dd3fc;"' : '';
+    const styleAttr = isAtTarget ? ' style="color:var(--emerald);"' : '';
     return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${val}" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
   }
   // Default: built-in numeric field (roa, pe, targetPrice, revenueGrowth, etc.)
