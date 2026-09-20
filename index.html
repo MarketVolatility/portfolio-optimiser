@@ -152,10 +152,11 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 #appShell{ display:none; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
-<!-- Export helpers: SheetJS for Excel, jsPDF + autotable for PDF. Text export needs no library. -->
+<!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
+     if this initial load fails — see EXPORT_LIB_URLS in app.js). PDF export uses the
+     browser's own native print dialog instead of a library, so it needs no script tag
+     and can never fail on a blocked CDN. Text/Word export need no library either. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -363,7 +364,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="exportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
     <button id="exportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
     <button id="exportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="exportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Download this table as a PDF">⬇ Export to PDF</button>
+    <button id="exportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
   </div>
   <div class="table-container">
     <table id="resultsTable">
@@ -372,7 +373,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)
+    HTML build: v5.28 (Dependency-free PDF export, Book Value parameter + Total Current Book Value row, more PP sort options)
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2.5rem; margin-bottom:0.75rem;">
@@ -463,6 +464,10 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <option value="date-new">Date Added (newest first)</option>
       <option value="date-old">Date Added (oldest first)</option>
       <option value="alpha">Alphabetical (Asset)</option>
+      <option value="param-date-purchased">Date Purchased (most recent first)</option>
+      <option value="param-date-sale">Date Sale (most recent first)</option>
+      <option value="param-sale-profit">Sale Profit (highest first)</option>
+      <option value="param-missed-gain">Missed Gain % (highest first)</option>
       <option value="custom" selected>Custom order (reorder with ↑ ↓)</option>
     </select>
   </div>
@@ -475,7 +480,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="ppExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
     <button id="ppExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
     <button id="ppExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Download this table as a PDF">⬇ Export to PDF</button>
+    <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
   </div>
   <div class="table-container" style="margin-bottom:2rem;">
     <table id="ppTable">
@@ -537,6 +542,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the average price per share you actually paid, for your own cost-basis tracking. Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Volume (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of shares (in millions) traded per day over a recent period.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Beta</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Fixed column on the main Portfolio Lists table. Also listed in the “+/- Parameter” dropdown on both tables — selecting it on Portfolio Lists is blocked by the duplicate-column guard (the fixed column already exists), but on Past Purchases, which has no fixed columns of its own, it's addable as a manual-entry field. A measure of the stock’s price volatility relative to the overall market — 1.0 moves with the market, above 1.0 is more volatile, below 1.0 is less.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Book Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Units Purchased × Average Purchase Price — what the position cost, regardless of whether it's been sold yet. Requires "Units Purchased" and "Average Purchase Price ($)" columns both present and non-zero; shows $0.00 until then. Feeds the "Total Current Book Value" footer row, which sums this across all rows with no Selling Price entered (i.e. not yet sold).</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Cash Runway (yr)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Fixed column on the main Portfolio Lists table. Also listed in the “+/- Parameter” dropdown on both tables — selecting it on Portfolio Lists is blocked by the duplicate-column guard (the fixed column already exists), but on Past Purchases, which has no fixed columns of its own, it's addable as a manual-entry field. The number of years a company could keep operating at its current cash-burn rate before running out of cash.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Company Name</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Fixed column on the main Portfolio Lists table (always present, not added via the dropdown). Not offered as a Past Purchases preset since the Asset column there already serves as the row’s identity.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Country / Region</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The primary country or geographic region where the company is headquartered or listed.</td></tr>
