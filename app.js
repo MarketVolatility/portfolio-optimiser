@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)
-console.log("app.js loaded — build v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)");
+// APP.JS BUILD: v5.28 (Dependency-free PDF export, Book Value parameter + Total Current Book Value row, more PP sort options)
+console.log("app.js loaded — build v5.28 (Dependency-free PDF export, Book Value parameter + Total Current Book Value row, more PP sort options)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1149,6 +1149,7 @@ const PP_ONLY_PARAM_PRESETS = [
   { label: "Selling Price", type: "number", defaultValue: 0 },
   { label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
   { label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
+  { label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
   { label: "ROA (%)", type: "number", defaultValue: 0 },
   { label: "P/E Multiple", type: "number", defaultValue: 0 },
   { label: "Current Price", type: "number", defaultValue: 0 },
@@ -1700,6 +1701,19 @@ function resolvePastPurchaseRowValues(row){
       resolved[p.id] = ready ? ((current - sell) / sell) * 100 : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
+    if(p.computed && p.formula === 'bookValuePP'){
+      // Units Purchased × Average Purchase Price — what the position cost, independent
+      // of whether it's been sold yet (unlike Sale Profit, this doesn't need a Selling
+      // Price at all).
+      const norm = s => String(s).trim().toLowerCase();
+      const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
+      const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
+      const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
+      const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
+      const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0;
+      resolved[p.id] = ready ? units * avg : 0;
+      resolved['_' + p.id + '_ready'] = ready;
+    }
   });
   return resolved;
 }
@@ -1720,10 +1734,31 @@ function getPastPurchasesSortedRows(){
     return rows;
   }
 
+  // Sorts by whichever Past Purchases column matches this label, if one exists yet
+  // (silently leaves the order unchanged if it doesn't — e.g. "Date Purchased" was
+  // never added on this list). Mirrors the column-header sort's own comparator.
+  const sortByParamLabel = (label, direction) => {
+    const norm = s => String(s).trim().toLowerCase();
+    const param = getPastPurchasesParams().find(p => norm(p.label) === norm(label));
+    if(!param) return;
+    rows.sort((a, b) => {
+      const va = resolvePastPurchaseRowValues(a)[param.id];
+      const vb = resolvePastPurchaseRowValues(b)[param.id];
+      let cmp;
+      if(typeof va === 'string' || typeof vb === 'string') cmp = String(va || '').localeCompare(String(vb || ''));
+      else cmp = (va || 0) - (vb || 0);
+      return direction === 'asc' ? cmp : -cmp;
+    });
+  };
+
   const sortMode = document.getElementById('ppSortMode') ? document.getElementById('ppSortMode').value : 'custom';
   if(sortMode === 'alpha') rows.sort((a, b) => String(a.asset).localeCompare(String(b.asset)));
   else if(sortMode === 'date-new') rows.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
   else if(sortMode === 'date-old') rows.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
+  else if(sortMode === 'param-date-purchased') sortByParamLabel('Date Purchased', 'desc'); // most recent purchase first
+  else if(sortMode === 'param-date-sale') sortByParamLabel('Date Sale', 'desc'); // most recently sold first
+  else if(sortMode === 'param-sale-profit') sortByParamLabel('Sale Profit', 'desc'); // highest profit first
+  else if(sortMode === 'param-missed-gain') sortByParamLabel('Missed Gain %', 'desc'); // biggest missed gain first
   // 'custom' (or anything else): leave as the persisted order.
   return rows;
 }
@@ -1839,6 +1874,11 @@ function renderPastPurchasesTable(){
         const color = (!ready || val === 0) ? 'var(--text-secondary)' : (val > 0 ? 'var(--emerald)' : '#ef4444');
         const titleAttr = ready ? '' : ` title="Add a Selling Price column, and make sure this asset has Current Price data on Portfolio Lists, to compute this."`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${Number(val).toFixed(1)}%</td>`;
+      } else if(p.computed && p.formula === 'bookValuePP'){
+        const val = resolved[p.id] || 0;
+        const ready = resolved['_' + p.id + '_ready'];
+        const titleAttr = ready ? '' : ` title="Add Units Purchased and Average Purchase Price columns to compute this."`;
+        rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}" style="font-weight:600;"${titleAttr}>$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
@@ -1925,7 +1965,29 @@ function renderPastPurchasesTable(){
   if(tfoot){
     const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
     const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
+    const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
+    const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
     let footHtml = '';
+
+    // "Not yet sold" = Selling Price is 0 (or there's no Selling Price column at all,
+    // in which case nothing on this list counts as sold). Shown above the monthly
+    // sale-profit subtotals, since it describes what's still held rather than what's
+    // already been sold.
+    if(bookValueParam){
+      const colIndex = params.findIndex(p => p.id === bookValueParam.id);
+      const totalBookValue = orderedRows.reduce((sum, row) => {
+        const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
+        if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
+        return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
+      }, 0);
+      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
+      params.forEach((p, idx) => {
+        footHtml += idx === colIndex
+          ? `<td style="font-weight:600; color:#fff;">$${totalBookValue.toFixed(2)}</td>`
+          : `<td></td>`;
+      });
+      footHtml += `</tr>`;
+    }
 
     if(saleProfitParam && dateSaleParam){
       // Group rows that actually have a Date Sale entered into per-month subtotals,
@@ -1995,31 +2057,26 @@ function downloadTextBlob(filename, content, mimeType){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// --- On-demand CDN loading with retry + multi-host fallback, for the Excel/PDF
-// export helper libraries ---
-// index.html still loads these once at page-load time (so the common case has zero
+// --- On-demand CDN loading with retry + multi-host fallback, for the Excel export
+// helper library ---
+// index.html still loads this once at page-load time (so the common case has zero
 // extra delay), but that's a single unretried attempt against a single CDN host —
-// if it ever fails, the feature used to stay broken until a full page reload. These
-// export functions now re-attempt the load right at click time, AND try multiple
+// if it ever fails, the feature used to stay broken until a full page reload. This
+// export function now re-attempts the load right at click time, AND tries multiple
 // independent CDN hosts (jsdelivr, cdnjs, unpkg) in turn — since a network that
 // blocks one of these (an ad-blocker rule, a corporate firewall, a country-level
 // block on a specific CDN) often doesn't block the others, this recovers from that
 // case too, not just a transient hiccup on the same host.
+// (PDF export used to need a similar library — jsPDF + autotable — but some networks
+// block ALL THREE CDN hosts at once, so it was switched to a dependency-free
+// browser-print-dialog approach instead; see exportTableAsPdf below. Excel still
+// needs a real library, since there's no browser-native way to produce a true .xlsx
+// binary, so it keeps the CDN-retry approach.)
 const EXPORT_LIB_URLS = {
   xlsx: [
     "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
     "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js",
-  ],
-  jspdf: [
-    "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
-    "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js",
-  ],
-  jspdfAutotable: [
-    "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
-    "https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
   ],
 };
 const _libraryLoadPromises = {};
@@ -2092,34 +2149,73 @@ function exportTableAsWord(filename, title, headers, rows){
   downloadTextBlob(filename, html, "application/msword");
 }
 
-async function exportTableAsPdf(filename, title, headers, rows){
-  // Two separate libraries, loaded (and retried across CDN hosts) independently:
-  // jsPDF itself, then the autoTable plugin that attaches to it. Loading them in
-  // separate ensureLibraryLoaded calls avoids re-fetching jsPDF again from a second
-  // host once it's already loaded, if only the autoTable plugin still needs a retry.
-  const jspdfOk = await ensureLibraryLoaded(() => !!(window.jspdf && window.jspdf.jsPDF), EXPORT_LIB_URLS.jspdf);
-  const autotableOk = jspdfOk && await ensureLibraryLoaded(
-    () => { const c = window.jspdf && window.jspdf.jsPDF; return !!(c && typeof c.prototype.autoTable === "function"); },
-    EXPORT_LIB_URLS.jspdfAutotable
-  );
-  if(!jspdfOk || !autotableOk){
-    alert('PDF export needs its helper library, and it could not be loaded from any available source just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net, cdnjs.cloudflare.com, or unpkg.com) and try again — or use "Export to Word" instead, which needs no internet connection.');
-    return;
+// Dependency-free: PDF export used to rely on jsPDF + autotable pulled from a CDN at
+// click time. In practice, some networks (ad-blockers, corporate/country firewalls)
+// block ALL of jsdelivr, cdnjs, AND unpkg at once, so no amount of CDN fallback fixes
+// it for those users. This builds a print-friendly HTML table in a hidden iframe and
+// invokes the browser's own native print dialog — the user picks "Save as PDF" as the
+// destination. Zero network calls, zero external libraries — same reliability as the
+// Text/Word exports, which is why those never had this problem.
+function exportTableAsPdf(filename, title, headers, rows){
+  const escCell = (v) => {
+    const s = (v === undefined || v === null) ? "" : String(v);
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  const headHtml = "<tr>" + headers.map(h => `<th>${escCell(h)}</th>`).join("") + "</tr>";
+  const bodyHtml = rows.map(r => "<tr>" + r.map(c => `<td>${escCell(c)}</td>`).join("") + "</tr>").join("");
+  const docTitle = escCell((filename || title || "export").replace(/\.pdf$/i, ""));
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>${docTitle}</title>
+<style>
+  @page { size: landscape; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Segoe UI, Arial, sans-serif; color: #111827; margin: 0; padding: 0; }
+  h2 { font-size: 16px; margin: 0 0 2px 0; }
+  .meta { font-size: 10px; color: #6b7280; margin: 0 0 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 9px; }
+  th, td { border: 1px solid #94a3b8; padding: 4px 6px; text-align: left; }
+  th { background: #1e293b; color: #ffffff; }
+  tr:nth-child(even) td { background: #f1f5f9; }
+</style>
+</head>
+<body>
+  <h2>${escCell(title)}</h2>
+  <p class="meta">Exported ${escCell(new Date().toLocaleString())}</p>
+  <table><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table>
+</body></html>`;
+
+  let iframe = document.getElementById("pdfPrintFrame");
+  if(iframe) iframe.remove();
+  iframe = document.createElement("iframe");
+  iframe.id = "pdfPrintFrame";
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const triggerPrint = () => {
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      alert("Could not open the print dialog for PDF export. Please try again, or use \"Export to Word\" instead.");
+    }
+  };
+  // Give the iframe a moment to lay out the table before printing; contentWindow.onload
+  // fires once the doc.write'd content has finished loading in the iframe.
+  if(iframe.contentWindow.document.readyState === "complete"){
+    setTimeout(triggerPrint, 50);
+  } else {
+    iframe.onload = () => setTimeout(triggerPrint, 50);
   }
-  const jsPDFCtor = window.jspdf.jsPDF;
-  const doc = new jsPDFCtor({ orientation: "landscape" });
-  doc.setFontSize(14);
-  doc.text(title, 14, 15);
-  doc.setFontSize(9);
-  doc.setTextColor(120);
-  doc.text("Exported " + new Date().toLocaleString(), 14, 21);
-  doc.autoTable({
-    head: [headers], body: rows, startY: 26,
-    styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: [30, 41, 59] },
-    theme: "grid",
-  });
-  doc.save(filename);
 }
 
 // Renders one main-table cell to a plain export value (mirrors renderCellHTML's
@@ -2135,6 +2231,10 @@ function getMainTableExportValue(item, colDef){
       if(isDefault) return "—";
       const num = Number(val) || 0;
       return (num >= 0 ? "+" : "-") + "$" + Math.abs(num).toFixed(2);
+    }
+    if(colDef.computed && colDef.formula === "bookValuePP"){
+      if(isDefault) return "—";
+      return "$" + Math.abs(Number(val) || 0).toFixed(2);
     }
     if(colDef.computed) return Number(val).toFixed(1) + "%";
     return val;
@@ -2169,6 +2269,11 @@ function buildPastPurchasesExportTable(){
         const val = resolved[p.id] || 0;
         return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
       }
+      if(p.computed && p.formula === "bookValuePP"){
+        const ready = resolved["_" + p.id + "_ready"];
+        if(!ready) return "—";
+        return "$" + Math.abs(resolved[p.id] || 0).toFixed(2);
+      }
       if(p.computed){
         const ready = resolved["_" + p.id + "_ready"];
         if(ready === false) return "—";
@@ -2181,6 +2286,21 @@ function buildPastPurchasesExportTable(){
 
   const saleProfitParam = params.find(p => p.computed && p.formula === "salesProfitPP");
   const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  const bookValueParam = params.find(p => p.computed && p.formula === "bookValuePP");
+  const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
+
+  if(bookValueParam){
+    const colIndex = params.findIndex(p => p.id === bookValueParam.id);
+    const totalBookValue = orderedRows.reduce((sum, row) => {
+      const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
+      if(sellVal !== 0) return sum;
+      return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
+    }, 0);
+    const row = new Array(headers.length).fill("");
+    row[0] = "Total Current Book Value";
+    row[colIndex + 1] = "$" + totalBookValue.toFixed(2);
+    rows.push(row);
+  }
 
   if(saleProfitParam && dateSaleParam){
     const groups = {};
@@ -2560,6 +2680,11 @@ function renderCellHTML(colDef, item, badge){
       const titleAttr = isDefault ? ` title="Add a Selling Price column with a non-zero value to compute this."` : '';
       return `<td style="color:${color}; font-weight:600;"${titleAttr}>${num.toFixed(1)}%</td>`;
     }
+    if(colDef.computed && colDef.formula === 'bookValuePP'){
+      const num = Number(val) || 0;
+      const titleAttr = isDefault ? ` title="Add Units Purchased and Average Purchase Price columns to compute this."` : '';
+      return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}" style="font-weight:600;"${titleAttr}>$${Math.abs(num).toFixed(2)}</td>`;
+    }
     if(colDef.computed){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
     }
@@ -2727,7 +2852,7 @@ function runMatrixOptimization() {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
-      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "missedGainPct")){
+      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
         // resolved in pass 2, once their sibling custom params (if present) are available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
@@ -2767,6 +2892,16 @@ function runMatrixOptimization() {
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!sellParam && sell !== 0;
         customValues[p.id] = ready ? ((currentPrice - sell) / sell) * 100 : 0;
+        customIsDefault[p.id] = !ready;
+      } else if(p.computed && p.formula === "bookValuePP"){
+        // Units Purchased × Average Purchase Price — independent of Selling Price.
+        const norm = s => String(s).trim().toLowerCase();
+        const unitsParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "units purchased");
+        const avgParam = allCustomParams.find(cp => !cp.computed && (norm(cp.label) === "average purchase price ($)" || norm(cp.label) === "average purchase price"));
+        const units = unitsParam ? (Number(customValues[unitsParam.id]) || 0) : 0;
+        const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
+        const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0;
+        customValues[p.id] = ready ? units * avg : 0;
         customIsDefault[p.id] = !ready;
       }
     });
