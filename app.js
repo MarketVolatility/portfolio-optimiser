@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.29 (Total Current Book Value row now in blue)
-console.log("app.js loaded — build v5.29 (Total Current Book Value row now in blue)");
+// APP.JS BUILD: v5.30 (Renamed monthly footer row to "Sales Profit for month of X of Y")
+console.log("app.js loaded — build v5.30 (Renamed monthly footer row to \"Sales Profit for month of X of Y\")");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2010,7 +2010,7 @@ function renderPastPurchasesTable(){
         const g = groups[key];
         const sign = g.total >= 0 ? '+' : '-';
         const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
-        const label = `Sales for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+        const label = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
         footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
         params.forEach((p, idx) => {
           footHtml += idx === colIndex
@@ -2319,7 +2319,7 @@ function buildPastPurchasesExportTable(){
     }).forEach(key => {
       const g = groups[key];
       const row = new Array(headers.length).fill("");
-      row[0] = `Sales for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      row[0] = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
       row[colIndex + 1] = (g.total >= 0 ? "+" : "-") + "$" + Math.abs(g.total).toFixed(2);
       rows.push(row);
     });
