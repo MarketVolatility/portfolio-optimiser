@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.28 (Dependency-free PDF export, Book Value parameter + Total Current Book Value row, more PP sort options)
-console.log("app.js loaded — build v5.28 (Dependency-free PDF export, Book Value parameter + Total Current Book Value row, more PP sort options)");
+// APP.JS BUILD: v5.29 (Total Current Book Value row now in blue)
+console.log("app.js loaded — build v5.29 (Total Current Book Value row now in blue)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1980,10 +1980,10 @@ function renderPastPurchasesTable(){
         if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
         return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
       }, 0);
-      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
+      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--accent-blue);">Total Current Book Value</td>`;
       params.forEach((p, idx) => {
         footHtml += idx === colIndex
-          ? `<td style="font-weight:600; color:#fff;">$${totalBookValue.toFixed(2)}</td>`
+          ? `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`
           : `<td></td>`;
       });
       footHtml += `</tr>`;
