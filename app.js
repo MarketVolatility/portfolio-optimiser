@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)
-console.log("app.js loaded — build v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)");
+// APP.JS BUILD: v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)
+console.log("app.js loaded — build v5.27 (Desktop/Mobile view toggle, multi-CDN export retry, Missed Gain % colors, grey disclaimers)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -14,6 +14,33 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // sync list as a safety net so a device pulling an older cloud snapshot can
 // still migrate it locally (see migratePastPurchasesRowsIfNeeded).
 const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId"];
+
+// --- Desktop/Mobile interface toggle ---
+// A manual, per-device override (deliberately NOT in SYNC_KEYS — a phone and a
+// desktop reasonably want independent choices here) that forces the mobile-
+// optimized CSS layout (via a body.view-mobile class — see index.html's <style>)
+// regardless of actual viewport width, so either interface can be previewed or used
+// on demand from the two tabs under the top disclaimer. Defaults to whichever
+// roughly matches this device's screen the first time it's ever loaded, then
+// remembers whatever the user explicitly picks from then on.
+function getUiViewMode(){
+  try{
+    const stored = localStorage.getItem("uiViewMode");
+    if(stored === "mobile" || stored === "desktop") return stored;
+  }catch(e){ /* fall through to the device-width guess below */ }
+  return (typeof window !== "undefined" && window.innerWidth && window.innerWidth <= 700) ? "mobile" : "desktop";
+}
+function setUiViewMode(mode){
+  try{ localStorage.setItem("uiViewMode", mode); }catch(e){ /* localStorage unavailable */ }
+}
+function applyUiViewMode(){
+  const mode = getUiViewMode();
+  document.body.classList.toggle("view-mobile", mode === "mobile");
+  const desktopBtn = document.getElementById("viewDesktopBtn");
+  const mobileBtn = document.getElementById("viewMobileBtn");
+  if(desktopBtn) desktopBtn.classList.toggle("active-tab", mode === "desktop");
+  if(mobileBtn) mobileBtn.classList.toggle("active-tab", mode === "mobile");
+}
 
 let authClient;
 function getAuthClient(){
@@ -1807,8 +1834,11 @@ function renderPastPurchasesTable(){
       } else if(p.computed && p.formula === 'missedGainPct'){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
+        // Per spec: negative = red, positive = green, exactly zero (or not yet
+        // computable) = grey.
+        const color = (!ready || val === 0) ? 'var(--text-secondary)' : (val > 0 ? 'var(--emerald)' : '#ef4444');
         const titleAttr = ready ? '' : ` title="Add a Selling Price column, and make sure this asset has Current Price data on Portfolio Lists, to compute this."`;
-        rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}"${titleAttr}>${Number(val).toFixed(1)}%</td>`;
+        rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${Number(val).toFixed(1)}%</td>`;
       } else if(p.computed){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
@@ -1965,18 +1995,32 @@ function downloadTextBlob(filename, content, mimeType){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// --- On-demand CDN loading with retry, for the Excel/PDF export helper libraries ---
+// --- On-demand CDN loading with retry + multi-host fallback, for the Excel/PDF
+// export helper libraries ---
 // index.html still loads these once at page-load time (so the common case has zero
-// extra delay), but that's a single unretried attempt — if it ever fails (a flaky
-// connection, an ad-blocker/firewall momentarily blocking cdn.jsdelivr.net, a
-// transient CDN hiccup), the feature used to stay broken until a full page reload.
-// These export functions now re-attempt the load right at click time instead, so a
-// working connection at export time is all that's needed, regardless of what
-// happened when the page first opened.
+// extra delay), but that's a single unretried attempt against a single CDN host —
+// if it ever fails, the feature used to stay broken until a full page reload. These
+// export functions now re-attempt the load right at click time, AND try multiple
+// independent CDN hosts (jsdelivr, cdnjs, unpkg) in turn — since a network that
+// blocks one of these (an ad-blocker rule, a corporate firewall, a country-level
+// block on a specific CDN) often doesn't block the others, this recovers from that
+// case too, not just a transient hiccup on the same host.
 const EXPORT_LIB_URLS = {
-  xlsx: "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
-  jspdf: "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
-  jspdfAutotable: "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
+  xlsx: [
+    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+    "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js",
+  ],
+  jspdf: [
+    "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+    "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js",
+  ],
+  jspdfAutotable: [
+    "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
+    "https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
+  ],
 };
 const _libraryLoadPromises = {};
 function loadScriptOnce(url){
@@ -1992,20 +2036,22 @@ function loadScriptOnce(url){
   return _libraryLoadPromises[url];
 }
 // checkFn reports whether the library's global is already usable; urls is one or
-// more script URLs to inject (in order) if it isn't. Returns whether it's usable
-// after trying.
+// more script URLs (typically the same library from different CDN hosts) to try in
+// order until checkFn passes. Stops as soon as it does, rather than loading every
+// remaining host needlessly. Returns whether it's usable after trying.
 async function ensureLibraryLoaded(checkFn, urls){
   if(checkFn()) return true;
   for(const url of urls){
-    try{ await loadScriptOnce(url); }catch(e){ /* try the next url / fall through to the final check */ }
+    try{ await loadScriptOnce(url); }catch(e){ /* try the next host */ }
+    if(checkFn()) return true;
   }
   return checkFn();
 }
 
 async function exportTableAsExcel(filename, sheetName, headers, rows){
-  const ok = await ensureLibraryLoaded(() => typeof XLSX !== "undefined", [EXPORT_LIB_URLS.xlsx]);
+  const ok = await ensureLibraryLoaded(() => typeof XLSX !== "undefined", EXPORT_LIB_URLS.xlsx);
   if(!ok){
-    alert('Excel export needs its helper library, and it could not be loaded just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net) and try again.');
+    alert('Excel export needs its helper library, and it could not be loaded from any available source just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net, cdnjs.cloudflare.com, or unpkg.com) and try again — or use "Export to Word" instead, which needs no internet connection.');
     return;
   }
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -2047,12 +2093,17 @@ function exportTableAsWord(filename, title, headers, rows){
 }
 
 async function exportTableAsPdf(filename, title, headers, rows){
-  const ok = await ensureLibraryLoaded(
+  // Two separate libraries, loaded (and retried across CDN hosts) independently:
+  // jsPDF itself, then the autoTable plugin that attaches to it. Loading them in
+  // separate ensureLibraryLoaded calls avoids re-fetching jsPDF again from a second
+  // host once it's already loaded, if only the autoTable plugin still needs a retry.
+  const jspdfOk = await ensureLibraryLoaded(() => !!(window.jspdf && window.jspdf.jsPDF), EXPORT_LIB_URLS.jspdf);
+  const autotableOk = jspdfOk && await ensureLibraryLoaded(
     () => { const c = window.jspdf && window.jspdf.jsPDF; return !!(c && typeof c.prototype.autoTable === "function"); },
-    [EXPORT_LIB_URLS.jspdf, EXPORT_LIB_URLS.jspdfAutotable]
+    EXPORT_LIB_URLS.jspdfAutotable
   );
-  if(!ok){
-    alert('PDF export needs its helper library, and it could not be loaded just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net) and try again.');
+  if(!jspdfOk || !autotableOk){
+    alert('PDF export needs its helper library, and it could not be loaded from any available source just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net, cdnjs.cloudflare.com, or unpkg.com) and try again — or use "Export to Word" instead, which needs no internet connection.');
     return;
   }
   const jsPDFCtor = window.jspdf.jsPDF;
@@ -2500,6 +2551,14 @@ function renderCellHTML(colDef, item, badge){
       const color = isDefault ? 'var(--text-secondary)' : (num >= 0 ? 'var(--emerald)' : '#ef4444');
       const titleAttr = isDefault ? ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."` : '';
       return `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(num).toFixed(2)}</td>`;
+    }
+    if(colDef.computed && colDef.formula === 'missedGainPct'){
+      const num = Number(val) || 0;
+      // Per spec: negative = red, positive = green, exactly zero (or not yet
+      // computable — no Selling Price entered) = grey.
+      const color = (isDefault || num === 0) ? 'var(--text-secondary)' : (num > 0 ? 'var(--emerald)' : '#ef4444');
+      const titleAttr = isDefault ? ` title="Add a Selling Price column with a non-zero value to compute this."` : '';
+      return `<td style="color:${color}; font-weight:600;"${titleAttr}>${num.toFixed(1)}%</td>`;
     }
     if(colDef.computed){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
@@ -3468,6 +3527,16 @@ try{
   wireUpExportButtons();
 }catch(err){
   console.error("Failed to wire up export buttons:", err);
+}
+
+try{
+  applyUiViewMode();
+  const viewDesktopBtn = document.getElementById("viewDesktopBtn");
+  const viewMobileBtn = document.getElementById("viewMobileBtn");
+  if(viewDesktopBtn) viewDesktopBtn.addEventListener("click", () => { setUiViewMode("desktop"); applyUiViewMode(); });
+  if(viewMobileBtn) viewMobileBtn.addEventListener("click", () => { setUiViewMode("mobile"); applyUiViewMode(); });
+}catch(err){
+  console.error("Failed to wire up the Desktop/Mobile interface toggle:", err);
 }
 
 // On page load, check if a session already exists (e.g. returning to the app
