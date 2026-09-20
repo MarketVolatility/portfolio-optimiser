@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.30 (Renamed monthly footer row to "Sales Profit for month of X of Y")
-console.log("app.js loaded — build v5.30 (Renamed monthly footer row to \"Sales Profit for month of X of Y\")");
+// APP.JS BUILD: v5.31 (Total Current Book Value label back to grey, Book Value light-blue for unsold positions)
+console.log("app.js loaded — build v5.31 (Total Current Book Value label back to grey, Book Value light-blue for unsold positions)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1878,7 +1878,13 @@ function renderPastPurchasesTable(){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
         const titleAttr = ready ? '' : ` title="Add Units Purchased and Average Purchase Price columns to compute this."`;
-        rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}" style="font-weight:600;"${titleAttr}>$${Math.abs(val).toFixed(2)}</td>`;
+        // Not yet sold (Selling Price is 0, or there's no Selling Price column at all)
+        // gets a light-blue number, matching the "Total Current Book Value" footer's
+        // own logic for what counts as still-held.
+        const sellParamForColor = params.find(pp => !pp.computed && String(pp.label).trim().toLowerCase() === 'selling price');
+        const sellValForColor = sellParamForColor ? (Number(resolved[sellParamForColor.id]) || 0) : 0;
+        const colorStyle = (ready && sellValForColor === 0) ? ' color:#7dd3fc;' : '';
+        rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}" style="font-weight:600;${colorStyle}"${titleAttr}>$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
@@ -1980,7 +1986,7 @@ function renderPastPurchasesTable(){
         if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
         return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
       }, 0);
-      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--accent-blue);">Total Current Book Value</td>`;
+      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
       params.forEach((p, idx) => {
         footHtml += idx === colIndex
           ? `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`
@@ -2683,7 +2689,14 @@ function renderCellHTML(colDef, item, badge){
     if(colDef.computed && colDef.formula === 'bookValuePP'){
       const num = Number(val) || 0;
       const titleAttr = isDefault ? ` title="Add Units Purchased and Average Purchase Price columns to compute this."` : '';
-      return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}" style="font-weight:600;"${titleAttr}>$${Math.abs(num).toFixed(2)}</td>`;
+      // Not yet sold (Selling Price is 0, or there's no Selling Price column at all)
+      // gets a light-blue number, mirroring the same rule used on the Past Purchases
+      // table's Book Value column.
+      const allParamsForColor = getCustomParams();
+      const sellParamForColor = allParamsForColor.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
+      const sellValForColor = sellParamForColor ? (Number(item.customValues[sellParamForColor.id]) || 0) : 0;
+      const colorStyle = (!isDefault && sellValForColor === 0) ? ' color:#7dd3fc;' : '';
+      return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}" style="font-weight:600;${colorStyle}"${titleAttr}>$${Math.abs(num).toFixed(2)}</td>`;
     }
     if(colDef.computed){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
