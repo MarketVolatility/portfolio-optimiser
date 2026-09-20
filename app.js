@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.25 (Excel/Text/PDF export, one-way pull fix, refresh from Portfolio)
-console.log("app.js loaded — build v5.25 (Excel/Text/PDF export, one-way pull fix, refresh from Portfolio)");
+// APP.JS BUILD: v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)
+console.log("app.js loaded — build v5.26 (Past Purchases multi-list, Word export, CDN retry, Missed Gain %)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -13,7 +13,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // Past Purchases schema — no longer read or written directly, but kept in the
 // sync list as a safety net so a device pulling an older cloud snapshot can
 // still migrate it locally (see migratePastPurchasesRowsIfNeeded).
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId"];
 
 let authClient;
 function getAuthClient(){
@@ -102,6 +102,7 @@ async function openDashboard(user){
   renderCustomParamList();
   renderColumnOrderList();
   runMatrixOptimization();
+  renderPPListSelector();
   renderPastPurchasesTickerList();
   renderPastPurchasesParamList();
   renderPastPurchasesColumnOrderList();
@@ -1120,6 +1121,7 @@ const PP_ONLY_PARAM_PRESETS = [
   { label: "Date Sale", type: "date", defaultValue: "" },
   { label: "Selling Price", type: "number", defaultValue: 0 },
   { label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+  { label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
   { label: "ROA (%)", type: "number", defaultValue: 0 },
   { label: "P/E Multiple", type: "number", defaultValue: 0 },
   { label: "Current Price", type: "number", defaultValue: 0 },
@@ -1159,13 +1161,120 @@ function escHtml(str){
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// --- Past Purchases multi-list support ---
+// Mirrors the Portfolio Lists architecture exactly: parameters (getPastPurchasesParams)
+// stay GLOBAL, shared across every Past Purchases list, while only row membership/order
+// is per-list. "pastPurchasesLists" holds { [listId]: { name, rows: [...] } }; the old
+// flat "pastPurchasesRows" key (itself the target of the older ticker-keyed migration
+// above) is wrapped into a single default list the first time this runs, then left alone
+// afterward as an inert legacy fallback — same convention as the older Past Purchases
+// keys already in SYNC_KEYS.
+const DEFAULT_PP_LIST_ID = "pp-list-default";
+
+function getAllPastPurchasesLists(){
+  let lists = null;
+  try{
+    const raw = localStorage.getItem("pastPurchasesLists");
+    if(raw) lists = JSON.parse(raw);
+  }catch(e){ /* fall through to migration below */ }
+
+  if(!lists || typeof lists !== "object" || Object.keys(lists).length === 0){
+    let flatRows = [];
+    try{ flatRows = JSON.parse(localStorage.getItem("pastPurchasesRows") || "[]"); }catch(e){}
+    lists = { [DEFAULT_PP_LIST_ID]: { name: "List 1", rows: flatRows } };
+    saveAllPastPurchasesLists(lists);
+  }
+
+  // Defensive schema safety net, in case a cloud snapshot ever carries a partial shape.
+  let changed = false;
+  Object.values(lists).forEach(l => {
+    if(!Array.isArray(l.rows)){ l.rows = []; changed = true; }
+    if(typeof l.name !== "string" || !l.name){ l.name = "List 1"; changed = true; }
+  });
+  if(changed) saveAllPastPurchasesLists(lists);
+
+  return lists;
+}
+
+function saveAllPastPurchasesLists(lists){
+  try{ localStorage.setItem("pastPurchasesLists", JSON.stringify(lists)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function getActivePastPurchasesListId(){
+  try{
+    const id = localStorage.getItem("activePastPurchasesListId");
+    const lists = getAllPastPurchasesLists();
+    if(id && lists[id]) return id;
+  }catch(e){ /* fall through */ }
+  const lists = getAllPastPurchasesLists();
+  const firstId = Object.keys(lists)[0] || DEFAULT_PP_LIST_ID;
+  setActivePastPurchasesListId(firstId);
+  return firstId;
+}
+
+function setActivePastPurchasesListId(id){
+  try{ localStorage.setItem("activePastPurchasesListId", id); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+function getActivePastPurchasesList(){
+  const lists = getAllPastPurchasesLists();
+  const id = getActivePastPurchasesListId();
+  if(!lists[id]){
+    lists[id] = { name: "List 1", rows: [] };
+    saveAllPastPurchasesLists(lists);
+  }
+  return lists[id];
+}
+
+function updateActivePastPurchasesList(mutatorFn){
+  const lists = getAllPastPurchasesLists();
+  const id = getActivePastPurchasesListId();
+  if(!lists[id]) lists[id] = { name: "List 1", rows: [] };
+  mutatorFn(lists[id]);
+  saveAllPastPurchasesLists(lists);
+}
+
+function createPastPurchasesList(name){
+  const lists = getAllPastPurchasesLists();
+  const id = "pp-list-" + Date.now();
+  lists[id] = { name: name || "New List", rows: [] };
+  saveAllPastPurchasesLists(lists);
+  setActivePastPurchasesListId(id);
+  return id;
+}
+
+function pastPurchasesListNameExists(name, excludeId){
+  const lists = getAllPastPurchasesLists();
+  const normalized = name.trim().toLowerCase();
+  return Object.keys(lists).some(id => id !== excludeId && lists[id].name.trim().toLowerCase() === normalized);
+}
+
+function renameActivePastPurchasesList(newName){
+  updateActivePastPurchasesList(list => { list.name = newName; });
+}
+
+function deleteActivePastPurchasesList(){
+  const lists = getAllPastPurchasesLists();
+  const id = getActivePastPurchasesListId();
+  delete lists[id];
+  const remainingIds = Object.keys(lists);
+  if(remainingIds.length === 0){
+    lists[DEFAULT_PP_LIST_ID] = { name: "List 1", rows: [] };
+    saveAllPastPurchasesLists(lists);
+    setActivePastPurchasesListId(DEFAULT_PP_LIST_ID);
+  } else {
+    saveAllPastPurchasesLists(lists);
+    setActivePastPurchasesListId(remainingIds[0]);
+  }
+}
+
 function getPastPurchasesRows(){
-  try{ return JSON.parse(localStorage.getItem("pastPurchasesRows") || "[]"); }
-  catch(e){ return []; }
+  return getActivePastPurchasesList().rows || [];
 }
 function savePastPurchasesRows(rows){
-  try{ localStorage.setItem("pastPurchasesRows", JSON.stringify(rows)); }
-  catch(e){ /* localStorage unavailable */ }
+  updateActivePastPurchasesList(list => { list.rows = rows; });
 }
 
 function getPastPurchasesParams(){
@@ -1278,9 +1387,14 @@ function addPastPurchaseParam({label, type, defaultValue, computed, formula}){
 
 function removePastPurchaseParam(id){
   savePastPurchasesParams(getPastPurchasesParams().filter(p => p.id !== id));
-  const rows = getPastPurchasesRows();
-  rows.forEach(r => { if(r.values) delete r.values[id]; });
-  savePastPurchasesRows(rows);
+  // Params are global across every Past Purchases list (same design as Portfolio
+  // Lists' custom params), so removing one has to clean its values out of every
+  // list's rows, not just the currently active list.
+  const lists = getAllPastPurchasesLists();
+  Object.values(lists).forEach(list => {
+    (list.rows || []).forEach(r => { if(r.values) delete r.values[id]; });
+  });
+  saveAllPastPurchasesLists(lists);
   if(ppColumnSortState && ppColumnSortState.colId === id) ppColumnSortState = null;
 }
 
@@ -1544,6 +1658,21 @@ function resolvePastPurchaseRowValues(row){
       resolved[p.id] = ready ? units * (sell - avg) : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
+    if(p.computed && p.formula === 'missedGainPct'){
+      // (Current Price − Selling Price) ÷ Selling Price × 100. Current Price is
+      // resolved live via getResolvedBuiltinAssetValues (override > live Finnhub
+      // fetch > static default) rather than read from a frozen Past Purchases
+      // column, so this recomputes automatically every time the row re-renders
+      // after a live data fetch — it "fluctuates" as the user's Current Price does.
+      const norm = s => String(s).trim().toLowerCase();
+      const sellParam = params.find(pp => !pp.computed && norm(pp.label) === 'selling price');
+      const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
+      const builtin = row.asset ? getResolvedBuiltinAssetValues(row.asset.trim().toUpperCase()) : null;
+      const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
+      const ready = !!sellParam && sell !== 0 && !!builtin;
+      resolved[p.id] = ready ? ((current - sell) / sell) * 100 : 0;
+      resolved['_' + p.id + '_ready'] = ready;
+    }
   });
   return resolved;
 }
@@ -1675,6 +1804,15 @@ function renderPastPurchasesTable(){
         const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : '#ef4444');
         const titleAttr = ready ? '' : ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
+      } else if(p.computed && p.formula === 'missedGainPct'){
+        const val = resolved[p.id] || 0;
+        const ready = resolved['_' + p.id + '_ready'];
+        const titleAttr = ready ? '' : ` title="Add a Selling Price column, and make sure this asset has Current Price data on Portfolio Lists, to compute this."`;
+        rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}"${titleAttr}>${Number(val).toFixed(1)}%</td>`;
+      } else if(p.computed){
+        const val = resolved[p.id] || 0;
+        const ready = resolved['_' + p.id + '_ready'];
+        rowHtml += `<td class="${ready === false ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
       } else {
         const val = resolved[p.id];
         if(p.type === 'text'){
@@ -1740,6 +1878,7 @@ function renderPastPurchasesTable(){
           renderPastPurchasesTickerList();
           renderPastPurchasesTable();
           renderPastPurchasesRowOrderList();
+          if(typeof renderPPListSelector === "function") renderPPListSelector();
         }
       } else if(action === 'up'){
         movePastPurchaseRow(rowId, -1);
@@ -1826,9 +1965,47 @@ function downloadTextBlob(filename, content, mimeType){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function exportTableAsExcel(filename, sheetName, headers, rows){
-  if(typeof XLSX === "undefined"){
-    alert('Excel export needs its helper library, which loads from a CDN the first time this page opens — please check your internet connection and reload the page, then try again.');
+// --- On-demand CDN loading with retry, for the Excel/PDF export helper libraries ---
+// index.html still loads these once at page-load time (so the common case has zero
+// extra delay), but that's a single unretried attempt — if it ever fails (a flaky
+// connection, an ad-blocker/firewall momentarily blocking cdn.jsdelivr.net, a
+// transient CDN hiccup), the feature used to stay broken until a full page reload.
+// These export functions now re-attempt the load right at click time instead, so a
+// working connection at export time is all that's needed, regardless of what
+// happened when the page first opened.
+const EXPORT_LIB_URLS = {
+  xlsx: "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+  jspdf: "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
+  jspdfAutotable: "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
+};
+const _libraryLoadPromises = {};
+function loadScriptOnce(url){
+  if(_libraryLoadPromises[url]) return _libraryLoadPromises[url];
+  _libraryLoadPromises[url] = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = url;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => { delete _libraryLoadPromises[url]; reject(new Error("Failed to load " + url)); };
+    document.head.appendChild(script);
+  });
+  return _libraryLoadPromises[url];
+}
+// checkFn reports whether the library's global is already usable; urls is one or
+// more script URLs to inject (in order) if it isn't. Returns whether it's usable
+// after trying.
+async function ensureLibraryLoaded(checkFn, urls){
+  if(checkFn()) return true;
+  for(const url of urls){
+    try{ await loadScriptOnce(url); }catch(e){ /* try the next url / fall through to the final check */ }
+  }
+  return checkFn();
+}
+
+async function exportTableAsExcel(filename, sheetName, headers, rows){
+  const ok = await ensureLibraryLoaded(() => typeof XLSX !== "undefined", [EXPORT_LIB_URLS.xlsx]);
+  if(!ok){
+    alert('Excel export needs its helper library, and it could not be loaded just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net) and try again.');
     return;
   }
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -1846,12 +2023,39 @@ function exportTableAsText(filename, headers, rows){
   downloadTextBlob(filename, lines.join("\n"), "text/plain");
 }
 
-function exportTableAsPdf(filename, title, headers, rows){
-  const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
-  if(!jsPDFCtor || typeof jsPDFCtor.prototype.autoTable !== "function"){
-    alert('PDF export needs its helper library, which loads from a CDN the first time this page opens — please check your internet connection and reload the page, then try again.');
+// Dependency-free: wraps the table as HTML with Word-specific XML namespaces and a
+// .doc extension/MIME type, which Word (and most word processors) open directly as
+// a formatted document — no CDN library involved, so unlike Excel/PDF this can never
+// fail on a network hiccup.
+function exportTableAsWord(filename, title, headers, rows){
+  const escCell = (v) => {
+    const s = (v === undefined || v === null) ? "" : String(v);
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  const headHtml = "<tr>" + headers.map(h => `<th style="background:#1e293b;color:#ffffff;padding:6px 10px;border:1px solid #334155;">${escCell(h)}</th>`).join("") + "</tr>";
+  const bodyHtml = rows.map(r => "<tr>" + r.map(c => `<td style="padding:6px 10px;border:1px solid #334155;">${escCell(c)}</td>`).join("") + "</tr>").join("");
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${escCell(title)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+</head>
+<body>
+<h2 style="font-family:Segoe UI, Arial, sans-serif;">${escCell(title)}</h2>
+<p style="font-family:Segoe UI, Arial, sans-serif; color:#555555; font-size:11px;">Exported ${escCell(new Date().toLocaleString())}</p>
+<table style="border-collapse:collapse; font-family:Segoe UI, Arial, sans-serif; font-size:11px;">${headHtml}${bodyHtml}</table>
+</body></html>`;
+  downloadTextBlob(filename, html, "application/msword");
+}
+
+async function exportTableAsPdf(filename, title, headers, rows){
+  const ok = await ensureLibraryLoaded(
+    () => { const c = window.jspdf && window.jspdf.jsPDF; return !!(c && typeof c.prototype.autoTable === "function"); },
+    [EXPORT_LIB_URLS.jspdf, EXPORT_LIB_URLS.jspdfAutotable]
+  );
+  if(!ok){
+    alert('PDF export needs its helper library, and it could not be loaded just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net) and try again.');
     return;
   }
+  const jsPDFCtor = window.jspdf.jsPDF;
   const doc = new jsPDFCtor({ orientation: "landscape" });
   doc.setFontSize(14);
   doc.text(title, 14, 15);
@@ -1913,6 +2117,11 @@ function buildPastPurchasesExportTable(){
         if(!ready) return "—";
         const val = resolved[p.id] || 0;
         return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
+      }
+      if(p.computed){
+        const ready = resolved["_" + p.id + "_ready"];
+        if(ready === false) return "—";
+        return Number(resolved[p.id] || 0).toFixed(1) + "%";
       }
       return resolved[p.id];
     });
@@ -1987,6 +2196,11 @@ function wireUpExportButtons(){
     const { headers, rows } = buildMainTableExportTable();
     exportTableAsText(`${activeListName()}.txt`, headers, rows);
   });
+  const wordBtn = document.getElementById("exportWordBtn");
+  if(wordBtn) wordBtn.addEventListener("click", () => {
+    const { headers, rows } = buildMainTableExportTable();
+    exportTableAsWord(`${activeListName()}.doc`, getActiveList().name || "Portfolio List", headers, rows);
+  });
   const pdfBtn = document.getElementById("exportPdfBtn");
   if(pdfBtn) pdfBtn.addEventListener("click", () => {
     const { headers, rows } = buildMainTableExportTable();
@@ -2002,6 +2216,11 @@ function wireUpExportButtons(){
   if(ppTextBtn) ppTextBtn.addEventListener("click", () => {
     const { headers, rows } = buildPastPurchasesExportTable();
     exportTableAsText("Past_Purchases.txt", headers, rows);
+  });
+  const ppWordBtn = document.getElementById("ppExportWordBtn");
+  if(ppWordBtn) ppWordBtn.addEventListener("click", () => {
+    const { headers, rows } = buildPastPurchasesExportTable();
+    exportTableAsWord("Past_Purchases.doc", "Past Purchases", headers, rows);
   });
   const ppPdfBtn = document.getElementById("ppExportPdfBtn");
   if(ppPdfBtn) ppPdfBtn.addEventListener("click", () => {
@@ -2039,6 +2258,39 @@ function renderListSelector(){
 
 function showListActionStatus(message){
   const el = document.getElementById("listActionStatus");
+  if(!el) return;
+  el.textContent = message;
+  setTimeout(() => { if(el.textContent === message) el.textContent = ""; }, 4000);
+}
+
+// Mirrors renderListSelector()/showListActionStatus() for the Past Purchases table's
+// own list selector.
+function renderPPListSelector(){
+  const selector = document.getElementById("ppListSelector");
+  const heading = document.getElementById("ppActiveListHeading");
+  const lists = getAllPastPurchasesLists();
+  const activeId = getActivePastPurchasesListId();
+
+  if(selector){
+    selector.innerHTML = "";
+    Object.keys(lists).forEach(id => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = lists[id].name;
+      if(id === activeId) opt.selected = true;
+      selector.appendChild(opt);
+    });
+  }
+
+  if(heading){
+    const activeName = lists[activeId] ? lists[activeId].name : "—";
+    const count = getPastPurchasesRows().length;
+    heading.textContent = `Now viewing: ${activeName} (${count} row${count === 1 ? "" : "s"})`;
+  }
+}
+
+function showPPListActionStatus(message){
+  const el = document.getElementById("ppListActionStatus");
   if(!el) return;
   el.textContent = message;
   setTimeout(() => { if(el.textContent === message) el.textContent = ""; }, 4000);
@@ -2416,7 +2668,7 @@ function runMatrixOptimization() {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
-      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP")){
+      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "missedGainPct")){
         // resolved in pass 2, once their sibling custom params (if present) are available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
@@ -2446,6 +2698,16 @@ function runMatrixOptimization() {
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam && sellParam) && units !== 0 && sell !== 0;
         customValues[p.id] = ready ? units * (sell - avg) : 0;
+        customIsDefault[p.id] = !ready;
+      } else if(p.computed && p.formula === "missedGainPct"){
+        // (Current Price − Selling Price) ÷ Selling Price × 100, using the already-
+        // resolved (override > live fetch > static) currentPrice for this row, so it
+        // fluctuates automatically every time live data is fetched/updated.
+        const norm = s => String(s).trim().toLowerCase();
+        const sellParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "selling price");
+        const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
+        const ready = !!sellParam && sell !== 0;
+        customValues[p.id] = ready ? ((currentPrice - sell) / sell) * 100 : 0;
         customIsDefault[p.id] = !ready;
       }
     });
@@ -2958,6 +3220,79 @@ try{
   console.error("Failed to wire up sync controls:", err);
 }
 
+// --- Wire up Past Purchases list management (mirrors Portfolio Lists' own) ---
+try{
+  renderPPListSelector();
+
+  const ppListSelector = document.getElementById("ppListSelector");
+  if(ppListSelector){
+    ppListSelector.addEventListener("change", (e) => {
+      setActivePastPurchasesListId(e.target.value);
+      renderPPListSelector();
+      renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
+      renderPastPurchasesTable();
+      showPPListActionStatus(`Switched to "${getActivePastPurchasesList().name}".`);
+    });
+  }
+
+  const ppNewListBtn = document.getElementById("ppNewListBtn");
+  if(ppNewListBtn){
+    ppNewListBtn.addEventListener("click", () => {
+      let name = prompt("Name for the new Past Purchases list:", "List " + (Object.keys(getAllPastPurchasesLists()).length + 1));
+      while(name !== null && name.trim() !== "" && pastPurchasesListNameExists(name)){
+        name = prompt(`"${name.trim()}" is already in use. Please choose a different name:`, "");
+      }
+      if(name === null || name.trim() === "") return; // user cancelled
+      createPastPurchasesList(name.trim());
+      renderPPListSelector();
+      renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
+      renderPastPurchasesTable();
+      showPPListActionStatus(`Created and switched to "${name.trim()}". Use the dropdown above to switch between lists.`);
+    });
+  }
+
+  const ppRenameListBtn = document.getElementById("ppRenameListBtn");
+  if(ppRenameListBtn){
+    ppRenameListBtn.addEventListener("click", () => {
+      const current = getActivePastPurchasesList();
+      const activeId = getActivePastPurchasesListId();
+      let name = prompt("Rename this Past Purchases list:", current.name);
+      while(name !== null && name.trim() !== "" && pastPurchasesListNameExists(name, activeId)){
+        name = prompt(`"${name.trim()}" is already in use by another list. Please choose a different name:`, "");
+      }
+      if(name === null || name.trim() === "") return;
+      renameActivePastPurchasesList(name.trim());
+      renderPPListSelector();
+      showPPListActionStatus(`Renamed to "${name.trim()}".`);
+    });
+  }
+
+  const ppDeleteListBtn = document.getElementById("ppDeleteListBtn");
+  if(ppDeleteListBtn){
+    ppDeleteListBtn.addEventListener("click", () => {
+      const current = getActivePastPurchasesList();
+      const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
+      if(!confirmed) return;
+      deleteActivePastPurchasesList();
+      renderPPListSelector();
+      renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
+      renderPastPurchasesTable();
+      showPPListActionStatus(`Deleted "${current.name}". Now viewing "${getActivePastPurchasesList().name}".`);
+    });
+  }
+}catch(err){
+  console.error("Failed to wire up Past Purchases list management:", err);
+}
+
 // --- Wire up the Past Purchases table (freeform assets + freeform parameters) ---
 try{
   const ppTabs = [
@@ -3008,6 +3343,7 @@ try{
       renderPastPurchasesTable();
       renderPastPurchasesColumnOrderList();
       renderPastPurchasesRowOrderList();
+      renderPPListSelector();
 
       if(result.total === 0){
         statusEl.textContent = `"${sourceName}" has no assets to import.`;
@@ -3038,6 +3374,7 @@ try{
       renderPastPurchasesTable();
       renderPastPurchasesColumnOrderList();
       renderPastPurchasesRowOrderList();
+      renderPPListSelector();
       statusEl.textContent = `${asset} added to Past Purchases as a new row.` + (pulled > 0 ? ` Pulled in ${pulled} field value(s) already entered on your Portfolio Lists.` : "");
       statusEl.style.color = "var(--emerald)";
       tickerInput.value = "";
