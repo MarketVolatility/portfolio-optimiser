@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP "Ticker" header, footer reorder, new PP sort options, Current Holdings filter)
-console.log("app.js loaded — build v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP \"Ticker\" header, footer reorder, new PP sort options, Current Holdings filter)");
+// APP.JS BUILD: v5.35 (Buy Price -> To Buy Price rename, blue Current Price when at/below buy target, title -> Stock Portfolio Optimizer, build line moved under dashboard subtitle)
+console.log("app.js loaded — build v5.35 (Buy Price -> To Buy Price rename, blue Current Price when at/below buy target, title -> Stock Portfolio Optimizer, build line moved under dashboard subtitle)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1566,6 +1566,49 @@ function migratePastPurchasesRowsIfNeeded(){
 }
 migratePastPurchasesRowsIfNeeded();
 
+// One-time, self-healing rename: a user could freely type "Buy Price" as a custom
+// parameter's name (it was never a preset/glossary entry — just whatever label
+// someone typed into "Add Parameter"). Renaming it here, by label, wherever a
+// param with that exact name is stored, keeps it linked to the same param id
+// (and every value already entered under it) while updating just the display
+// text to "To Buy Price". Runs on every load — harmless once already renamed,
+// since "buy price" no longer matches anything afterward — and covers BOTH the
+// Portfolio Lists table's custom params and the Past Purchases table's params
+// (they're stored separately; a user could have added it to either).
+function renameBuyPriceParamsIfNeeded(){
+  const isBuyPrice = label => String(label).trim().toLowerCase() === "buy price";
+  try{
+    const mainParams = getCustomParams();
+    let changed = false;
+    mainParams.forEach(p => { if(isBuyPrice(p.label)){ p.label = "To Buy Price"; changed = true; } });
+    if(changed) saveCustomParams(mainParams);
+  }catch(e){ /* localStorage unavailable */ }
+  try{
+    const ppParams = getPastPurchasesParams();
+    let changed = false;
+    ppParams.forEach(p => { if(isBuyPrice(p.label)){ p.label = "To Buy Price"; changed = true; } });
+    if(changed) savePastPurchasesParams(ppParams);
+  }catch(e){ /* localStorage unavailable */ }
+}
+renameBuyPriceParamsIfNeeded();
+
+// Shared by both tables: is `currentPrice` at or below the "To Buy Price" target
+// (a user-added custom column, on either table), signaling "this hit my buy
+// target"? `params` is that table's own param/column list, `valuesById` the
+// row's (or ticker's) resolved custom values keyed by param id. Matches both the
+// current "To Buy Price" label and the pre-rename "Buy Price" spelling, purely
+// as a defensive fallback — renameBuyPriceParamsIfNeeded() above normally means
+// only the new spelling is ever actually stored. A zero/blank target isn't a
+// real buy-price entry yet, so it never triggers the highlight.
+function isAtOrBelowBuyPriceTarget(currentPrice, params, valuesById){
+  const norm = s => String(s).trim().toLowerCase();
+  const buyPriceParam = (params || []).find(p => !p.computed && (norm(p.label) === "to buy price" || norm(p.label) === "buy price"));
+  if(!buyPriceParam) return false;
+  const buyPriceVal = Number((valuesById || {})[buyPriceParam.id]) || 0;
+  if(buyPriceVal === 0) return false;
+  return Number(currentPrice) <= buyPriceVal;
+}
+
 function addPastPurchaseRow(asset){
   const rows = getPastPurchasesRows();
   const id = "pp_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -2186,7 +2229,14 @@ function renderPastPurchasesTable(){
         } else if(p.type === 'date'){
           rowHtml += `<td><input class="cell-input pp-cell-input" data-row-id="${row.id}" data-field="${p.id}" data-type="date" type="date" value="${escAttr(val)}"></td>`;
         } else {
-          rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-row-id="${row.id}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"></td>`;
+          // Same "hit your buy target" blue highlight as the main table's Current
+          // Price column, applied here whenever this row has BOTH a "Current
+          // Price" column (e.g. pulled in from Portfolio Lists) and a "To Buy
+          // Price" column of its own.
+          const isCurrentPriceCol = String(p.label).trim().toLowerCase() === "current price";
+          const isAtTarget = isCurrentPriceCol && isAtOrBelowBuyPriceTarget(val, params, resolved);
+          const styleAttr = isAtTarget ? ' style="color:#7dd3fc;"' : '';
+          rowHtml += `<td><input class="cell-input cell-input-num pp-cell-input" data-row-id="${row.id}" data-field="${p.id}" data-type="number" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
         }
       }
     });
@@ -2584,6 +2634,9 @@ function getMainTableExportValue(item, colDef){
 // palette instead of the live dark-theme hex values.
 function getMainTableExportColor(item, colDef){
   if(colDef.id === "calculatedUpside") return item.calculatedUpside >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
+  if(colDef.id === "currentPrice"){
+    return isAtOrBelowBuyPriceTarget(item.currentPrice, getCustomParams(), item.customValues) ? EXPORT_COLORS.lightBlue : null;
+  }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
@@ -2646,6 +2699,9 @@ function getPastPurchasesExportRowColors(resolved, params){
       const sellParam = params.find(pp => !pp.computed && String(pp.label).trim().toLowerCase() === "selling price");
       const sellVal = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
       return sellVal === 0 ? EXPORT_COLORS.lightBlue : null;
+    }
+    if(!p.computed && String(p.label).trim().toLowerCase() === "current price"){
+      return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.lightBlue : null;
     }
     return null;
   })];
@@ -3126,7 +3182,17 @@ function renderCellHTML(colDef, item, badge){
     }
     return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
   }
-  // Default: built-in numeric field (roa, pe, currentPrice, targetPrice, revenueGrowth, etc.)
+  if(colDef.id === 'currentPrice'){
+    // Blue font when Current Price has fallen to or below a user-added "To Buy
+    // Price" custom column's target for this ticker — a "hit your buy target"
+    // signal. Styled on the input itself (not just the <td>) so the number
+    // actually reads blue.
+    const val = item.currentPrice;
+    const isAtTarget = isAtOrBelowBuyPriceTarget(val, getCustomParams(), item.customValues);
+    const styleAttr = isAtTarget ? ' style="color:#7dd3fc;"' : '';
+    return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${val}" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
+  }
+  // Default: built-in numeric field (roa, pe, targetPrice, revenueGrowth, etc.)
   const val = item[colDef.id];
   return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
 }
