@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.32 (PP-to-PP list import, collapsible Portfolio/Past Purchases sections, "Portfolio/Past Purchases viewing:" labels, colored Word/PDF exports, Quick Paste Update, Consensus Target Price rename)
-console.log("app.js loaded — build v5.32 (PP-to-PP list import, collapsible Portfolio/Past Purchases sections, \"Portfolio/Past Purchases viewing:\" labels, colored Word/PDF exports, Quick Paste Update, Consensus Target Price rename)");
+// APP.JS BUILD: v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)
+console.log("app.js loaded — build v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -480,13 +480,45 @@ async function fetchLiveDataForAllAssets(){
 
 // --- Quick Paste Update ---
 // A network-free companion to "Fetch live data": generates a fixed-order prompt
-// listing every ticker across ALL Portfolio Lists (deduplicated) for Current Price,
-// P/E, and ROA — the same trio "Fetch live data" pulls from Finnhub — that the user
-// can hand to any AI assistant, then pastes the AI's numeric reply back in to apply
-// it. Applied via setGlobalOverride (ticker-keyed, not list-keyed) — exactly like a
-// manual cell edit — so a paste updates a ticker's values everywhere that ticker
-// appears, across every Portfolio List at once, and takes the same "manual override
-// beats live fetch beats static default" precedence used everywhere else in the app.
+// listing every ticker across ALL Portfolio Lists (deduplicated) for a fixed set of
+// 7 fields, that the user can hand to any AI assistant, then pastes the AI's numeric
+// reply back in to apply it. Applied via setGlobalOverride (ticker-keyed, not
+// list-keyed) — exactly like a manual cell edit or a "Fetch live data" result — so a
+// paste updates a ticker's values everywhere that ticker appears, across every
+// Portfolio List at once, and takes the same "manual override beats live fetch beats
+// static default" precedence used everywhere else in the app.
+//
+// The 7 fields are a deliberate mix: 4 are always-present BUILTIN_COLUMNS fields
+// (targetPrice, pegRatio, freeCashFlow, currentPrice), and 3 (Dividend Yield,
+// Market Cap, Forward P/E) are normally-optional custom params that the user would
+// otherwise have to add by hand via "+ Parameter" first — resolveQpuFieldId adds
+// them automatically (matching the exact PARAM_PRESETS definition "Fetch live data"
+// already knows how to fill, including its finnhubField mapping) the first time
+// "Parse & Update" actually runs, so the feature works without that manual step.
+const QPU_FIELDS = [
+  { label: "Consensus Target Price", builtinId: "targetPrice" },
+  { label: "PEG Ratio", builtinId: "pegRatio" },
+  { label: "FCF ($M)", builtinId: "freeCashFlow" },
+  { label: "Dividend Yield (%)" },
+  { label: "Market Cap ($B)" },
+  { label: "Current Price", builtinId: "currentPrice" },
+  { label: "Forward P/E" },
+];
+
+// Resolves the override-able field id for one QPU_FIELDS entry: the fixed
+// BUILTIN_COLUMNS id for the 4 always-present fields, or an existing/newly-added
+// custom param's id for the 3 optional ones. findSimilarExistingParam is the same
+// fuzzy matcher the "+ Parameter" UI itself uses, so a column already added by hand
+// under a slightly different label (e.g. "Fwd P/E") is recognized and reused
+// instead of creating a duplicate column.
+function resolveQpuFieldId(field){
+  if(field.builtinId) return field.builtinId;
+  const existing = findSimilarExistingParam(field.label);
+  if(existing) return existing.id;
+  const preset = PARAM_PRESETS.find(p => p.label === field.label);
+  return preset ? addCustomParam(preset) : null;
+}
+
 function getQuickPasteTickers(){
   const seen = new Set();
   const tickers = [];
@@ -505,8 +537,9 @@ function buildQuickPasteUpdatePrompt(tickers){
   if(tickers.length === 0){
     return "No tickers yet — add at least one asset to a Portfolio List first.";
   }
-  const lines = tickers.map(t => `${t}: Current Price, P/E, ROA (%)`);
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — three numbers per ticker (Current Price, P/E, ROA %), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * 3} numbers total).`;
+  const fieldLabels = QPU_FIELDS.map(f => f.label).join(", ");
+  const lines = tickers.map(t => `${t}: ${fieldLabels}`);
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${QPU_FIELDS.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * QPU_FIELDS.length} numbers total).`;
 }
 
 function renderQuickPasteUpdatePrompt(){
@@ -557,9 +590,10 @@ function wireUpQuickPasteUpdate(){
       return;
     }
     const tokens = raw.split(/[,\n]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const expected = tickers.length * 3;
+    const fieldCount = QPU_FIELDS.length;
+    const expected = tickers.length * fieldCount;
     if(tokens.length !== expected){
-      parseStatus.textContent = `Expected ${expected} numbers (${tickers.length} ticker(s) × 3 fields) but found ${tokens.length}. Nothing was updated — check the paste matches the prompt's order and try again.`;
+      parseStatus.textContent = `Expected ${expected} numbers (${tickers.length} ticker(s) × ${fieldCount} fields) but found ${tokens.length}. Nothing was updated — check the paste matches the prompt's order and try again.`;
       parseStatus.style.color = "#ef4444";
       return;
     }
@@ -571,11 +605,15 @@ function wireUpQuickPasteUpdate(){
       return;
     }
 
+    // Resolve (creating any missing optional custom param) once, up front, so every
+    // ticker below applies against the same field ids.
+    const fieldIds = QPU_FIELDS.map(resolveQpuFieldId);
+
     tickers.forEach((ticker, i) => {
-      const [currentPrice, pe, roa] = numbers.slice(i * 3, i * 3 + 3);
-      setGlobalOverride(ticker, "currentPrice", currentPrice);
-      setGlobalOverride(ticker, "pe", pe);
-      setGlobalOverride(ticker, "roa", roa);
+      const values = numbers.slice(i * fieldCount, i * fieldCount + fieldCount);
+      fieldIds.forEach((fieldId, j) => {
+        if(fieldId) setGlobalOverride(ticker, fieldId, values[j]);
+      });
     });
 
     runMatrixOptimization();
@@ -587,9 +625,11 @@ function wireUpQuickPasteUpdate(){
       if(typeof renderPastPurchasesTable === "function") renderPastPurchasesTable();
       if(typeof renderPastPurchasesParamList === "function") renderPastPurchasesParamList();
     }
+    if(typeof renderColumnOrderList === "function") renderColumnOrderList();
+    if(typeof renderCustomParamList === "function") renderCustomParamList();
 
     pasteInput.value = "";
-    parseStatus.textContent = `Updated Current Price, P/E, and ROA for ${tickers.length} ticker(s), applied across every Portfolio List they appear on.`;
+    parseStatus.textContent = `Updated ${QPU_FIELDS.map(f => f.label).join(", ")} for ${tickers.length} ticker(s), applied across every Portfolio List they appear on.`;
     parseStatus.style.color = "var(--emerald)";
   });
 }
