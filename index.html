@@ -242,7 +242,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
     <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">⚡ Quick Paste Update — copy and paste this to your AI</h2>
     <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd; margin-bottom:1rem;">
-      No Finnhub key, or want a second source? The box below lists every ticker across <strong>all</strong> your Portfolio Lists together with the fields to update (Current Price, P/E, ROA), in a fixed order. Copy it and paste it to an AI assistant (Claude, ChatGPT, Gemini, etc.) — it can research current values and reply with just the numbers, comma-separated, in that same order. Paste that reply into the second box and click "Parse & Update" — each ticker's values update everywhere it appears, across every Portfolio List, the same way "Fetch live data" does.
+      No Finnhub key, or want a second source? The box below lists every ticker across <strong>all</strong> your Portfolio Lists together with the fields to update (Consensus Target Price, PEG Ratio, FCF ($M), Dividend Yield (%), Market Cap ($B), Current Price, Forward P/E), in a fixed order. Copy it and paste it to an AI assistant (Claude, ChatGPT, Gemini, etc.) — it can research current values and reply with just the numbers, comma-separated, in that same order. Paste that reply into the second box and click "Parse & Update" — each ticker's values update everywhere it appears, across every Portfolio List, the same way "Fetch live data" does. (Dividend Yield, Market Cap, and Forward P/E are added as columns automatically the first time you use this, if they aren't already on your table.)
     </div>
     <label for="qpuPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
     <textarea id="qpuPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
@@ -252,7 +252,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <span id="qpuPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
     </div>
     <label for="qpuPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
-    <textarea id="qpuPasteInput" rows="4" placeholder="e.g. 227.50, 32.10, 24.30, 410.20, 35.00, 27.80, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <textarea id="qpuPasteInput" rows="4" placeholder="e.g. 245.00, 1.85, 320.5, 0.72, 850.4, 227.50, 30.10, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
     <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
       <button id="qpuParseBtn" type="button">Parse & Update</button>
       <span id="qpuParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
@@ -401,7 +401,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     </table>
   </div>
   <div style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:1rem;">
-    HTML build: v5.32 (PP-to-PP list import, collapsible Portfolio/Past Purchases sections, "Portfolio/Past Purchases viewing:" labels, colored Word/PDF exports, Quick Paste Update, Consensus Target Price rename)
+    HTML build: v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)
   </div>
 
   </div>
