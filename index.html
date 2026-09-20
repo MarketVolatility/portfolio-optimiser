@@ -227,8 +227,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   <header>
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
-    <div id="htmlBuildLine" style="text-align:center; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.35 (Buy Price rename + blue Current Price highlight, Stock Portfolio Optimizer title, PDF export re-verified)
+    <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
+      HTML build: v5.36 ("To Buy Price" preset param, fixed Buy Price rename not surviving cloud sync, emerald Current Price at/below buy target, build line left-aligned)
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
@@ -635,6 +635,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Shares Outstanding (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The total number of shares (in millions) currently issued and held by all shareholders.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Short Interest (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of outstanding shares that have been sold short by investors betting on a price decline.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Stability</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Fixed column on the main Portfolio Lists table. Also listed in the “+/- Parameter” dropdown on both tables — selecting it on Portfolio Lists is blocked by the duplicate-column guard (the fixed column already exists), but on Past Purchases, which has no fixed columns of its own, it's addable as a manual-entry field. A qualitative rating of business durability (Ultra-high, High, Med, or Low) used in the scoring formulas above. On the main table it’s a dropdown; in Past Purchases it’s free text, since custom parameters there don’t support the dropdown-style rating.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">To Buy Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: a user-defined price threshold at which the buyer will consider purchasing the stock. Not fetched from any source. When this column is present alongside a "Current Price" column, Current Price is highlighted in emerald on that row once it falls to or below this target.</td></tr>
         <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Units Purchased</td><td style="padding:0.6rem 1rem;">Manual entry: the number of shares/units you actually hold, for your own position tracking. Not fetched from any source.</td></tr>
       </tbody>
     </table>
