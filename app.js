@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)
-console.log("app.js loaded — build v5.33 (Quick Paste Update fields changed to Consensus Target Price/PEG/FCF/Dividend Yield/Market Cap/Current Price/Forward P/E)");
+// APP.JS BUILD: v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP "Ticker" header, footer reorder, new PP sort options, Current Holdings filter)
+console.log("app.js loaded — build v5.34 (Emerald Portfolio heading, silent PDF export, toggles next to headings, PP \"Ticker\" header, footer reorder, new PP sort options, Current Holdings filter)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -71,6 +71,29 @@ function toggleCollapsibleSection(sectionId, toggleBtnId){
 function applyAllCollapsedSections(){
   applyCollapsedSection("portfolioSectionBody", "portfolioToggleBtn");
   applyCollapsedSection("pastPurchasesSectionBody", "pastPurchasesToggleBtn");
+}
+
+// --- Past Purchases "Current Holdings" view filter ---
+// Per-device UI preference (deliberately NOT in SYNC_KEYS, same reasoning as
+// uiViewMode/collapsedSections above). When on, only rows that haven't been sold
+// yet (Selling Price = 0, or there's no Selling Price column at all, in which case
+// nothing counts as sold) are shown in the table body and included in exports —
+// this is purely a display filter, so the footer totals (Total Current Book Value,
+// Total Sale Profit to date, monthly breakdowns) keep summarizing the WHOLE list
+// regardless, the same way they already don't change based on sort order.
+function getPpShowCurrentHoldingsOnly(){
+  try{ return localStorage.getItem("ppShowCurrentHoldingsOnly") === "true"; }
+  catch(e){ return false; }
+}
+function setPpShowCurrentHoldingsOnly(on){
+  try{ localStorage.setItem("ppShowCurrentHoldingsOnly", on ? "true" : "false"); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function isPastPurchaseRowCurrentHolding(row, params){
+  const sellParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
+  if(!sellParam) return true; // no Selling Price column at all -> nothing counts as sold
+  const sellVal = Number(row.values && row.values[sellParam.id]) || 0;
+  return sellVal === 0;
 }
 
 let authClient;
@@ -302,6 +325,11 @@ let lastFetchTime = null;
 // recomputing anything themselves.
 let lastMainTableProcessedAssets = [];
 let lastPastPurchasesOrderedRows = [];
+// Same idea, but narrowed to whichever rows are actually visible in the table body
+// right now (i.e. after the "Current Holdings" filter, if it's on) — this is what
+// exports use for their row data, while lastPastPurchasesOrderedRows above (the
+// FULL list) is what footer totals are always computed from.
+let lastPastPurchasesVisibleRows = [];
 
 function getSavedApiKey(){
   try{ return localStorage.getItem("finnhubApiKey") || ""; }
@@ -2000,7 +2028,9 @@ function getPastPurchasesSortedRows(){
   else if(sortMode === 'date-new') rows.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
   else if(sortMode === 'date-old') rows.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
   else if(sortMode === 'param-date-purchased') sortByParamLabel('Date Purchased', 'desc'); // most recent purchase first
+  else if(sortMode === 'param-date-purchased-old') sortByParamLabel('Date Purchased', 'asc'); // oldest purchase first
   else if(sortMode === 'param-date-sale') sortByParamLabel('Date Sale', 'desc'); // most recently sold first
+  else if(sortMode === 'param-date-sale-old') sortByParamLabel('Date Sale', 'asc'); // oldest sale first
   else if(sortMode === 'param-sale-profit') sortByParamLabel('Sale Profit', 'desc'); // highest profit first
   else if(sortMode === 'param-missed-gain') sortByParamLabel('Missed Gain %', 'desc'); // biggest missed gain first
   // 'custom' (or anything else): leave as the persisted order.
@@ -2026,7 +2056,17 @@ function renderPastPurchasesTable(){
   const orderedRows = getPastPurchasesSortedRows();
   lastPastPurchasesOrderedRows = orderedRows;
 
-  let headHtml = '<tr><th>Past Purchases</th>';
+  // "Current Holdings" is a display filter only — it narrows which rows appear in
+  // the table body (and, mirroring that, in exports), but the footer totals below
+  // always summarize every row in the list, same as they already do regardless of
+  // sort order.
+  const showHoldingsOnly = getPpShowCurrentHoldingsOnly();
+  const visibleRows = showHoldingsOnly ? orderedRows.filter(r => isPastPurchaseRowCurrentHolding(r, params)) : orderedRows;
+  lastPastPurchasesVisibleRows = visibleRows;
+  const holdingsBtn = document.getElementById("ppCurrentHoldingsToggle");
+  if(holdingsBtn) holdingsBtn.classList.toggle("active-tab", showHoldingsOnly);
+
+  let headHtml = '<tr><th>Ticker</th>';
   params.forEach((p, idx) => {
     const isSorted = ppColumnSortState && ppColumnSortState.colId === p.id;
     const sortIcon = isSorted ? (ppColumnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
@@ -2074,26 +2114,32 @@ function renderPastPurchasesTable(){
   });
 
   tbody.innerHTML = "";
-  if(orderedRows.length === 0 || params.length === 0){
+  if(visibleRows.length === 0 || params.length === 0){
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = params.length + 1;
     td.style.color = "var(--text-secondary)";
     td.style.padding = "1.25rem 1rem";
-    td.textContent = orderedRows.length === 0
-      ? "No assets yet — add one above, or import a list."
-      : "Add at least one parameter above to start tracking data for these assets.";
+    td.textContent = params.length === 0
+      ? "Add at least one parameter above to start tracking data for these assets."
+      : (showHoldingsOnly
+        ? (orderedRows.length === 0 ? "No assets yet — add one above, or import a list." : "No current holdings — every asset on this list has a non-zero Selling Price, or turn off \"Current Holdings\" to see everything.")
+        : "No assets yet — add one above, or import a list.");
     tr.appendChild(td);
     tbody.appendChild(tr);
-    if(tfoot) tfoot.innerHTML = "";
+    // The footer (Total Current Book Value, Total Sale Profit to date, etc.) still
+    // reflects the FULL list even when the filtered body is empty, so only skip it
+    // when there's genuinely nothing on the list at all.
+    if(tfoot && orderedRows.length === 0) tfoot.innerHTML = "";
+    else if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
     return;
   }
 
-  orderedRows.forEach((row, rowIdx) => {
+  visibleRows.forEach((row, rowIdx) => {
     const tr = document.createElement('tr');
     const resolved = resolvePastPurchaseRowValues(row);
     const upDisabled = rowIdx === 0 ? 'disabled' : '';
-    const downDisabled = rowIdx === orderedRows.length - 1 ? 'disabled' : '';
+    const downDisabled = rowIdx === visibleRows.length - 1 ? 'disabled' : '';
     let rowHtml = `<td>
       <input class="cell-input cell-input-ticker pp-asset-input" data-row-id="${row.id}" data-resolved-value="${escHtml(row.asset)}" type="text" value="${escHtml(row.asset)}">
       <div class="row-ctrl-controls">
@@ -2212,81 +2258,88 @@ function renderPastPurchasesTable(){
     });
   });
 
-  if(tfoot){
-    const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
-    const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
-    const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
-    const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
-    let footHtml = '';
+  if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
+}
 
-    // "Not yet sold" = Selling Price is 0 (or there's no Selling Price column at all,
-    // in which case nothing on this list counts as sold). Shown above the monthly
-    // sale-profit subtotals, since it describes what's still held rather than what's
-    // already been sold.
-    if(bookValueParam){
-      const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-      const totalBookValue = orderedRows.reduce((sum, row) => {
-        const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
-        if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
-        return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
-      }, 0);
-      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
-      params.forEach((p, idx) => {
-        footHtml += idx === colIndex
-          ? `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`
-          : `<td></td>`;
-      });
-      footHtml += `</tr>`;
-    }
+// Builds the Past Purchases tfoot summary rows — Total Current Book Value, then
+// Total Sale Profit to date immediately below it, then the per-month Sales Profit
+// breakdown (most recent month first) below both. Always summarizes the FULL list
+// passed in (orderedRows), independent of the "Current Holdings" display filter or
+// whatever sort order the table body itself is currently showing.
+function renderPastPurchasesFooter(tfoot, params, orderedRows){
+  const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
+  const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
+  const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
+  const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
+  let footHtml = '';
 
-    if(saleProfitParam && dateSaleParam){
-      // Group rows that actually have a Date Sale entered into per-month subtotals,
-      // most recent month first, inserted above the grand total below.
-      const groups = {};
-      orderedRows.forEach(row => {
-        const dateVal = (row.values && row.values[dateSaleParam.id]) || '';
-        const parsed = ppParseDateSale(dateVal);
-        if(!parsed) return;
-        const key = parsed.year + '-' + String(parsed.month).padStart(2, '0');
-        if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
-        groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
-      });
-      const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-      const groupKeys = Object.keys(groups).sort((a, b) => {
-        if(groups[b].year !== groups[a].year) return groups[b].year - groups[a].year;
-        return groups[b].month - groups[a].month;
-      });
-      groupKeys.forEach(key => {
-        const g = groups[key];
-        const sign = g.total >= 0 ? '+' : '-';
-        const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
-        const label = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
-        footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
-        params.forEach((p, idx) => {
-          footHtml += idx === colIndex
-            ? `<td style="font-weight:600; color:${color};">${sign}$${Math.abs(g.total).toFixed(2)}</td>`
-            : `<td></td>`;
-        });
-        footHtml += `</tr>`;
-      });
-    }
-
-    if(saleProfitParam){
-      const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
-      const sign = total >= 0 ? '+' : '-';
-      const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
-      const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-      footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Sale Profit to date</td>`;
-      params.forEach((p, idx) => {
-        footHtml += idx === colIndex
-          ? `<td style="font-weight:700; color:${color};">${sign}$${Math.abs(total).toFixed(2)}</td>`
-          : `<td></td>`;
-      });
-      footHtml += `</tr>`;
-    }
-
-    tfoot.innerHTML = footHtml;
+  // "Not yet sold" = Selling Price is 0 (or there's no Selling Price column at all,
+  // in which case nothing on this list counts as sold).
+  if(bookValueParam){
+    const colIndex = params.findIndex(p => p.id === bookValueParam.id);
+    const totalBookValue = orderedRows.reduce((sum, row) => {
+      const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
+      if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
+      return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
+    }, 0);
+    footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
+    params.forEach((p, idx) => {
+      footHtml += idx === colIndex
+        ? `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`
+        : `<td></td>`;
+    });
+    footHtml += `</tr>`;
   }
+
+  // Grand total, positioned immediately below Total Current Book Value — the
+  // per-month breakdown (further below) is supporting detail for this number.
+  if(saleProfitParam){
+    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
+    const sign = total >= 0 ? '+' : '-';
+    const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Sale Profit to date</td>`;
+    params.forEach((p, idx) => {
+      footHtml += idx === colIndex
+        ? `<td style="font-weight:700; color:${color};">${sign}$${Math.abs(total).toFixed(2)}</td>`
+        : `<td></td>`;
+    });
+    footHtml += `</tr>`;
+  }
+
+  if(saleProfitParam && dateSaleParam){
+    // Group rows that actually have a Date Sale entered into per-month subtotals,
+    // most recent month first.
+    const groups = {};
+    orderedRows.forEach(row => {
+      const dateVal = (row.values && row.values[dateSaleParam.id]) || '';
+      const parsed = ppParseDateSale(dateVal);
+      if(!parsed) return;
+      const key = parsed.year + '-' + String(parsed.month).padStart(2, '0');
+      if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
+      groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
+    });
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    const groupKeys = Object.keys(groups).sort((a, b) => {
+      if(groups[b].year !== groups[a].year) return groups[b].year - groups[a].year;
+      return groups[b].month - groups[a].month;
+    });
+    groupKeys.forEach(key => {
+      const g = groups[key];
+      const sign = g.total >= 0 ? '+' : '-';
+      const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
+      const label = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
+      params.forEach((p, idx) => {
+        footHtml += idx === colIndex
+          ? `<td style="font-weight:600; color:${color};">${sign}$${Math.abs(g.total).toFixed(2)}</td>`
+          : `<td></td>`;
+      });
+      footHtml += `</tr>`;
+    });
+  }
+
+  tfoot.innerHTML = footHtml;
 }
 
 // --- Export: Excel / Text / PDF, for both tables ---
@@ -2482,20 +2535,21 @@ function exportTableAsPdf(filename, title, headers, rows, colors){
   doc.write(html);
   doc.close();
 
-  const triggerPrint = () => {
-    try{
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    }catch(e){
-      alert("Could not open the print dialog for PDF export. Please try again, or use \"Export to Word\" instead.");
-    }
-  };
-  // Give the iframe a moment to lay out the table before printing; contentWindow.onload
-  // fires once the doc.write'd content has finished loading in the iframe.
-  if(iframe.contentWindow.document.readyState === "complete"){
-    setTimeout(triggerPrint, 50);
-  } else {
-    iframe.onload = () => setTimeout(triggerPrint, 50);
+  // Call print() synchronously, in the SAME call stack as the click that triggered
+  // this export — no setTimeout/async gap. This table's HTML has no external
+  // resources (no images, fonts, or scripts to fetch), so doc.write()/doc.close()
+  // already leaves it fully parsed and laid out by the time doc.close() returns —
+  // nothing is gained by waiting. A delay here (even a few ms, via setTimeout or an
+  // onload handler) happens in a separate task from the original click, so the
+  // browser no longer treats the print() call as a direct result of the user's
+  // gesture — that's what was causing Chrome's extra "This page is trying to
+  // print — do you want to print this page?" confirmation before the real print
+  // dialog. Calling it immediately keeps it tied to the click and skips that prompt.
+  try{
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }catch(e){
+    alert("Could not open the print dialog for PDF export. Please try again, or use \"Export to Word\" instead.");
   }
 }
 
@@ -2601,12 +2655,16 @@ function getPastPurchasesExportRowColors(resolved, params){
 // grand total) so exports carry the same summary rows shown on screen.
 function buildPastPurchasesExportTable(){
   const params = getPastPurchasesParams();
+  // Body rows mirror exactly what's currently visible on screen (respecting the
+  // "Current Holdings" filter, if it's on); footer totals below always summarize
+  // the FULL list, same as the live table's own tfoot.
+  const visibleRows = lastPastPurchasesVisibleRows || lastPastPurchasesOrderedRows || [];
   const orderedRows = lastPastPurchasesOrderedRows || [];
-  const headers = ["Past Purchases", ...params.map(p => p.label)];
+  const headers = ["Ticker", ...params.map(p => p.label)];
 
   const rows = [];
   const colors = [];
-  orderedRows.forEach(row => {
+  visibleRows.forEach(row => {
     const resolved = resolvePastPurchaseRowValues(row);
     const cells = params.map(p => {
       if(p.computed && p.formula === "salesProfitPP"){
@@ -2653,6 +2711,21 @@ function buildPastPurchasesExportTable(){
     colors.push(rowColors);
   }
 
+  // Grand total, positioned immediately below Total Current Book Value — matches
+  // the live table's tfoot order (the per-month breakdown below is supporting
+  // detail for this number).
+  if(saleProfitParam){
+    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    const row = new Array(headers.length).fill("");
+    const rowColors = new Array(headers.length).fill(null);
+    row[0] = "Total Sale Profit to date";
+    row[colIndex + 1] = (total >= 0 ? "+" : "-") + "$" + Math.abs(total).toFixed(2);
+    rowColors[colIndex + 1] = total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
+    rows.push(row);
+    colors.push(rowColors);
+  }
+
   if(saleProfitParam && dateSaleParam){
     const groups = {};
     orderedRows.forEach(row => {
@@ -2678,18 +2751,6 @@ function buildPastPurchasesExportTable(){
       rows.push(row);
       colors.push(rowColors);
     });
-  }
-
-  if(saleProfitParam){
-    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
-    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-    const row = new Array(headers.length).fill("");
-    const rowColors = new Array(headers.length).fill(null);
-    row[0] = "Total Sale Profit to date";
-    row[colIndex + 1] = (total >= 0 ? "+" : "-") + "$" + Math.abs(total).toFixed(2);
-    rowColors[colIndex + 1] = total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
-    rows.push(row);
-    colors.push(rowColors);
   }
 
   return { headers, rows, colors };
@@ -3894,6 +3955,14 @@ try{
   if(ppSortMode){
     ppSortMode.addEventListener("change", () => {
       ppColumnSortState = null; // dropdown takes back over from any column-header sort
+      renderPastPurchasesTable();
+    });
+  }
+
+  const ppCurrentHoldingsToggle = document.getElementById("ppCurrentHoldingsToggle");
+  if(ppCurrentHoldingsToggle){
+    ppCurrentHoldingsToggle.addEventListener("click", () => {
+      setPpShowCurrentHoldingsOnly(!getPpShowCurrentHoldingsOnly());
       renderPastPurchasesTable();
     });
   }
