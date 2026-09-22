@@ -228,7 +228,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.37 (Portfolio heading recolored to match "Portfolio List:"/"Past Purchases" amber, #facc15)
+      HTML build: v5.38 (Added "Sample Excel for Data Entry" / "Import Excel" tabs above Export to Excel, on both tables)
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
@@ -391,6 +391,12 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Portfolio viewing: —</h2>
     <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
+    <button id="sampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template listing every ticker across ALL your Portfolio Lists, with every fillable parameter as a column, so you can research/complete missing data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="importExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload a filled-in Excel file (matching the Sample Excel's column headers) to pull its values into the currently open Portfolio List — adding any ticker that isn't in it yet.">⬆ Import Excel</button>
+    <input id="importExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="excelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
   <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
     <button id="exportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
     <button id="exportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
@@ -511,6 +517,12 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <button id="ppCurrentHoldingsToggle" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Show only assets that haven't been sold yet (Selling Price = 0)">Current Holdings</button>
     </div>
     <span id="ppListActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
+    <button id="ppSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template listing every asset across ALL your Past Purchases lists, with every fillable parameter as a column, so you can complete missing data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="ppImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload a filled-in Excel file (matching the Sample Excel's column headers) to pull its values into the currently open Past Purchases list — adding any asset that isn't in it yet.">⬆ Import Excel</button>
+    <input id="ppImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="ppExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
   <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
     <button id="ppExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
