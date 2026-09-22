@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.40 (Added "Detailed Update for Selected Assets" — a targeted AI-update flow for hand-picked tickers covering every numeric Portfolio parameter; renamed the original flow to "Brief Update for all Assets")
-console.log("app.js loaded — build v5.40 (Added \"Detailed Update for Selected Assets\"; renamed original flow to \"Brief Update for all Assets\")");
+// APP.JS BUILD: v5.41 (Fixed "Cash Runway (yr)" coming back as 0 from Detailed Update — the generated prompt now tells the AI to answer 99999, this app's "not a cash-runway concern" convention, for a profitable/FCF-positive company instead of guessing 0)
+console.log("app.js loaded — build v5.41 (Fixed Cash Runway (yr) coming back as 0 from Detailed Update for Selected Assets)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -712,6 +712,20 @@ function getDetailedUpdateFields(){
   return getEditableMainColumnDefs().filter(d => d.type === "number");
 }
 
+// A few numeric fields use an app-specific sentinel value instead of a plain
+// "no data" 0 — a generic AI has no way to know that convention, so without a
+// hint it reliably answers a literal 0 for these instead, which then LOOKS
+// like a real (and wrong) value once pasted back in. Cash Runway (yr) is the
+// one that actually ships this way: 28 of the 30 built-in tickers default to
+// cashRunway: 99999, this app's convention for "free-cash-flow positive /
+// not a cash-burning company," and only the couple of genuinely cash-burning
+// names (e.g. early-stage names like IONQ) carry a real number of years. Keyed
+// by BUILTIN_COLUMNS/custom-param id so it still applies if the column is
+// reordered or renamed.
+const DETAILED_UPDATE_FIELD_HINTS = {
+  cashRunway: 'if the company is free-cash-flow positive, profitable, or otherwise not burning cash, write 99999 — this app\'s convention for "not a cash-runway concern." Only give a real number of years for a company that is actually burning cash and could run out of it. Do NOT write 0 for a profitable company.',
+};
+
 function buildDetailedUpdatePrompt(assets){
   if(assets.length === 0){
     return "No requested assets yet — add at least one ticker above first.";
@@ -722,7 +736,11 @@ function buildDetailedUpdatePrompt(assets){
   }
   const fieldLabels = fields.map(f => f.label).join(", ");
   const lines = assets.map(a => `${a.ticker}: ${fieldLabels}`);
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
+  const hints = fields
+    .filter(f => DETAILED_UPDATE_FIELD_HINTS[f.id])
+    .map(f => `- ${f.label}: ${DETAILED_UPDATE_FIELD_HINTS[f.id]}`);
+  const hintBlock = hints.length ? `\n\nNotes on specific fields — read before answering:\n${hints.join("\n")}` : "";
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
 }
 
 function renderDusRequestList(){
