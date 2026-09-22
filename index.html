@@ -228,7 +228,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.38 (Added "Sample Excel for Data Entry" / "Import Excel" tabs above Export to Excel, on both tables) — app.js v5.39 fixes the Finnhub API key not syncing to the cloud
+      HTML build: v5.39 (Added "Detailed Update for Selected Assets" above "Brief Update for all Assets" — pick specific tickers and generate a full-parameter AI prompt for just those) — app.js v5.40
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
@@ -243,7 +243,37 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   </div>
 
   <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
-    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">⚡ Quick Paste Update — copy and paste this to your AI</h2>
+    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">🎯 Detailed Update for Selected Assets — copy and paste this to your AI</h2>
+    <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd; margin-bottom:1rem;">
+      Pick just the ticker(s) you want a <strong>full, detailed</strong> refresh for — every editable numeric parameter currently on your Portfolio table (not the fixed 7-field set in "Brief Update for all Assets" below), for only the asset(s) you add here. Add a ticker below, click "Generate request" to build the prompt, copy it to an AI assistant, then paste its numbered reply back and click "Parse & Update". A ticker not yet on any Portfolio List is added to your current list automatically when its reply is parsed.
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+      <input id="dusTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" style="width:140px;">
+      <input id="dusName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
+      <button id="dusAddBtn" type="button">Add to Request</button>
+    </div>
+    <div id="dusAddStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
+    <div class="chart-note" style="margin-top:0.75rem;">Requested assets (click × to remove):</div>
+    <div id="dusRequestList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;"></div>
+    <div style="margin-bottom:1.25rem;">
+      <button id="dusGenerateBtn" type="button">Generate request</button>
+    </div>
+    <label for="dusPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
+    <textarea id="dusPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.5rem; margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
+      <span id="dusPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+    </div>
+    <label for="dusPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
+    <textarea id="dusPasteInput" rows="4" placeholder="e.g. 245.00, 1.85, 320.5, 0.72, 850.4, 227.50, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusParseBtn" type="button">Parse & Update</button>
+      <span id="dusParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+  </div>
+
+  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
+    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">⚡ Brief Update for all Assets — copy and paste this to your AI</h2>
     <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd; margin-bottom:1rem;">
       No Finnhub key, or want a second source? The box below lists every ticker across <strong>all</strong> your Portfolio Lists together with the fields to update (Consensus Target Price, PEG Ratio, FCF ($M), Dividend Yield (%), Market Cap ($B), Current Price, Forward P/E), in a fixed order. Copy it and paste it to an AI assistant (Claude, ChatGPT, Gemini, etc.) — it can research current values and reply with just the numbers, comma-separated, in that same order. Paste that reply into the second box and click "Parse & Update" — each ticker's values update everywhere it appears, across every Portfolio List, the same way "Fetch live data" does. (Dividend Yield, Market Cap, and Forward P/E are added as columns automatically the first time you use this, if they aren't already on your table.)
     </div>
