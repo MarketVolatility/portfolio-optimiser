@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.44 (Detailed Update for Selected Assets: "Requested assets" is now a ✓/✕ checklist of every asset across every Portfolio List, grey/blue/red, instead of a hand-typed queue; marking an asset ✓ included now adds it to the currently open Portfolio List immediately, not just at Parse & Update)
-console.log("app.js loaded — build v5.44 (Detailed Update: ✓/✕ checklist of all Portfolio List assets; ✓ included now adds to the current list right away)");
+// APP.JS BUILD: v5.45 (Brand-new users now start with a smaller 9-ticker Sample List (NVDA, MU, AMZN, TSM, GOOGL, SNDK, PLTR, META, AAPL) and a specific default column order/set, seeded once via initializeNewUserDefaults(); existing users' lists, columns, and data are never touched)
+console.log("app.js loaded — build v5.45 (New-user defaults: smaller 9-ticker Sample List + requested column layout, existing users unaffected)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -4929,6 +4929,62 @@ try{
 }catch(err){
   console.error("Failed to apply collapsed section state:", err);
 }
+
+// --- New-user starting defaults ---
+// A smaller starting Sample List and a specific default column layout, for a
+// brand-new visitor only — never for anyone who has already used this app (on
+// this device or, via cloud sync, on any device). Detection: "portfolioLists"
+// in localStorage not existing at all is exactly what marks a first-ever visit
+// elsewhere in this file too (see getAllLists()'s own "if(!lists)" branch), so
+// the same check is used here. This runs once, synchronously, at script load —
+// before the login/register flow's own pullSnapshotFromCloud()/
+// pushSnapshotToCloud() can run (those only fire after the user submits the
+// login/register form, which takes real user interaction, i.e. well after this
+// point) — so a genuinely new account still starts from this smaller default,
+// while an existing account's cloud data (pulled right after sign-in) correctly
+// overwrites it, and nothing here ever touches an existing local user's data.
+const NEW_USER_STARTING_TICKERS = ["NVDA", "MU", "AMZN", "TSM", "GOOGL", "SNDK", "PLTR", "META", "AAPL"];
+
+// The 7 optional preset columns the requested starting layout calls for that
+// aren't built-in columns — added here with fixed ids (rather than through
+// addCustomParam(), whose ids include a timestamp) so the column order below
+// can reference them by a stable, predictable id.
+const NEW_USER_DEFAULT_CUSTOM_PARAMS = [
+  { id: "custom_actual_upside_pct", label: "Actual Upside (%)", type: "number", defaultValue: 0, computed: true, formula: "actualUpsidePct" },
+  { id: "custom_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
+  { id: "custom_avg_purchase_price", label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
+  { id: "custom_to_buy_price", label: "To Buy Price", type: "number", defaultValue: 0 },
+  { id: "custom_dividend_yield_pct", label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
+  { id: "custom_market_cap_b", label: "Market Cap ($B)", type: "number", defaultValue: 0, finnhubField: ["marketCapitalization"], finnhubUnitDivisor: 1000 },
+  { id: "custom_forward_pe", label: "Forward P/E", type: "number", defaultValue: 0, finnhubField: ["peForward", "forwardPE"] },
+];
+
+// Every BUILTIN_COLUMNS id used anywhere in runMatrixOptimization()'s scoring
+// (upside via targetPrice/currentPrice, revenueGrowth, beta, stability, pe,
+// netMargin, debtToEquity, freeCashFlow, pegRatio, roa, cashRunway) already has
+// an explicit slot below — nothing scoring-relevant needed appending at the end.
+const NEW_USER_DEFAULT_COLUMN_ORDER = [
+  "name", "allocationWeight", "calculatedUpside",
+  "custom_actual_upside_pct", "custom_units_purchased", "custom_avg_purchase_price",
+  "currentPrice", "targetPrice", "custom_to_buy_price",
+  "stability", "roa", "pe", "revenueGrowth", "pegRatio", "debtToEquity",
+  "freeCashFlow", "cashAndEquivalents", "cashRunway", "beta", "netMargin",
+  "custom_dividend_yield_pct", "custom_market_cap_b", "custom_forward_pe",
+];
+
+function initializeNewUserDefaults(){
+  try{
+    if(localStorage.getItem("portfolioLists") !== null) return; // not a first-ever visit — leave everything alone
+    localStorage.setItem("customParams", JSON.stringify(NEW_USER_DEFAULT_CUSTOM_PARAMS));
+    localStorage.setItem("columnOrder", JSON.stringify(NEW_USER_DEFAULT_COLUMN_ORDER));
+    const removedTickers = marketData.map(a => a.ticker).filter(t => !NEW_USER_STARTING_TICKERS.includes(t));
+    const lists = {
+      [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers }
+    };
+    localStorage.setItem("portfolioLists", JSON.stringify(lists));
+  }catch(e){ /* localStorage unavailable — the app's own existing defaults still apply */ }
+}
+initializeNewUserDefaults();
 
 // On page load, check if a session already exists (e.g. returning to the app
 // in the same browser) and open the dashboard automatically if so. Otherwise
