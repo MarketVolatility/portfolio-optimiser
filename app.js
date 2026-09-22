@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.42 ("Cash Runway (yr)" is now a COMPUTED column — Cash & Equivalents ($M) ÷ |FCF| when FCF is negative, else N/A — instead of a number asked of an AI; added the new "Cash & Equivalents ($M)" editable column it's computed from)
-console.log("app.js loaded — build v5.42 (Cash Runway (yr) is now computed from a new Cash & Equivalents ($M) column, not AI-supplied)");
+// APP.JS BUILD: v5.43 (Cash Runway (yr) now distinguishes "∞ (profitable)" — income covers spending, so cash never runs out, per the metric's own definition — from "N/A" — burning cash but Cash & Equivalents ($M) not yet on file — instead of showing an ambiguous N/A for both)
+console.log("app.js loaded — build v5.43 (Cash Runway now shows ∞ for profitable companies vs N/A for cash-burners missing Cash & Equivalents data)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2862,7 +2862,11 @@ function getMainTableExportValue(item, colDef){
   if(colDef.id === "stability") return item.stability;
   if(colDef.id === "calculatedUpside") return (item.calculatedUpside >= 0 ? "+" : "") + (item.calculatedUpside * 100).toFixed(1) + "%";
   if(colDef.id === "allocationWeight") return item.allocationWeight.toFixed(2) + "%";
-  if(colDef.id === "cashRunway") return item.cashRunway >= 99999 ? "N/A" : item.cashRunway.toFixed(1);
+  if(colDef.id === "cashRunway"){
+    if(item.freeCashFlow >= 0) return "Infinite (profitable)";
+    if(item.cashRunway >= 99999) return "N/A (needs Cash & Equivalents)";
+    return item.cashRunway.toFixed(1);
+  }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
@@ -3771,17 +3775,25 @@ function renderCellHTML(colDef, item, badge){
     return `<td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>`;
   }
   if(colDef.id === 'cashRunway'){
-    // Computed, read-only — see computeCashRunway(). 99999 is the "not a cash-
-    // runway concern" sentinel (FCF-positive, or no Cash & Equivalents on file
-    // yet), shown as N/A rather than a literal five-digit number.
-    const isNA = item.cashRunway >= 99999;
-    const display = isNA ? 'N/A' : `${item.cashRunway.toFixed(1)} yr`;
-    const color = isNA ? 'var(--text-secondary)' : (item.cashRunway < 1 ? '#ef4444' : (item.cashRunway < 2 ? 'var(--amber)' : 'inherit'));
-    const title = isNA
-      ? (item.freeCashFlow >= 0
-        ? 'Computed: free-cash-flow positive, so not treated as a cash-runway risk.'
-        : 'Computed: no "Cash & Equivalents ($M)" on file for this ticker yet, so not treated as a cash-runway risk until you fill that in.')
-      : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ |FCF| (${Math.abs(item.freeCashFlow)}) = ${item.cashRunway.toFixed(2)} years of runway at the current burn rate.`;
+    // Computed, read-only — see computeCashRunway(). The 99999 sentinel covers
+    // two DIFFERENT situations that read very differently to a user, so they
+    // get distinct labels instead of both being an unexplained "N/A":
+    //   - FCF >= 0: income covers spending, so under the definition ("years
+    //     before completely running out of cash, assuming current spending and
+    //     income remain constant") cash mathematically never runs out — this is
+    //     a genuine, permanent "∞ (profitable)", not missing data.
+    //   - FCF < 0 but no "Cash & Equivalents ($M)" on file: the company IS
+    //     burning cash, so a real number exists in principle, it's just not
+    //     computable yet — "N/A — enter Cash & Equivalents" prompts the fix.
+    const isProfitable = item.freeCashFlow >= 0;
+    const isMissingData = !isProfitable && item.cashRunway >= 99999;
+    const display = isProfitable ? '∞' : (isMissingData ? 'N/A' : `${item.cashRunway.toFixed(1)} yr`);
+    const color = (isProfitable || isMissingData) ? 'var(--text-secondary)' : (item.cashRunway < 1 ? '#ef4444' : (item.cashRunway < 2 ? 'var(--amber)' : 'inherit'));
+    const title = isProfitable
+      ? 'Computed: free-cash-flow positive — income covers spending, so cash mathematically never runs out under current conditions. This is a genuine infinite runway, not missing data.'
+      : (isMissingData
+        ? 'This company IS burning cash (negative FCF), but no "Cash & Equivalents ($M)" is on file for it yet, so a real number of years can\'t be computed. Fill in Cash & Equivalents ($M) to get one.'
+        : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ |FCF| (${Math.abs(item.freeCashFlow)}) = ${item.cashRunway.toFixed(2)} years of runway at the current burn rate.`);
     return `<td style="color:${color}; font-weight:600;" title="${escAttr(title)}">${display}</td>`;
   }
   if(colDef.isCustom){
