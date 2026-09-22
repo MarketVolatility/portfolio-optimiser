@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.43 (Cash Runway (yr) now distinguishes "∞ (profitable)" — income covers spending, so cash never runs out, per the metric's own definition — from "N/A" — burning cash but Cash & Equivalents ($M) not yet on file — instead of showing an ambiguous N/A for both)
-console.log("app.js loaded — build v5.43 (Cash Runway now shows ∞ for profitable companies vs N/A for cash-burners missing Cash & Equivalents data)");
+// APP.JS BUILD: v5.44 (Detailed Update for Selected Assets: "Requested assets" is now a ✓/✕ checklist of every asset across every Portfolio List, grey/blue/red, instead of a hand-typed queue; marking an asset ✓ included now adds it to the currently open Portfolio List immediately, not just at Parse & Update)
+console.log("app.js loaded — build v5.44 (Detailed Update: ✓/✕ checklist of all Portfolio List assets; ✓ included now adds to the current list right away)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -22,7 +22,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusRequestedAssets"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates"];
 
 // --- Desktop/Mobile interface toggle ---
 // A manual, per-device override (deliberately NOT in SYNC_KEYS — a phone and a
@@ -687,21 +687,67 @@ function wireUpQuickPasteUpdate(){
 
 // --- "Detailed Update for Selected Assets" ---
 // Same copy/paste-to-an-AI idea as the Brief Update above, but scoped to a
-// hand-picked set of tickers (kept in localStorage under DUS_STORAGE_KEY, so
-// the request list survives a reload/re-login) and covering EVERY numeric
+// hand-picked set of tickers (checked ✓ included/✕ excluded per-asset, kept in
+// localStorage under DUS_STATES_KEY so the choices survive a reload/re-login)
+// and covering EVERY numeric
 // parameter currently on the Portfolio table — built-in and custom alike —
 // rather than the fixed 7-field QPU_FIELDS set. Non-numeric columns (Company
 // Name, Stability, any text/date custom param) are left out since the AI
 // reply is numbers-only, matching the prompt's own instructions.
-const DUS_STORAGE_KEY = "dusRequestedAssets";
+// Every asset across every Portfolio List is shown as a checklist row here —
+// { [ticker]: "included" | "excluded" } — rather than a hand-typed queue, so a
+// ticker added anywhere else in the app shows up automatically. A ticker with
+// no entry at all (never toggled) is "undecided" and treated the same as
+// excluded for request-generation purposes, but rendered with both the ✕ and
+// ✓ icons grey rather than either one colored, so it reads as "not decided
+// yet" rather than "actively excluded."
+const DUS_STATES_KEY = "dusAssetStates";
 
-function getDusRequestedAssets(){
-  try{ return JSON.parse(localStorage.getItem(DUS_STORAGE_KEY) || "[]"); }
-  catch(e){ return []; }
+function getDusAssetStates(){
+  try{ return JSON.parse(localStorage.getItem(DUS_STATES_KEY) || "{}"); }
+  catch(e){ return {}; }
 }
-function saveDusRequestedAssets(list){
-  try{ localStorage.setItem(DUS_STORAGE_KEY, JSON.stringify(list)); }
+function saveDusAssetStates(states){
+  try{ localStorage.setItem(DUS_STATES_KEY, JSON.stringify(states)); }
   catch(e){ /* localStorage unavailable */ }
+}
+function setDusAssetState(ticker, state){
+  const states = getDusAssetStates();
+  states[ticker] = state;
+  saveDusAssetStates(states);
+}
+
+// Same source ticker list as the Brief Update below (every ticker across every
+// Portfolio List, deduped), but carrying each one's current display name too,
+// since the checklist shows both.
+function getAllPortfolioAssetsForDetailedUpdate(){
+  const seen = new Set();
+  const rows = [];
+  Object.values(getAllLists()).forEach(list => {
+    getWorkingData(list).forEach(asset => {
+      if(!seen.has(asset.ticker)){
+        seen.add(asset.ticker);
+        const ov = asset._overrides || {};
+        rows.push({ ticker: asset.ticker, name: ov.name !== undefined ? ov.name : asset.name });
+      }
+    });
+  });
+  rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
+  return rows;
+}
+
+function getDusIncludedAssets(){
+  const states = getDusAssetStates();
+  return getAllPortfolioAssetsForDetailedUpdate().filter(a => states[a.ticker] === "included");
+}
+
+// addAsset is idempotent — it falls back to any existing name/override rather
+// than clobbering it (the same behavior Import Excel already relies on for a
+// ticker that already has data elsewhere) — so it's safe to call every time an
+// asset is marked "included," whether or not it's already a member of the
+// currently open Portfolio List.
+function ensureTickerInActiveList(ticker, name){
+  addAsset({ ticker, name });
 }
 
 // getEditableMainColumnDefs is defined further below (with the Excel sample/import
@@ -743,21 +789,32 @@ function buildDetailedUpdatePrompt(assets){
 function renderDusRequestList(){
   const container = document.getElementById("dusRequestList");
   if(!container) return;
-  const assets = getDusRequestedAssets();
+  const assets = getAllPortfolioAssetsForDetailedUpdate();
+  const states = getDusAssetStates();
   container.innerHTML = "";
   if(assets.length === 0){
-    container.innerHTML = `<span style="color:var(--text-secondary);">No assets requested yet.</span>`;
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets on any Portfolio List yet — add one below.</span>`;
     return;
   }
   assets.forEach(a => {
-    const chip = document.createElement("div");
-    chip.className = "remove-chip";
-    chip.innerHTML = `<span>${a.ticker}</span><button data-ticker="${a.ticker}" title="Remove ${a.ticker} from the request">&times;</button>`;
-    chip.querySelector("button").addEventListener("click", () => {
-      saveDusRequestedAssets(getDusRequestedAssets().filter(x => x.ticker !== a.ticker));
-      renderDusRequestList();
+    const state = states[a.ticker]; // "included" | "excluded" | undefined (undecided)
+    const row = document.createElement("div");
+    row.className = "remove-chip";
+    row.innerHTML = `<span>${a.ticker} — ${a.name || a.ticker}</span>` +
+      `<button data-ticker="${a.ticker}" data-state="excluded" title="Exclude ${a.ticker} from the request" style="color:${state === 'excluded' ? '#ef4444' : 'var(--text-secondary)'};">&#10007;</button>` +
+      `<button data-ticker="${a.ticker}" data-state="included" title="Include ${a.ticker} in the request" style="color:${state === 'included' ? 'var(--accent-blue)' : 'var(--text-secondary)'};">&#10003;</button>`;
+    row.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const newState = btn.getAttribute("data-state");
+        setDusAssetState(a.ticker, newState);
+        if(newState === "included"){
+          ensureTickerInActiveList(a.ticker, a.name);
+          if(typeof renderRemoveList === "function") renderRemoveList();
+        }
+        renderDusRequestList();
+      });
     });
-    container.appendChild(chip);
+    container.appendChild(row);
   });
 }
 
@@ -767,6 +824,7 @@ function wireUpDetailedUpdate(){
   const nameInput = document.getElementById("dusName");
   const addStatus = document.getElementById("dusAddStatus");
   const generateBtn = document.getElementById("dusGenerateBtn");
+  const refreshBtn = document.getElementById("dusRefreshBtn");
   const copyBtn = document.getElementById("dusCopyBtn");
   const parseBtn = document.getElementById("dusParseBtn");
   const promptBox = document.getElementById("dusPromptBox");
@@ -785,33 +843,35 @@ function wireUpDetailedUpdate(){
       addStatus.style.color = "var(--amber)";
       return;
     }
-    const assets = getDusRequestedAssets();
-    const existing = assets.find(a => a.ticker === ticker);
-    if(existing){
-      existing.name = name;
-      addStatus.textContent = `${ticker} is already in the request — name updated.`;
-      addStatus.style.color = "var(--amber)";
-    }else{
-      assets.push({ ticker, name });
-      addStatus.textContent = `${ticker} added to the request.`;
-      addStatus.style.color = "var(--emerald)";
-    }
-    saveDusRequestedAssets(assets);
+    // Adding here means "include this in the request" — mark it included and
+    // drop it onto the currently open Portfolio List right away, same as
+    // checking ✓ on an asset already in the checklist below.
+    setDusAssetState(ticker, "included");
+    ensureTickerInActiveList(ticker, name);
+    if(typeof renderRemoveList === "function") renderRemoveList();
     renderDusRequestList();
+    addStatus.textContent = `${ticker} added to your current list and marked ✓ included in the request.`;
+    addStatus.style.color = "var(--emerald)";
     tickerInput.value = "";
     nameInput.value = "";
   });
 
   generateBtn.addEventListener("click", () => {
-    const assets = getDusRequestedAssets();
+    const assets = getDusIncludedAssets();
     promptBox.value = buildDetailedUpdatePrompt(assets);
     if(assets.length === 0){
-      promptStatus.textContent = "Add at least one ticker to the request first.";
+      promptStatus.textContent = "Mark at least one asset ✓ included below first (or add a new one above).";
       promptStatus.style.color = "var(--amber)";
     }else{
       promptStatus.textContent = `Request generated for ${assets.length} asset(s).`;
       promptStatus.style.color = "var(--emerald)";
     }
+  });
+
+  if(refreshBtn) refreshBtn.addEventListener("click", () => {
+    renderDusRequestList();
+    addStatus.textContent = "Asset list refreshed.";
+    addStatus.style.color = "var(--text-secondary)";
   });
 
   if(copyBtn) copyBtn.addEventListener("click", async () => {
@@ -827,9 +887,9 @@ function wireUpDetailedUpdate(){
   });
 
   parseBtn.addEventListener("click", () => {
-    const assets = getDusRequestedAssets();
+    const assets = getDusIncludedAssets();
     if(assets.length === 0){
-      parseStatus.textContent = "No requested assets yet — add at least one ticker above first.";
+      parseStatus.textContent = "No assets marked ✓ included yet — check at least one above, or add a new one.";
       parseStatus.style.color = "var(--amber)";
       return;
     }
@@ -858,14 +918,11 @@ function wireUpDetailedUpdate(){
 
     assets.forEach((asset, i) => {
       const values = numbers.slice(i * fieldCount, i * fieldCount + fieldCount);
-      // A requested ticker might not be on any Portfolio List yet (e.g. the user
-      // is using this to fully data-enter a brand-new stock) — add it to the
-      // active list so the values just pasted in aren't orphaned in
-      // globalOverrides with nowhere to display.
-      const existsSomewhere = Object.values(getAllLists()).some(list => getWorkingData(list).some(a => a.ticker === asset.ticker));
-      if(!existsSomewhere){
-        addAsset({ ticker: asset.ticker, name: asset.name || asset.ticker, targetPrice: 0, stability: "Med" });
-      }
+      // Marking an asset ✓ included already drops it onto the active list at
+      // that moment (see setDusAssetState/ensureTickerInActiveList above) — this
+      // is just a defensive, idempotent re-check in case its inclusion state was
+      // set in an earlier session before this behavior existed.
+      ensureTickerInActiveList(asset.ticker, asset.name);
       fields.forEach((f, j) => setGlobalOverride(asset.ticker, f.id, values[j]));
     });
 
@@ -881,6 +938,7 @@ function wireUpDetailedUpdate(){
     if(typeof renderColumnOrderList === "function") renderColumnOrderList();
     if(typeof renderCustomParamList === "function") renderCustomParamList();
     if(typeof renderRemoveList === "function") renderRemoveList();
+    renderDusRequestList();
 
     pasteInput.value = "";
     parseStatus.textContent = `Updated ${fieldCount} parameter(s) for ${assets.length} requested asset(s), applied across every Portfolio List they appear on.`;
