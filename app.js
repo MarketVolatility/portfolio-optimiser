@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.37 (Portfolio heading recolored to match "Portfolio List:"/"Past Purchases" amber, #facc15)
-console.log("app.js loaded — build v5.37 (Portfolio heading recolored to match \"Portfolio List:\"/\"Past Purchases\" amber, #facc15)");
+// APP.JS BUILD: v5.38 ("Sample Excel for Data Entry" + "Import Excel" round-trip, on both tables)
+console.log("app.js loaded — build v5.38 (\"Sample Excel for Data Entry\" + \"Import Excel\" round-trip, on both tables)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2937,6 +2937,338 @@ function wireUpExportButtons(){
   });
 }
 
+// --- "Sample Excel for Data Entry" / "Import Excel" ---
+// A round-trippable companion to the plain Excel export above. The sample file
+// lists every ticker/asset across ALL of a table's lists (not just the one
+// currently open) so research can be done once and spread everywhere that ticker
+// appears, together with every parameter that can actually be typed in — built-in
+// and custom columns, but NOT the read-only computed ones (Implied Upside, Sale
+// Profit, etc.), since there's nothing to "fill in" there and re-importing them
+// would just be ignored anyway. "Import Excel" reads that same shape back —
+// matched by column HEADER text, not position, so re-ordering or deleting columns
+// in the spreadsheet is safe, and any header it doesn't recognize is reported
+// rather than silently dropped — and writes every non-blank cell it finds into
+// the CURRENTLY OPEN list, adding any ticker/asset that isn't in it yet. A blank
+// cell is left alone (never wipes an existing value to 0/""), so a partially
+// filled-in sheet is safe to re-import.
+
+function getEditableMainColumnDefs(){
+  // Same column set the main table itself renders (getAllColumnDefs), minus the
+  // computed-only ones (Implied Upside, Optimized Weight Allocation, and any
+  // computed custom param) — those are always derived, never typed in.
+  return getAllColumnDefs().filter(d => !d.computed);
+}
+function getEditablePastPurchasesParams(){
+  return getPastPurchasesParams().filter(p => !p.computed);
+}
+
+function buildSampleExcelForDataEntry_Portfolio(){
+  const defs = getEditableMainColumnDefs();
+  // Prefer the active list's current column order (for a familiar left-to-right
+  // layout), then append anything editable that order left out (e.g. a hidden
+  // built-in column, or one only used on a different list).
+  const order = getColumnOrder().filter(id => defs.some(d => d.id === id));
+  const orderedDefs = [...order.map(id => defs.find(d => d.id === id)), ...defs.filter(d => !order.includes(d.id))];
+  const headers = ["Ticker", ...orderedDefs.map(d => d.label)];
+  const tickers = getQuickPasteTickers(); // deduped + alphabetical, across every Portfolio List
+  const overrides = getGlobalOverrides();
+  const rows = tickers.map(ticker => {
+    const builtin = getResolvedBuiltinAssetValues(ticker) || {};
+    const ov = overrides[ticker] || {};
+    return [ticker, ...orderedDefs.map(d => {
+      if(d.isCustom) return ov[d.id] !== undefined ? ov[d.id] : "";
+      return builtin[d.id] !== undefined ? builtin[d.id] : "";
+    })];
+  });
+  return { headers, rows };
+}
+
+// Every unique asset symbol across every Past Purchases list (an asset can repeat
+// within/across lists for separate purchase rounds — this dedupes to one row per
+// symbol for data-entry purposes, using whichever row is encountered first for
+// its current values).
+function getAllPastPurchasesAssetRows(){
+  const seen = new Set();
+  const ordered = [];
+  Object.values(getAllPastPurchasesLists()).forEach(list => {
+    (list.rows || []).forEach(row => {
+      if(row.asset && !seen.has(row.asset)){
+        seen.add(row.asset);
+        ordered.push(row);
+      }
+    });
+  });
+  ordered.sort((a, b) => a.asset.localeCompare(b.asset));
+  return ordered;
+}
+
+function buildSampleExcelForDataEntry_PastPurchases(){
+  const params = getEditablePastPurchasesParams();
+  const headers = ["Asset", ...params.map(p => p.label)];
+  const rows = getAllPastPurchasesAssetRows().map(row => {
+    const values = row.values || {};
+    return [row.asset, ...params.map(p => values[p.id] !== undefined ? values[p.id] : "")];
+  });
+  return { headers, rows };
+}
+
+// Converts one imported cell into what setGlobalOverride/setPastPurchaseValue
+// expect for that column's type: numbers stay numbers, dates become "YYYY-MM-DD"
+// strings (matching every date input elsewhere in this app), everything else is a
+// trimmed string. Returns undefined for a genuinely blank cell or an unparseable
+// number, so the caller can skip it (leaving any existing value untouched) rather
+// than overwriting good data with 0/"".
+function parseImportedCellValue(raw, type){
+  if(raw === undefined || raw === null) return undefined;
+  if(typeof raw === "string" && raw.trim() === "") return undefined;
+  if(type === "number"){
+    const n = Number(raw);
+    return isFinite(n) ? n : undefined;
+  }
+  if(type === "date"){
+    // Formats using LOCAL date components (never toISOString, which converts to
+    // UTC first and can shift the calendar day backward/forward across midnight
+    // depending on the browser's timezone) so a purchase date typed as "Jan 15"
+    // always comes back as "Jan 15", not "Jan 14".
+    const toLocalYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if(raw instanceof Date && !isNaN(raw)) return toLocalYmd(raw);
+    const s = String(raw).trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const parsed = new Date(s);
+    return isNaN(parsed) ? s : toLocalYmd(parsed);
+  }
+  return String(raw).trim();
+}
+
+// Reads the first sheet of an uploaded .xlsx/.xls File as an array-of-arrays
+// (header row first), loading the same SheetJS library (with the same multi-CDN
+// retry) the Excel EXPORT already depends on, since parsing needs the same
+// XLSX global.
+async function readWorkbookFirstSheetRows(file){
+  const ok = await ensureLibraryLoaded(() => typeof XLSX !== "undefined", EXPORT_LIB_URLS.xlsx);
+  if(!ok){
+    throw new Error('Excel import needs its helper library, and it could not be loaded from any available source just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net, cdnjs.cloudflare.com, or unpkg.com) and try again.');
+  }
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  if(!sheetName) return [];
+  return XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, blankrows: false, defval: "" });
+}
+
+// Applies an imported array-of-arrays into the CURRENTLY OPEN Portfolio List.
+// Column 0 is always "Ticker"; every other header is matched (via the same
+// normalizeParamLabel used for the "+/- Parameter" duplicate-column guard, so
+// aliasing like "FCF ($M)"/"Free Cash Flow" still lines up) against this table's
+// editable columns. A ticker not yet in the open list is added to it first.
+function importExcelIntoActivePortfolioList(rowsAoA){
+  if(!rowsAoA || rowsAoA.length === 0) return { tickersAdded: 0, tickersUpdated: 0, valuesApplied: 0, unmatchedHeaders: [] };
+  const [headerRow, ...dataRows] = rowsAoA;
+  const editableDefs = getEditableMainColumnDefs();
+  const colMap = [];
+  const unmatchedHeaders = [];
+  headerRow.forEach((h, idx) => {
+    if(idx === 0){ colMap.push(null); return; } // "Ticker" column
+    const norm = normalizeParamLabel(String(h));
+    const match = editableDefs.find(d => normalizeParamLabel(d.label) === norm);
+    colMap.push(match || null);
+    if(!match && String(h).trim() !== "") unmatchedHeaders.push(String(h));
+  });
+
+  const existingTickers = new Set(getWorkingData().map(a => a.ticker));
+  let tickersAdded = 0, tickersUpdated = 0, valuesApplied = 0;
+
+  dataRows.forEach(rowArr => {
+    const ticker = String(rowArr[0] || "").trim().toUpperCase();
+    if(!ticker) return;
+
+    if(existingTickers.has(ticker)){
+      tickersUpdated++;
+    } else {
+      addAsset({ ticker }); // no name passed -> addAsset falls back to any existing override/base name, or the ticker itself
+      existingTickers.add(ticker);
+      tickersAdded++;
+    }
+
+    colMap.forEach((def, idx) => {
+      if(!def) return;
+      let value = parseImportedCellValue(rowArr[idx], def.type);
+      if(value === undefined) return;
+      if(def.options && typeof value === "string"){
+        // e.g. Stability's dropdown options — accept any casing the user typed.
+        const matchOpt = def.options.find(o => o.toLowerCase() === value.toLowerCase());
+        if(matchOpt) value = matchOpt;
+      }
+      setGlobalOverride(ticker, def.id, value);
+      valuesApplied++;
+    });
+  });
+
+  return { tickersAdded, tickersUpdated, valuesApplied, unmatchedHeaders: [...new Set(unmatchedHeaders)] };
+}
+
+// Same idea for Past Purchases, applied into the currently open Past Purchases
+// list. Column 0 is always "Asset". An asset symbol already present as a row in
+// this list gets its FIRST matching row updated; one that isn't gets a brand new
+// row added (via addPastPurchaseRow, same as the "+/- Asset" panel — including
+// the same one-time pull of matching data from the Portfolio Lists table).
+function importExcelIntoActivePastPurchasesList(rowsAoA){
+  if(!rowsAoA || rowsAoA.length === 0) return { assetsAdded: 0, assetsUpdated: 0, valuesApplied: 0, unmatchedHeaders: [] };
+  const [headerRow, ...dataRows] = rowsAoA;
+  const editableParams = getEditablePastPurchasesParams();
+  const colMap = [];
+  const unmatchedHeaders = [];
+  headerRow.forEach((h, idx) => {
+    if(idx === 0){ colMap.push(null); return; } // "Asset" column
+    const norm = normalizeParamLabel(String(h));
+    const match = editableParams.find(p => normalizeParamLabel(p.label) === norm);
+    colMap.push(match || null);
+    if(!match && String(h).trim() !== "") unmatchedHeaders.push(String(h));
+  });
+
+  const knownAssetRowIds = {}; // asset -> rowId, seeded from the open list and grown as new rows are added below
+  getPastPurchasesRows().forEach(r => { if(r.asset && knownAssetRowIds[r.asset] === undefined) knownAssetRowIds[r.asset] = r.id; });
+  let assetsAdded = 0, assetsUpdated = 0, valuesApplied = 0;
+
+  dataRows.forEach(rowArr => {
+    const asset = String(rowArr[0] || "").trim().toUpperCase();
+    if(!asset) return;
+
+    let rowId = knownAssetRowIds[asset];
+    if(rowId !== undefined){
+      assetsUpdated++;
+    } else {
+      rowId = addPastPurchaseRow(asset);
+      pullMainTableDataIntoPastPurchases(rowId, asset);
+      knownAssetRowIds[asset] = rowId;
+      assetsAdded++;
+    }
+
+    colMap.forEach((param, idx) => {
+      if(!param) return;
+      const value = parseImportedCellValue(rowArr[idx], param.type);
+      if(value === undefined) return;
+      setPastPurchaseValue(rowId, param.id, value);
+      valuesApplied++;
+    });
+  });
+
+  return { assetsAdded, assetsUpdated, valuesApplied, unmatchedHeaders: [...new Set(unmatchedHeaders)] };
+}
+
+function wireUpSampleAndImportExcelButtons(){
+  // --- Portfolio Lists ---
+  const sampleBtn = document.getElementById("sampleExcelBtn");
+  const importBtn = document.getElementById("importExcelBtn");
+  const importInput = document.getElementById("importExcelFileInput");
+  const statusEl = document.getElementById("excelDataEntryStatus");
+
+  if(sampleBtn){
+    sampleBtn.addEventListener("click", () => {
+      const { headers, rows } = buildSampleExcelForDataEntry_Portfolio();
+      exportTableAsExcel("Sample_Data_Entry.xlsx", "Data Entry", headers, rows);
+      if(statusEl){
+        statusEl.textContent = rows.length === 0
+          ? "No tickers yet — add at least one asset to a Portfolio List first."
+          : `Downloaded a template covering ${rows.length} ticker(s) across every Portfolio List.`;
+        statusEl.style.color = rows.length === 0 ? "var(--amber)" : "var(--emerald)";
+      }
+    });
+  }
+
+  if(importBtn && importInput){
+    importBtn.addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", async () => {
+      const file = importInput.files && importInput.files[0];
+      importInput.value = ""; // allow re-selecting the exact same file later
+      if(!file) return;
+      if(statusEl){ statusEl.textContent = "Reading file…"; statusEl.style.color = "var(--text-secondary)"; }
+      try{
+        const rowsAoA = await readWorkbookFirstSheetRows(file);
+        const result = importExcelIntoActivePortfolioList(rowsAoA);
+        runMatrixOptimization();
+        renderRemoveList();
+        renderListSelector();
+        if(statusEl){
+          if(result.tickersAdded + result.tickersUpdated === 0){
+            statusEl.textContent = "No rows with a Ticker were found in that file.";
+            statusEl.style.color = "var(--amber)";
+          } else {
+            const unmatchedNote = result.unmatchedHeaders.length
+              ? ` ${result.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${result.unmatchedHeaders.join(", ")}.`
+              : "";
+            statusEl.textContent = `Imported into "${getActiveList().name}": ${result.tickersAdded} new ticker(s), ${result.tickersUpdated} existing ticker(s) touched, ${result.valuesApplied} value(s) applied.${unmatchedNote}`;
+            statusEl.style.color = "var(--emerald)";
+          }
+        }
+      }catch(err){
+        console.error("Portfolio Excel import failed:", err);
+        if(statusEl){
+          statusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers).";
+          statusEl.style.color = "#ef4444";
+        }
+      }
+    });
+  }
+
+  // --- Past Purchases ---
+  const ppSampleBtn = document.getElementById("ppSampleExcelBtn");
+  const ppImportBtn = document.getElementById("ppImportExcelBtn");
+  const ppImportInput = document.getElementById("ppImportExcelFileInput");
+  const ppStatusEl = document.getElementById("ppExcelDataEntryStatus");
+
+  if(ppSampleBtn){
+    ppSampleBtn.addEventListener("click", () => {
+      const { headers, rows } = buildSampleExcelForDataEntry_PastPurchases();
+      exportTableAsExcel("Past_Purchases_Sample_Data_Entry.xlsx", "Data Entry", headers, rows);
+      if(ppStatusEl){
+        ppStatusEl.textContent = rows.length === 0
+          ? "No assets yet — add at least one asset to a Past Purchases list first."
+          : `Downloaded a template covering ${rows.length} asset(s) across every Past Purchases list.`;
+        ppStatusEl.style.color = rows.length === 0 ? "var(--amber)" : "var(--emerald)";
+      }
+    });
+  }
+
+  if(ppImportBtn && ppImportInput){
+    ppImportBtn.addEventListener("click", () => ppImportInput.click());
+    ppImportInput.addEventListener("change", async () => {
+      const file = ppImportInput.files && ppImportInput.files[0];
+      ppImportInput.value = "";
+      if(!file) return;
+      if(ppStatusEl){ ppStatusEl.textContent = "Reading file…"; ppStatusEl.style.color = "var(--text-secondary)"; }
+      try{
+        const rowsAoA = await readWorkbookFirstSheetRows(file);
+        const result = importExcelIntoActivePastPurchasesList(rowsAoA);
+        renderPastPurchasesTickerList();
+        renderPastPurchasesParamList();
+        renderPastPurchasesTable();
+        renderPastPurchasesColumnOrderList();
+        renderPastPurchasesRowOrderList();
+        renderPPListSelector();
+        if(ppStatusEl){
+          if(result.assetsAdded + result.assetsUpdated === 0){
+            ppStatusEl.textContent = "No rows with an Asset were found in that file.";
+            ppStatusEl.style.color = "var(--amber)";
+          } else {
+            const unmatchedNote = result.unmatchedHeaders.length
+              ? ` ${result.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${result.unmatchedHeaders.join(", ")}.`
+              : "";
+            ppStatusEl.textContent = `Imported into "${getActivePastPurchasesList().name}": ${result.assetsAdded} new asset(s), ${result.assetsUpdated} existing asset(s) touched, ${result.valuesApplied} value(s) applied.${unmatchedNote}`;
+            ppStatusEl.style.color = "var(--emerald)";
+          }
+        }
+      }catch(err){
+        console.error("Past Purchases Excel import failed:", err);
+        if(ppStatusEl){
+          ppStatusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers).";
+          ppStatusEl.style.color = "#ef4444";
+        }
+      }
+    });
+  }
+}
+
 function renderListSelector(){
   const selector = document.getElementById("listSelector");
   const heading = document.getElementById("activeListHeading");
@@ -4247,6 +4579,12 @@ try{
   wireUpExportButtons();
 }catch(err){
   console.error("Failed to wire up export buttons:", err);
+}
+
+try{
+  wireUpSampleAndImportExcelButtons();
+}catch(err){
+  console.error("Failed to wire up Sample Excel / Import Excel buttons:", err);
 }
 
 try{
