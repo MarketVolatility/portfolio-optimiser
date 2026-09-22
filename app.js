@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.41 (Fixed "Cash Runway (yr)" coming back as 0 from Detailed Update — the generated prompt now tells the AI to answer 99999, this app's "not a cash-runway concern" convention, for a profitable/FCF-positive company instead of guessing 0)
-console.log("app.js loaded — build v5.41 (Fixed Cash Runway (yr) coming back as 0 from Detailed Update for Selected Assets)");
+// APP.JS BUILD: v5.42 ("Cash Runway (yr)" is now a COMPUTED column — Cash & Equivalents ($M) ÷ |FCF| when FCF is negative, else N/A — instead of a number asked of an AI; added the new "Cash & Equivalents ($M)" editable column it's computed from)
+console.log("app.js loaded — build v5.42 (Cash Runway (yr) is now computed from a new Cash & Equivalents ($M) column, not AI-supplied)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -715,16 +715,13 @@ function getDetailedUpdateFields(){
 // A few numeric fields use an app-specific sentinel value instead of a plain
 // "no data" 0 — a generic AI has no way to know that convention, so without a
 // hint it reliably answers a literal 0 for these instead, which then LOOKS
-// like a real (and wrong) value once pasted back in. Cash Runway (yr) is the
-// one that actually ships this way: 28 of the 30 built-in tickers default to
-// cashRunway: 99999, this app's convention for "free-cash-flow positive /
-// not a cash-burning company," and only the couple of genuinely cash-burning
-// names (e.g. early-stage names like IONQ) carry a real number of years. Keyed
-// by BUILTIN_COLUMNS/custom-param id so it still applies if the column is
-// reordered or renamed.
-const DETAILED_UPDATE_FIELD_HINTS = {
-  cashRunway: 'if the company is free-cash-flow positive, profitable, or otherwise not burning cash, write 99999 — this app\'s convention for "not a cash-runway concern." Only give a real number of years for a company that is actually burning cash and could run out of it. Do NOT write 0 for a profitable company.',
-};
+// like a real (and wrong) value once pasted back in. Nothing uses this right
+// now — Cash Runway (yr) used to (see computeCashRunway), but it's now
+// computed in-app from FCF and "Cash & Equivalents ($M)" instead of asked of
+// the AI at all, so it's no longer part of getDetailedUpdateFields()'s output.
+// Left in place, keyed by BUILTIN_COLUMNS/custom-param id, for the next field
+// that turns out to need this treatment.
+const DETAILED_UPDATE_FIELD_HINTS = {};
 
 function buildDetailedUpdatePrompt(assets){
   if(assets.length === 0){
@@ -905,12 +902,31 @@ const BUILTIN_COLUMNS = [
   { id: "pegRatio", label: "PEG Ratio", type: "number", computed: false },
   { id: "debtToEquity", label: "D/E Ratio", type: "number", computed: false },
   { id: "freeCashFlow", label: "FCF ($M)", type: "number", computed: false },
-  { id: "cashRunway", label: "Cash Runway (yr)", type: "number", computed: false },
+  { id: "cashAndEquivalents", label: "Cash & Equivalents ($M)", type: "number", computed: false },
+  { id: "cashRunway", label: "Cash Runway (yr)", type: "number", computed: true },
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
   { id: "stability", label: "Stability", type: "select", options: ["Ultra-high", "High", "Med", "Low"], computed: false },
   { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
 ];
+
+// Cash Runway (yr) is now COMPUTED, not a manually/AI-filled number: years of
+// runway = Cash & Equivalents ÷ how much cash is being burned per year. A
+// company that isn't burning cash (freeCashFlow >= 0) has no runway to run
+// out, so it gets the app's long-standing 99999 sentinel ("not a cash-runway
+// concern") — the same value 28 of the 30 built-in tickers ship with. A
+// cash-burning company with no "Cash & Equivalents ($M)" on file yet ALSO
+// gets 99999 rather than a scary (and made-up) low number — fill in Cash &
+// Equivalents (via Sample Excel, Import Excel, Detailed/Brief Update, or by
+// typing it directly into the table) to get a real computed years-of-runway
+// figure for that ticker; it recalculates automatically from then on,
+// including every time live data or Cash & Equivalents changes.
+function computeCashRunway(freeCashFlow, cashAndEquivalents){
+  const fcf = Number(freeCashFlow) || 0;
+  const cash = Number(cashAndEquivalents) || 0;
+  if(fcf >= 0 || cash <= 0) return 99999;
+  return cash / Math.abs(fcf);
+}
 
 function getCustomParams(){
   try{ return JSON.parse(localStorage.getItem("customParams") || "[]"); }
@@ -1341,7 +1357,7 @@ function getWorkingData(explicitList){
     const shell = baseAsset
       ? { ...baseAsset }
       : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "",
-          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 99999, beta: 1.0 };
+          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
@@ -1359,8 +1375,10 @@ function getResolvedBuiltinAssetValues(ticker){
   const ov = getGlobalOverrides()[ticker] || {};
   if(!baseAsset && Object.keys(ov).length === 0) return null;
   const shell = baseAsset || { name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med",
-    revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashRunway: 99999, beta: 1.0 };
+    revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, beta: 1.0 };
   const live = liveDataMap[ticker];
+  const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : shell.freeCashFlow;
+  const cashAndEquivalents = ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : shell.cashAndEquivalents;
   return {
     name: ov.name !== undefined ? ov.name : shell.name,
     currentPrice: ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : shell.currentPrice),
@@ -1372,8 +1390,9 @@ function getResolvedBuiltinAssetValues(ticker){
     netMargin: ov.netMargin !== undefined ? ov.netMargin : ((live && live.netMargin !== undefined) ? live.netMargin : shell.netMargin),
     pegRatio: ov.pegRatio !== undefined ? ov.pegRatio : shell.pegRatio,
     debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : shell.debtToEquity),
-    freeCashFlow: ov.freeCashFlow !== undefined ? ov.freeCashFlow : shell.freeCashFlow,
-    cashRunway: ov.cashRunway !== undefined ? ov.cashRunway : shell.cashRunway,
+    freeCashFlow,
+    cashAndEquivalents,
+    cashRunway: computeCashRunway(freeCashFlow, cashAndEquivalents),
     beta: ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : shell.beta),
   };
 }
@@ -1482,7 +1501,7 @@ function renameTicker(oldTicker, newTicker){
     pegRatio: ov.pegRatio !== undefined ? ov.pegRatio : current.pegRatio,
     debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : current.debtToEquity,
     freeCashFlow: ov.freeCashFlow !== undefined ? ov.freeCashFlow : current.freeCashFlow,
-    cashRunway: ov.cashRunway !== undefined ? ov.cashRunway : current.cashRunway,
+    cashAndEquivalents: ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : current.cashAndEquivalents,
     beta: ov.beta !== undefined ? ov.beta : current.beta,
   };
   // Carry over any custom parameter values too, whatever custom params currently exist.
@@ -1608,7 +1627,7 @@ const PP_ONLY_PARAM_PRESETS = [
   { label: "PEG Ratio", type: "number", defaultValue: 0 },
   { label: "D/E Ratio", type: "number", defaultValue: 0 },
   { label: "FCF ($M)", type: "number", defaultValue: 0 },
-  { label: "Cash Runway (yr)", type: "number", defaultValue: 0 },
+  { label: "Cash & Equivalents ($M)", type: "number", defaultValue: 0 },
   { label: "Beta", type: "number", defaultValue: 0 },
   { label: "Stability", type: "text", defaultValue: "" },
 ];
@@ -2843,6 +2862,7 @@ function getMainTableExportValue(item, colDef){
   if(colDef.id === "stability") return item.stability;
   if(colDef.id === "calculatedUpside") return (item.calculatedUpside >= 0 ? "+" : "") + (item.calculatedUpside * 100).toFixed(1) + "%";
   if(colDef.id === "allocationWeight") return item.allocationWeight.toFixed(2) + "%";
+  if(colDef.id === "cashRunway") return item.cashRunway >= 99999 ? "N/A" : item.cashRunway.toFixed(1);
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
@@ -2868,6 +2888,7 @@ function getMainTableExportValue(item, colDef){
 // palette instead of the live dark-theme hex values.
 function getMainTableExportColor(item, colDef){
   if(colDef.id === "calculatedUpside") return item.calculatedUpside >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
+  if(colDef.id === "cashRunway") return (item.cashRunway < 99999 && item.cashRunway < 2) ? EXPORT_COLORS.red : null;
   if(colDef.id === "currentPrice"){
     return isAtOrBelowBuyPriceTarget(item.currentPrice, getCustomParams(), item.customValues) ? EXPORT_COLORS.emerald : null;
   }
@@ -3749,6 +3770,20 @@ function renderCellHTML(colDef, item, badge){
   if(colDef.id === 'allocationWeight'){
     return `<td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>`;
   }
+  if(colDef.id === 'cashRunway'){
+    // Computed, read-only — see computeCashRunway(). 99999 is the "not a cash-
+    // runway concern" sentinel (FCF-positive, or no Cash & Equivalents on file
+    // yet), shown as N/A rather than a literal five-digit number.
+    const isNA = item.cashRunway >= 99999;
+    const display = isNA ? 'N/A' : `${item.cashRunway.toFixed(1)} yr`;
+    const color = isNA ? 'var(--text-secondary)' : (item.cashRunway < 1 ? '#ef4444' : (item.cashRunway < 2 ? 'var(--amber)' : 'inherit'));
+    const title = isNA
+      ? (item.freeCashFlow >= 0
+        ? 'Computed: free-cash-flow positive, so not treated as a cash-runway risk.'
+        : 'Computed: no "Cash & Equivalents ($M)" on file for this ticker yet, so not treated as a cash-runway risk until you fill that in.')
+      : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ |FCF| (${Math.abs(item.freeCashFlow)}) = ${item.cashRunway.toFixed(2)} years of runway at the current burn rate.`;
+    return `<td style="color:${color}; font-weight:600;" title="${escAttr(title)}">${display}</td>`;
+  }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
@@ -3899,7 +3934,8 @@ function runMatrixOptimization() {
     const pegRatio = ov.pegRatio !== undefined ? ov.pegRatio : asset.pegRatio;
     const debtToEquity = ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : asset.debtToEquity);
     const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : asset.freeCashFlow;
-    const cashRunway = ov.cashRunway !== undefined ? ov.cashRunway : asset.cashRunway;
+    const cashAndEquivalents = ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : asset.cashAndEquivalents;
+    const cashRunway = computeCashRunway(freeCashFlow, cashAndEquivalents);
     const beta = ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : asset.beta);
 
     const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
@@ -4012,7 +4048,7 @@ function runMatrixOptimization() {
     });
 
     return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
-      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashRunway, beta, customValues, customIsDefault,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, cashRunway, beta, customValues, customIsDefault,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
