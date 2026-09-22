@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.46 (The old full-30-ticker Sample List default is retired everywhere, not just for brand-new users: the reduced 9-ticker set (NVDA, MU, AMZN, TSM, GOOGL, SNDK, PLTR, META, AAPL) is now the one Sample List default used by initializeNewUserDefaults() AND by every fallback that (re)creates a Sample List for an existing user — e.g. deleting your last remaining list. An existing user's own customized Sample List (their own removedTickers/includedCustomTickers, or genuinely migrated pre-multi-list data) is never touched or reset by this.)
-console.log("app.js loaded — build v5.46 (Old 30-ticker Sample List default retired app-wide; reduced 9-ticker set is now the single default everywhere a Sample List is freshly created)");
+// APP.JS BUILD: v5.47 (SECURITY FIX: a different account signing in on the same browser/device could see — and even end up with its own cloud save permanently overwritten by — the previous account's local data, because localStorage isn't scoped per Supabase account. openDashboard() now runs ensureLocalDataOwnedBy() first on every login/register/resumed-session, wiping any other account's leftover local data before it can be read or pushed; logoutUser() also now clears local data (after a best-effort final sync) as extra hardening on shared computers; and a new "Reset my account data" button lets an already-affected account wipe itself back to the default Sample List, locally and in the cloud, right now.)
+console.log("app.js loaded — build v5.47 (Security fix: per-account local data isolation on shared devices, + a manual Reset my account data control)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -23,6 +23,56 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
 const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates"];
+
+// --- Local data ownership guard ---
+// localStorage is shared by EVERY Supabase account that ever signs in on a given
+// browser/device — it is not scoped per account the way the cloud (user_app_data,
+// keyed by user_id) is. Without this guard: if Account A's data is sitting in
+// localStorage (they never explicitly logged out, or logout couldn't reach the
+// network) and a DIFFERENT Account B then registers or signs in on that same
+// browser, openDashboard() would render Account A's leftover local data as if it
+// were Account B's own — and, worse, pullSnapshotFromCloud() finding nothing yet
+// for a brand-new Account B would cause pushSnapshotToCloud() to upload Account
+// A's leftover local data to Account B's own cloud row, permanently. This tracks,
+// purely on-device, which account's data local storage currently holds, and wipes
+// it the instant a different account is about to use this device — before any
+// pull, push, or render can happen. It is intentionally NOT in SYNC_KEYS: it is
+// this device's own bookkeeping and must never itself be synced or copied to
+// another device.
+const LOCAL_DATA_OWNER_KEY = "appDataOwnerUserId";
+
+// App-owned local keys that hold real account data/preferences but, for one
+// reason or another (legacy pre-multi-list migration, or deliberately
+// per-device UI state), aren't in SYNC_KEYS. Still must never leak from one
+// account to another on a shared device, so a full local wipe clears these too.
+const NON_SYNCED_LOCAL_KEYS = ["customAssets", "removedTickers", "collapsedSections", "ppShowCurrentHoldingsOnly", "uiViewMode"];
+
+function clearAllLocalAppData(){
+  SYNC_KEYS.concat(NON_SYNCED_LOCAL_KEYS).forEach(k => {
+    try{ localStorage.removeItem(k); }catch(e){ /* localStorage unavailable */ }
+  });
+}
+
+// Call this before doing ANYTHING else with local data for a just-authenticated
+// user. If local storage currently belongs to a different account, it wipes it
+// (then reseeds the same clean starting defaults a brand-new visitor gets, so the
+// device isn't left in a broken empty state) before any pull/push/render can see
+// or propagate the wrong account's data. If no owner is recorded yet — either a
+// genuinely fresh browser, or an existing installation from before this guard
+// existed — it does NOT wipe (that would destroy a legitimate returning user's
+// own data the very first time this ships); it just adopts whatever's already
+// there as belonging to this user from now on.
+function ensureLocalDataOwnedBy(userId){
+  let storedOwner = null;
+  try{ storedOwner = localStorage.getItem(LOCAL_DATA_OWNER_KEY); }catch(e){ /* localStorage unavailable */ }
+  const isDifferentAccount = !!(storedOwner && storedOwner !== userId);
+  if(isDifferentAccount){
+    clearAllLocalAppData();
+    initializeNewUserDefaults();
+  }
+  try{ localStorage.setItem(LOCAL_DATA_OWNER_KEY, userId); }catch(e){ /* localStorage unavailable */ }
+  return isDifferentAccount;
+}
 
 // --- Desktop/Mobile interface toggle ---
 // A manual, per-device override (deliberately NOT in SYNC_KEYS — a phone and a
@@ -159,6 +209,13 @@ function lockDashboard(){
 
 async function openDashboard(user){
   if(!user?.id) throw new Error('No authenticated user was returned. Please sign in again.');
+
+  // Must run before anything below touches local storage: if this device's local
+  // data currently belongs to a different account, wipe it first so it's never
+  // rendered as this account's own, and never pushed up into this account's cloud
+  // row by the "no cloud data found yet" branch further down.
+  ensureLocalDataOwnedBy(user.id);
+
   const emailInline = document.getElementById('loggedInEmailInline');
   if(emailInline) emailInline.textContent = user.email || '';
   const overlay = document.getElementById('authOverlay');
@@ -241,6 +298,14 @@ async function handleLogin(event){
 
 async function logoutUser(){
   stopAutoSync();
+  // Best-effort final save of anything not yet auto-synced (must happen while still
+  // authenticated, i.e. before signOut() below) — then wipe this device's local copy
+  // of the account's data. Extra privacy hardening on top of the ensureLocalDataOwnedBy()
+  // guard in openDashboard(): on a shared/public computer, a logged-out session should
+  // leave nothing of this account's portfolio data sitting in local storage.
+  try{ await pushSnapshotToCloud(); }catch(e){ /* offline or push failed — proceed with logout regardless */ }
+  clearAllLocalAppData();
+  try{ localStorage.removeItem(LOCAL_DATA_OWNER_KEY); }catch(e){ /* localStorage unavailable */ }
   lockDashboard();
   showAuthStep('loginStep');
   try{
@@ -4640,6 +4705,42 @@ try{
       const result = await pushSnapshotToCloud();
       syncStatusEl.textContent = result.ok ? `Synced at ${new Date().toLocaleTimeString()}.` : `Sync failed: ${result.reason}`;
       syncStatusEl.style.color = result.ok ? "var(--emerald)" : "var(--amber)";
+    });
+  }
+
+  // Manual remedy for an account that already ended up with another account's data —
+  // e.g. from before the ensureLocalDataOwnedBy() guard existed. Wipes local storage,
+  // reseeds the same clean defaults a brand-new visitor gets, and immediately pushes
+  // that fresh snapshot to the cloud, overwriting whatever (possibly someone else's)
+  // data was previously saved under this account.
+  const resetAccountDataBtn = document.getElementById("resetAccountDataBtn");
+  if(resetAccountDataBtn){
+    resetAccountDataBtn.addEventListener("click", async () => {
+      const syncStatusEl = document.getElementById("syncStatus");
+      if(!confirm("Reset this account's data? This permanently replaces everything currently saved for this account — locally and in the cloud — with the default starting Sample List. This cannot be undone. Continue?")) return;
+
+      clearAllLocalAppData();
+      initializeNewUserDefaults();
+
+      // Re-render everything from the freshly reseeded local data.
+      renderListSelector();
+      renderRemoveList();
+      renderCustomParamList();
+      renderColumnOrderList();
+      runMatrixOptimization();
+      renderPPListSelector();
+      renderPastPurchasesTickerList();
+      renderPastPurchasesParamList();
+      renderPastPurchasesColumnOrderList();
+      renderPastPurchasesRowOrderList();
+      renderPastPurchasesTable();
+
+      if(syncStatusEl){ syncStatusEl.textContent = "Resetting and saving to the cloud…"; syncStatusEl.style.color = "var(--sub)"; }
+      const result = await pushSnapshotToCloud();
+      if(syncStatusEl){
+        syncStatusEl.textContent = result.ok ? `Account reset and saved at ${new Date().toLocaleTimeString()}.` : `Reset locally, but saving to the cloud failed: ${result.reason}`;
+        syncStatusEl.style.color = result.ok ? "var(--emerald)" : "var(--amber)";
+      }
     });
   }
 }catch(err){
