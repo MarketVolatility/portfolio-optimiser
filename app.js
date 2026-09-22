@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.39 (Fixed Finnhub API key never actually syncing to the cloud — SYNC_KEYS had "apiKey" instead of "finnhubApiKey")
-console.log("app.js loaded — build v5.39 (Fixed Finnhub API key never actually syncing to the cloud — SYNC_KEYS had \"apiKey\" instead of \"finnhubApiKey\")");
+// APP.JS BUILD: v5.40 (Added "Detailed Update for Selected Assets" — a targeted AI-update flow for hand-picked tickers covering every numeric Portfolio parameter; renamed the original flow to "Brief Update for all Assets")
+console.log("app.js loaded — build v5.40 (Added \"Detailed Update for Selected Assets\"; renamed original flow to \"Brief Update for all Assets\")");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -22,7 +22,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusRequestedAssets"];
 
 // --- Desktop/Mobile interface toggle ---
 // A manual, per-device override (deliberately NOT in SYNC_KEYS — a phone and a
@@ -681,6 +681,194 @@ function wireUpQuickPasteUpdate(){
 
     pasteInput.value = "";
     parseStatus.textContent = `Updated ${QPU_FIELDS.map(f => f.label).join(", ")} for ${tickers.length} ticker(s), applied across every Portfolio List they appear on.`;
+    parseStatus.style.color = "var(--emerald)";
+  });
+}
+
+// --- "Detailed Update for Selected Assets" ---
+// Same copy/paste-to-an-AI idea as the Brief Update above, but scoped to a
+// hand-picked set of tickers (kept in localStorage under DUS_STORAGE_KEY, so
+// the request list survives a reload/re-login) and covering EVERY numeric
+// parameter currently on the Portfolio table — built-in and custom alike —
+// rather than the fixed 7-field QPU_FIELDS set. Non-numeric columns (Company
+// Name, Stability, any text/date custom param) are left out since the AI
+// reply is numbers-only, matching the prompt's own instructions.
+const DUS_STORAGE_KEY = "dusRequestedAssets";
+
+function getDusRequestedAssets(){
+  try{ return JSON.parse(localStorage.getItem(DUS_STORAGE_KEY) || "[]"); }
+  catch(e){ return []; }
+}
+function saveDusRequestedAssets(list){
+  try{ localStorage.setItem(DUS_STORAGE_KEY, JSON.stringify(list)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+// getEditableMainColumnDefs is defined further below (with the Excel sample/import
+// feature) but, as a function declaration, is hoisted — safe to call here at
+// runtime since this only ever runs from a click handler, after the whole file
+// has loaded.
+function getDetailedUpdateFields(){
+  return getEditableMainColumnDefs().filter(d => d.type === "number");
+}
+
+function buildDetailedUpdatePrompt(assets){
+  if(assets.length === 0){
+    return "No requested assets yet — add at least one ticker above first.";
+  }
+  const fields = getDetailedUpdateFields();
+  if(fields.length === 0){
+    return "No numeric parameters found on the Portfolio table to request.";
+  }
+  const fieldLabels = fields.map(f => f.label).join(", ");
+  const lines = assets.map(a => `${a.ticker}: ${fieldLabels}`);
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
+}
+
+function renderDusRequestList(){
+  const container = document.getElementById("dusRequestList");
+  if(!container) return;
+  const assets = getDusRequestedAssets();
+  container.innerHTML = "";
+  if(assets.length === 0){
+    container.innerHTML = `<span style="color:var(--text-secondary);">No assets requested yet.</span>`;
+    return;
+  }
+  assets.forEach(a => {
+    const chip = document.createElement("div");
+    chip.className = "remove-chip";
+    chip.innerHTML = `<span>${a.ticker}</span><button data-ticker="${a.ticker}" title="Remove ${a.ticker} from the request">&times;</button>`;
+    chip.querySelector("button").addEventListener("click", () => {
+      saveDusRequestedAssets(getDusRequestedAssets().filter(x => x.ticker !== a.ticker));
+      renderDusRequestList();
+    });
+    container.appendChild(chip);
+  });
+}
+
+function wireUpDetailedUpdate(){
+  const addBtn = document.getElementById("dusAddBtn");
+  const tickerInput = document.getElementById("dusTicker");
+  const nameInput = document.getElementById("dusName");
+  const addStatus = document.getElementById("dusAddStatus");
+  const generateBtn = document.getElementById("dusGenerateBtn");
+  const copyBtn = document.getElementById("dusCopyBtn");
+  const parseBtn = document.getElementById("dusParseBtn");
+  const promptBox = document.getElementById("dusPromptBox");
+  const promptStatus = document.getElementById("dusPromptStatus");
+  const parseStatus = document.getElementById("dusParseStatus");
+  const pasteInput = document.getElementById("dusPasteInput");
+  if(!addBtn || !generateBtn || !parseBtn || !promptBox) return; // index.html may be out of date
+
+  renderDusRequestList();
+
+  addBtn.addEventListener("click", () => {
+    const ticker = (tickerInput.value || "").trim().toUpperCase();
+    const name = (nameInput.value || "").trim();
+    if(!ticker || !name){
+      addStatus.textContent = "Ticker and Company Name are required.";
+      addStatus.style.color = "var(--amber)";
+      return;
+    }
+    const assets = getDusRequestedAssets();
+    const existing = assets.find(a => a.ticker === ticker);
+    if(existing){
+      existing.name = name;
+      addStatus.textContent = `${ticker} is already in the request — name updated.`;
+      addStatus.style.color = "var(--amber)";
+    }else{
+      assets.push({ ticker, name });
+      addStatus.textContent = `${ticker} added to the request.`;
+      addStatus.style.color = "var(--emerald)";
+    }
+    saveDusRequestedAssets(assets);
+    renderDusRequestList();
+    tickerInput.value = "";
+    nameInput.value = "";
+  });
+
+  generateBtn.addEventListener("click", () => {
+    const assets = getDusRequestedAssets();
+    promptBox.value = buildDetailedUpdatePrompt(assets);
+    if(assets.length === 0){
+      promptStatus.textContent = "Add at least one ticker to the request first.";
+      promptStatus.style.color = "var(--amber)";
+    }else{
+      promptStatus.textContent = `Request generated for ${assets.length} asset(s).`;
+      promptStatus.style.color = "var(--emerald)";
+    }
+  });
+
+  if(copyBtn) copyBtn.addEventListener("click", async () => {
+    try{
+      await navigator.clipboard.writeText(promptBox.value);
+      promptStatus.textContent = "Copied to clipboard.";
+      promptStatus.style.color = "var(--emerald)";
+    }catch(e){
+      promptBox.select();
+      promptStatus.textContent = "Couldn't use the clipboard automatically — the text is selected, so Ctrl/Cmd+C will copy it.";
+      promptStatus.style.color = "var(--amber)";
+    }
+  });
+
+  parseBtn.addEventListener("click", () => {
+    const assets = getDusRequestedAssets();
+    if(assets.length === 0){
+      parseStatus.textContent = "No requested assets yet — add at least one ticker above first.";
+      parseStatus.style.color = "var(--amber)";
+      return;
+    }
+    const raw = (pasteInput.value || "").trim();
+    if(!raw){
+      parseStatus.textContent = "Paste the AI's numbers into the box above first.";
+      parseStatus.style.color = "var(--amber)";
+      return;
+    }
+    const fields = getDetailedUpdateFields();
+    const fieldCount = fields.length;
+    const tokens = raw.split(/[,\n]+/).map(s => s.trim()).filter(s => s.length > 0);
+    const expected = assets.length * fieldCount;
+    if(tokens.length !== expected){
+      parseStatus.textContent = `Expected ${expected} numbers (${assets.length} ticker(s) × ${fieldCount} fields) but found ${tokens.length}. Nothing was updated — check the paste matches the generated request's order and try again.`;
+      parseStatus.style.color = "#ef4444";
+      return;
+    }
+    const numbers = tokens.map(t => Number(t));
+    const invalidIndex = numbers.findIndex(n => !isFinite(n));
+    if(invalidIndex !== -1){
+      parseStatus.textContent = `"${tokens[invalidIndex]}" (item ${invalidIndex + 1}) isn't a valid number. Nothing was updated — fix the paste and try again.`;
+      parseStatus.style.color = "#ef4444";
+      return;
+    }
+
+    assets.forEach((asset, i) => {
+      const values = numbers.slice(i * fieldCount, i * fieldCount + fieldCount);
+      // A requested ticker might not be on any Portfolio List yet (e.g. the user
+      // is using this to fully data-enter a brand-new stock) — add it to the
+      // active list so the values just pasted in aren't orphaned in
+      // globalOverrides with nowhere to display.
+      const existsSomewhere = Object.values(getAllLists()).some(list => getWorkingData(list).some(a => a.ticker === asset.ticker));
+      if(!existsSomewhere){
+        addAsset({ ticker: asset.ticker, name: asset.name || asset.ticker, targetPrice: 0, stability: "Med" });
+      }
+      fields.forEach((f, j) => setGlobalOverride(asset.ticker, f.id, values[j]));
+    });
+
+    runMatrixOptimization();
+    // Same as the Brief Update: Past Purchases only pulls FROM Portfolio Lists, so
+    // re-pull now in case any Past Purchases column mirrors one of the fields
+    // just pasted in (e.g. Current Price).
+    if(typeof refreshPastPurchasesFromPortfolio === "function"){
+      refreshPastPurchasesFromPortfolio();
+      if(typeof renderPastPurchasesTable === "function") renderPastPurchasesTable();
+      if(typeof renderPastPurchasesParamList === "function") renderPastPurchasesParamList();
+    }
+    if(typeof renderColumnOrderList === "function") renderColumnOrderList();
+    if(typeof renderCustomParamList === "function") renderCustomParamList();
+    if(typeof renderRemoveList === "function") renderRemoveList();
+
+    pasteInput.value = "";
+    parseStatus.textContent = `Updated ${fieldCount} parameter(s) for ${assets.length} requested asset(s), applied across every Portfolio List they appear on.`;
     parseStatus.style.color = "var(--emerald)";
   });
 }
@@ -4301,6 +4489,12 @@ try{
   wireUpQuickPasteUpdate();
 }catch(err){
   console.error("Failed to wire up Quick Paste Update:", err);
+}
+
+try{
+  wireUpDetailedUpdate();
+}catch(err){
+  console.error("Failed to wire up Detailed Update for Selected Assets:", err);
 }
 
 // --- Wire up the in-app sync controls (logout/sync-now, once already logged in) ---
