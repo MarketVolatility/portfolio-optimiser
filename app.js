@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.38 ("Sample Excel for Data Entry" + "Import Excel" round-trip, on both tables)
-console.log("app.js loaded — build v5.38 (\"Sample Excel for Data Entry\" + \"Import Excel\" round-trip, on both tables)");
+// APP.JS BUILD: v5.39 (Fixed Finnhub API key never actually syncing to the cloud — SYNC_KEYS had "apiKey" instead of "finnhubApiKey")
+console.log("app.js loaded — build v5.39 (Fixed Finnhub API key never actually syncing to the cloud — SYNC_KEYS had \"apiKey\" instead of \"finnhubApiKey\")");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -13,7 +13,16 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // Past Purchases schema — no longer read or written directly, but kept in the
 // sync list as a safety net so a device pulling an older cloud snapshot can
 // still migrate it locally (see migratePastPurchasesRowsIfNeeded).
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "apiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId"];
+// FIX (found while debugging "Fetch live data" not working on a freshly deployed
+// origin): this used to list "apiKey", but the Finnhub key is actually stored
+// under localStorage key "finnhubApiKey" (see getSavedApiKey/saveApiKey below) —
+// "apiKey" was never written to by anything, so the real key was silently NEVER
+// included in snapshotLocalData()'s push, and applyRemoteSnapshot() never
+// restored it on login either. Net effect: the Finnhub key lived only in
+// whichever single browser/origin you clicked "Save key" in, and never traveled
+// with the rest of your synced data (lists/overrides, which use correctly-named
+// keys and always synced fine) to a new device, browser, or newly deployed URL.
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId"];
 
 // --- Desktop/Mobile interface toggle ---
 // A manual, per-device override (deliberately NOT in SYNC_KEYS — a phone and a
