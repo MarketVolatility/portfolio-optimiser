@@ -228,7 +228,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.40 (Detailed Update's "Requested assets" is now a ✓/✕ checklist of every asset across all Portfolio Lists, with a "Refresh asset list" button) — app.js v5.46 retires the old 30-ticker Sample List default everywhere in favor of the reduced 9-ticker set, without affecting any existing user's own data
+      HTML build: v5.40 (Detailed Update's "Requested assets" is now a ✓/✕ checklist of every asset across all Portfolio Lists, with a "Refresh asset list" button) — app.js v5.47 fixes a security issue where a different account on the same device could see a previous account's data, and adds a "Reset my account data" button
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
@@ -296,6 +296,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   <div class="control-panel" style="flex-wrap: wrap; align-items: center;">
     <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
     <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
+    <button id="resetAccountDataBtn" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Reset my account data</button>
     <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
     <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
