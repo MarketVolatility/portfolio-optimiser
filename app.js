@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.45 (Brand-new users now start with a smaller 9-ticker Sample List (NVDA, MU, AMZN, TSM, GOOGL, SNDK, PLTR, META, AAPL) and a specific default column order/set, seeded once via initializeNewUserDefaults(); existing users' lists, columns, and data are never touched)
-console.log("app.js loaded — build v5.45 (New-user defaults: smaller 9-ticker Sample List + requested column layout, existing users unaffected)");
+// APP.JS BUILD: v5.46 (The old full-30-ticker Sample List default is retired everywhere, not just for brand-new users: the reduced 9-ticker set (NVDA, MU, AMZN, TSM, GOOGL, SNDK, PLTR, META, AAPL) is now the one Sample List default used by initializeNewUserDefaults() AND by every fallback that (re)creates a Sample List for an existing user — e.g. deleting your last remaining list. An existing user's own customized Sample List (their own removedTickers/includedCustomTickers, or genuinely migrated pre-multi-list data) is never touched or reset by this.)
+console.log("app.js loaded — build v5.46 (Old 30-ticker Sample List default retired app-wide; reduced 9-ticker set is now the single default everywhere a Sample List is freshly created)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1266,9 +1266,13 @@ function getAllLists(){
 
   if(!lists){
     // Migrate any pre-existing single-list data (from before multi-list support existed at all).
-    let migratedCustom = [], migratedRemoved = [];
+    // If neither old-schema key is present, there's nothing to migrate — this is really a
+    // fresh Sample List being (re)created, not a real legacy user, so it gets the same
+    // reduced ticker set as everywhere else rather than the now-obsolete full 30-ticker list.
+    const hasLegacyData = localStorage.getItem("customAssets") !== null || localStorage.getItem("removedTickers") !== null;
+    let migratedCustom = [], migratedRemoved = hasLegacyData ? [] : getDefaultSampleListRemovedTickers();
     try{ migratedCustom = JSON.parse(localStorage.getItem("customAssets") || "[]"); }catch(e){}
-    try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){}
+    if(hasLegacyData){ try{ migratedRemoved = JSON.parse(localStorage.getItem("removedTickers") || "[]"); }catch(e){} }
     lists = {
       [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, customAssets: migratedCustom, removedTickers: migratedRemoved, overrides: {} }
     };
@@ -1350,7 +1354,7 @@ function getActiveList(){
   const lists = getAllLists();
   const id = getActiveListId();
   if(!lists[id]){
-    lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
+    lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: getDefaultSampleListRemovedTickers() };
     saveAllLists(lists);
   }
   return lists[id];
@@ -1359,7 +1363,7 @@ function getActiveList(){
 function updateActiveList(mutatorFn){
   const lists = getAllLists();
   const id = getActiveListId();
-  if(!lists[id]) lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
+  if(!lists[id]) lists[id] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: getDefaultSampleListRemovedTickers() };
   mutatorFn(lists[id]);
   saveAllLists(lists);
 }
@@ -1393,7 +1397,7 @@ function deleteActiveList(){
   delete lists[id];
   const remainingIds = Object.keys(lists);
   if(remainingIds.length === 0){
-    lists[DEFAULT_LIST_ID] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: [] };
+    lists[DEFAULT_LIST_ID] = { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: getDefaultSampleListRemovedTickers() };
     saveAllLists(lists);
     setActiveListId(DEFAULT_LIST_ID);
   } else {
@@ -4931,12 +4935,20 @@ try{
 }
 
 // --- New-user starting defaults ---
-// A smaller starting Sample List and a specific default column layout, for a
-// brand-new visitor only — never for anyone who has already used this app (on
-// this device or, via cloud sync, on any device). Detection: "portfolioLists"
-// in localStorage not existing at all is exactly what marks a first-ever visit
-// elsewhere in this file too (see getAllLists()'s own "if(!lists)" branch), so
-// the same check is used here. This runs once, synchronously, at script load —
+// A smaller starting Sample List and a specific default column layout. The old
+// full-30-ticker Sample List is obsolete — this reduced ticker set is now THE
+// one and only default "Sample List" anywhere in the app: it's what a
+// brand-new visitor starts on (via initializeNewUserDefaults() below), and
+// it's also what getActiveList()/updateActiveList()/deleteActiveList() fall
+// back to if a Sample List ever needs to be freshly (re)created for an
+// existing user (e.g. deleting a last remaining list). It is never used to
+// overwrite a Sample List an existing user already has and has customized
+// (their own removedTickers/includedCustomTickers are left exactly as-is) —
+// only to seed one that doesn't exist yet.
+// For the brand-new-visitor case specifically: detection is "portfolioLists"
+// in localStorage not existing at all, exactly what marks a first-ever visit
+// elsewhere in this file too (see getAllLists()'s own "if(!lists)" branch).
+// initializeNewUserDefaults() runs once, synchronously, at script load —
 // before the login/register flow's own pullSnapshotFromCloud()/
 // pushSnapshotToCloud() can run (those only fire after the user submits the
 // login/register form, which takes real user interaction, i.e. well after this
@@ -4944,6 +4956,13 @@ try{
 // while an existing account's cloud data (pulled right after sign-in) correctly
 // overwrites it, and nothing here ever touches an existing local user's data.
 const NEW_USER_STARTING_TICKERS = ["NVDA", "MU", "AMZN", "TSM", "GOOGL", "SNDK", "PLTR", "META", "AAPL"];
+
+// Shared by every spot that freshly creates a "Sample List": returns the
+// removedTickers array that leaves exactly NEW_USER_STARTING_TICKERS visible
+// out of the full marketData set.
+function getDefaultSampleListRemovedTickers(){
+  return marketData.map(a => a.ticker).filter(t => !NEW_USER_STARTING_TICKERS.includes(t));
+}
 
 // The 7 optional preset columns the requested starting layout calls for that
 // aren't built-in columns — added here with fixed ids (rather than through
@@ -4977,9 +4996,8 @@ function initializeNewUserDefaults(){
     if(localStorage.getItem("portfolioLists") !== null) return; // not a first-ever visit — leave everything alone
     localStorage.setItem("customParams", JSON.stringify(NEW_USER_DEFAULT_CUSTOM_PARAMS));
     localStorage.setItem("columnOrder", JSON.stringify(NEW_USER_DEFAULT_COLUMN_ORDER));
-    const removedTickers = marketData.map(a => a.ticker).filter(t => !NEW_USER_STARTING_TICKERS.includes(t));
     const lists = {
-      [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers }
+      [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: getDefaultSampleListRemovedTickers() }
     };
     localStorage.setItem("portfolioLists", JSON.stringify(lists));
   }catch(e){ /* localStorage unavailable — the app's own existing defaults still apply */ }
