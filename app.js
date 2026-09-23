@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.47 (SECURITY FIX: a different account signing in on the same browser/device could see — and even end up with its own cloud save permanently overwritten by — the previous account's local data, because localStorage isn't scoped per Supabase account. openDashboard() now runs ensureLocalDataOwnedBy() first on every login/register/resumed-session, wiping any other account's leftover local data before it can be read or pushed; logoutUser() also now clears local data (after a best-effort final sync) as extra hardening on shared computers; and a new "Reset my account data" button lets an already-affected account wipe itself back to the default Sample List, locally and in the cloud, right now.)
-console.log("app.js loaded — build v5.47 (Security fix: per-account local data isolation on shared devices, + a manual Reset my account data control)");
+// APP.JS BUILD: v5.48 (Cash & Equivalents ($M) is now auto-fetched as part of "Fetch live data", since Finnhub's free tier has no source for it: tries free/no-key SEC EDGAR first (the real balance-sheet figure via /companyconcept), then falls back to a new optional Alpha Vantage API key (BALANCE_SHEET endpoint) if SEC has nothing for that ticker — e.g. foreign filers like TSM. Alpha Vantage's free tier is capped at 25 requests/day, so past 20 uses today it shows a confirm popup with the exact count (e.g. "21/25") before every further call, and declining stops it from asking again for the rest of that fetch run. Neither source ever overwrites a manually-entered or AI-pasted value unless it actually finds fresh data.)
+console.log("app.js loaded — build v5.48 (Cash & Equivalents ($M) auto-fetch: SEC EDGAR primary, Alpha Vantage fallback with a 25/day quota warning)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -22,7 +22,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -45,7 +45,11 @@ const LOCAL_DATA_OWNER_KEY = "appDataOwnerUserId";
 // reason or another (legacy pre-multi-list migration, or deliberately
 // per-device UI state), aren't in SYNC_KEYS. Still must never leak from one
 // account to another on a shared device, so a full local wipe clears these too.
-const NON_SYNCED_LOCAL_KEYS = ["customAssets", "removedTickers", "collapsedSections", "ppShowCurrentHoldingsOnly", "uiViewMode"];
+// alphaVantageCallLog is here (not synced) because it tracks THIS device's
+// count against a specific Alpha Vantage key's daily quota — carrying it over
+// to a different account (which likely has its own, separate Alpha Vantage
+// key with its own fresh quota) would just show a false, borrowed number.
+const NON_SYNCED_LOCAL_KEYS = ["customAssets", "removedTickers", "collapsedSections", "ppShowCurrentHoldingsOnly", "uiViewMode", "alphaVantageCallLog"];
 
 function clearAllLocalAppData(){
   SYNC_KEYS.concat(NON_SYNCED_LOCAL_KEYS).forEach(k => {
@@ -430,6 +434,181 @@ function saveApiKey(key){
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
+// --- Cash & Equivalents ($M): SEC EDGAR (primary, free/unlimited/no key) ---
+// --- falling back to Alpha Vantage (secondary, free key, capped at 25/day) ---
+// Neither Finnhub's free /stock/metric endpoint nor its /quote endpoint expose
+// the actual balance-sheet "Cash and Cash Equivalents" dollar figure (only a
+// cashRatio ratio) — see the SEC EDGAR / Alpha Vantage research this was built
+// from. Both sources below are tried automatically as part of "Fetch live
+// data"; nothing here ever overwrites a value the user entered by hand or via
+// the Detailed/Brief Update paste flows unless a fresh number was actually
+// found (mirrors how price/P-E/ROA already behave).
+
+function getSavedAlphaVantageKey(){
+  try{ return localStorage.getItem("alphaVantageApiKey") || ""; }
+  catch(e){ return ""; }
+}
+function saveAlphaVantageKey(key){
+  try{ localStorage.setItem("alphaVantageApiKey", key); }
+  catch(e){ /* localStorage unavailable */ }
+}
+
+// --- SEC EDGAR ---
+// data.sec.gov is free, requires no API key/signup, and has no documented
+// per-caller request cap for reasonable, non-bulk use. Its one real requirement
+// is a descriptive User-Agent header identifying the caller — something a
+// browser's own fetch()/XHR can never override (User-Agent is a forbidden
+// header name in both), so this simply sends whatever the browser sends and
+// relies on that being a normal, non-empty UA string. If SEC ever does reject
+// browser-origin requests for that reason (or blocks the cross-origin request
+// entirely), every call below fails safely into a caught exception and the
+// Alpha Vantage fallback further down takes over — this is never treated as
+// fatal to the overall "Fetch live data" run.
+let secTickerCikMapPromise = null;
+
+async function getSecTickerCikMap(){
+  // Cached in localStorage (not SYNC_KEYS/NON_SYNCED_LOCAL_KEYS: it holds no
+  // account data at all, just SEC's public ticker→CIK reference table, so
+  // there's no reason to wipe it on an account switch or sync it between
+  // devices — every device is equally happy re-downloading or reusing it).
+  const CACHE_KEY = "secTickerCikMapCache";
+  const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — this file changes rarely
+  try{
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if(cached && cached.map && (Date.now() - cached.fetchedAt) < CACHE_MAX_AGE_MS){
+      return cached.map;
+    }
+  }catch(e){ /* fall through and refetch */ }
+
+  if(!secTickerCikMapPromise){
+    secTickerCikMapPromise = (async () => {
+      const res = await fetch("https://www.sec.gov/files/company_tickers.json");
+      if(!res.ok) throw new Error("company_tickers.json fetch failed: " + res.status);
+      const data = await res.json();
+      const map = {};
+      Object.values(data).forEach(entry => {
+        if(entry && entry.ticker && entry.cik_str !== undefined){
+          map[String(entry.ticker).toUpperCase()] = String(entry.cik_str).padStart(10, "0");
+        }
+      });
+      try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), map })); }
+      catch(e){ /* localStorage full/unavailable — still usable for this page load */ }
+      return map;
+    })();
+  }
+  return secTickerCikMapPromise;
+}
+
+async function fetchSecCashAndEquivalents(ticker){
+  const map = await getSecTickerCikMap();
+  const cik = map && map[ticker.toUpperCase()];
+  if(!cik) return undefined; // not a US SEC filer under this ticker, or map unavailable
+
+  const res = await fetch(`https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/us-gaap/CashAndCashEquivalentsAtCarryingValue.json`);
+  if(!res.ok) return undefined; // 404 is normal here — e.g. foreign private issuers (20-F filers, like TSM) often don't tag this us-gaap concept at all
+  const data = await res.json();
+  const entries = data?.units?.USD;
+  if(!Array.isArray(entries) || entries.length === 0) return undefined;
+
+  // Prefer an actual 10-K/10-Q figure over other filing types, and within
+  // those, the most recently REPORTED period (not just most recently filed —
+  // "end" is the balance-sheet date the figure is as-of).
+  const relevant = entries.filter(e => e.form === "10-K" || e.form === "10-Q");
+  const pool = relevant.length ? relevant : entries;
+  const latest = pool.reduce((best, e) => (!best || e.end > best.end) ? e : best, null);
+  if(!latest || typeof latest.val !== "number") return undefined;
+
+  return latest.val / 1e6; // USD -> $M, matching this column's existing convention
+}
+
+// --- Alpha Vantage (fallback) ---
+// Free API key, works directly from the browser (no CORS proxy needed), and
+// its BALANCE_SHEET function does carry the real cashAndCashEquivalentsAtCarryingValue
+// figure — but the free key is capped at a shared 25 requests/day across
+// however this key gets used. getAlphaVantageCallCountToday/recordAlphaVantageCall
+// track THIS device's calls against that cap (see NON_SYNCED_LOCAL_KEYS' note on
+// why this isn't synced), and confirmAlphaVantageQuota() surfaces a heads-up
+// confirmation once that count would pass 20/day, so the last few daily calls
+// are spent deliberately rather than silently.
+function getAlphaVantageCallCountToday(){
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, local Date but stable enough for a daily counter
+  try{
+    const log = JSON.parse(localStorage.getItem("alphaVantageCallLog") || "null");
+    if(log && log.date === today) return log.count;
+  }catch(e){ /* treat as no calls logged yet */ }
+  return 0;
+}
+
+function recordAlphaVantageCall(){
+  const today = new Date().toISOString().slice(0, 10);
+  const count = getAlphaVantageCallCountToday() + 1;
+  try{ localStorage.setItem("alphaVantageCallLog", JSON.stringify({ date: today, count })); }
+  catch(e){ /* localStorage unavailable */ }
+  return count;
+}
+
+// Returns true if it's fine to make one more Alpha Vantage call right now.
+// Silent for the first 20 calls of the day; from the 21st on, asks first and
+// shows exactly which call number this would be out of the free 25/day cap
+// (e.g. "21/25"). NOTE: this only ever sees calls made from THIS browser/device
+// against whatever key is currently saved — if the same Alpha Vantage key is
+// also used elsewhere today, the real server-side count can be higher than
+// what's shown here.
+function confirmAlphaVantageQuota(){
+  const next = getAlphaVantageCallCountToday() + 1;
+  if(next <= 20) return true;
+  return confirm(`Alpha Vantage free-tier requests today (this device): ${next}/25. This is close to (or over) the daily free limit — further requests today may start failing once it's reached. Continue and use one more?`);
+}
+
+async function fetchAlphaVantageCashAndEquivalents(ticker, apiKey){
+  const res = await fetch(`https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`);
+  const data = await res.json();
+  if(data.Note || data.Information) throw new Error(data.Note || data.Information); // rate-limit/invalid-key messages come back as 200 OK with one of these instead of report data
+  const report = (data.quarterlyReports && data.quarterlyReports[0]) || (data.annualReports && data.annualReports[0]);
+  if(!report) return undefined;
+  const raw = report.cashAndCashEquivalentsAtCarryingValue;
+  if(raw === undefined || raw === null || raw === "None") return undefined;
+  const val = Number(raw);
+  if(isNaN(val)) return undefined;
+  return val / 1e6; // USD -> $M
+}
+
+// --- Combined orchestrator: SEC EDGAR first, Alpha Vantage only if needed ---
+// batchCtx is an optional shared {avDeclined} object passed by a caller looping
+// over many tickers, so declining the Alpha Vantage quota prompt once stops it
+// from being asked again (silently skipping Alpha Vantage) for the rest of
+// that same run, instead of popping up once per remaining ticker.
+async function fetchCashAndEquivalentsForTicker(ticker, batchCtx){
+  try{
+    const secVal = await fetchSecCashAndEquivalents(ticker);
+    if(secVal !== undefined){
+      setGlobalOverride(ticker, "cashAndEquivalents", secVal);
+      return { ok: true, source: "sec" };
+    }
+  }catch(e){ /* SEC EDGAR failed (CORS, network, no data) — fall through to Alpha Vantage */ }
+
+  if(batchCtx && batchCtx.avDeclined) return { ok: false, source: null };
+
+  const avKey = getSavedAlphaVantageKey();
+  if(!avKey) return { ok: false, source: null, reason: "no-secondary-source" };
+
+  if(!confirmAlphaVantageQuota()){
+    if(batchCtx) batchCtx.avDeclined = true;
+    return { ok: false, source: null, declined: true };
+  }
+  recordAlphaVantageCall();
+
+  try{
+    const avVal = await fetchAlphaVantageCashAndEquivalents(ticker, avKey);
+    if(avVal !== undefined){
+      setGlobalOverride(ticker, "cashAndEquivalents", avVal);
+      return { ok: true, source: "av" };
+    }
+  }catch(e){ /* no source had data for this ticker today */ }
+
+  return { ok: false, source: null };
+}
+
 async function fetchFinnhubQuote(ticker, apiKey){
   const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=${apiKey}`);
   const data = await res.json();
@@ -501,6 +680,7 @@ function applyCustomParamLiveData(ticker, rawMetric){
 async function fetchLiveDataForOneTicker(ticker){
   const apiKey = getSavedApiKey();
   if(!apiKey) return { ok: false, reason: "no-key" };
+  let result;
   try{
     const price = await fetchFinnhubQuote(ticker, apiKey);
     const metrics = await fetchFinnhubMetrics(ticker, apiKey, price);
@@ -515,12 +695,18 @@ async function fetchLiveDataForOneTicker(ticker){
     };
     applyCustomParamLiveData(ticker, metrics.raw);
     fetchFailedTickers.delete(ticker);
-    return { ok: true };
+    result = { ok: true };
   }catch(err){
     liveDataMap[ticker] = undefined;
     fetchFailedTickers.add(ticker);
-    return { ok: false, reason: err.message };
+    result = { ok: false, reason: err.message };
   }
+  // Best-effort, independent of whether the Finnhub price/metrics call above
+  // succeeded — Finnhub has no free-tier source for this figure at all (see
+  // fetchCashAndEquivalentsForTicker's own comments), so this always tries
+  // SEC EDGAR, then Alpha Vantage, on its own.
+  try{ await fetchCashAndEquivalentsForTicker(ticker); }catch(e){ /* non-fatal to this ticker's live-data result */ }
+  return result;
 }
 
 async function fetchLiveDataForAllAssets(){
@@ -539,6 +725,12 @@ async function fetchLiveDataForAllAssets(){
   let failCount = 0;
   const failedTickers = [];
   const noPeTickers = [];
+
+  // Shared across the whole run: once the Alpha Vantage daily-quota prompt is
+  // declined for one ticker, stop asking again for every remaining ticker —
+  // see fetchCashAndEquivalentsForTicker's own comment.
+  const cashFetchCtx = { avDeclined: false };
+  let cashSecCount = 0, cashAvCount = 0, cashNoneCount = 0;
 
   const workingAssets = getWorkingData();
   for(const asset of workingAssets){
@@ -564,6 +756,18 @@ async function fetchLiveDataForAllAssets(){
       failCount++;
       failedTickers.push(asset.ticker);
     }
+
+    // Cash & Equivalents ($M): Finnhub has no free source for this at all, so
+    // this is tried independently of whether the Finnhub call above succeeded
+    // — SEC EDGAR first (free/unlimited), Alpha Vantage as a fallback (free
+    // key, capped at 25/day — see confirmAlphaVantageQuota).
+    try{
+      const cashResult = await fetchCashAndEquivalentsForTicker(asset.ticker, cashFetchCtx);
+      if(cashResult.source === "sec") cashSecCount++;
+      else if(cashResult.source === "av") cashAvCount++;
+      else cashNoneCount++;
+    }catch(e){ cashNoneCount++; }
+
     // Stagger calls to stay well under Finnhub's free-tier rate limit (60/min).
     await sleep(120);
   }
@@ -589,6 +793,11 @@ async function fetchLiveDataForAllAssets(){
   }
   if(noPeTickers.length > 0){
     msgParts.push(`No P/E data available from Finnhub for: ${noPeTickers.join(", ")} (common for recent IPOs/SPACs or thinly-covered small caps — price/ROA still updated where possible).`);
+  }
+  if(cashSecCount > 0 || cashAvCount > 0){
+    msgParts.push(`Cash & Equivalents updated for ${cashSecCount + cashAvCount}/${workingAssets.length} tickers (${cashSecCount} via SEC EDGAR, ${cashAvCount} via Alpha Vantage)${cashNoneCount > 0 ? `; no source had data for ${cashNoneCount}` : ""}.`);
+  } else if(cashNoneCount > 0){
+    msgParts.push(`Cash & Equivalents: no data found via SEC EDGAR${getSavedAlphaVantageKey() ? " or Alpha Vantage" : " (add an Alpha Vantage key above to also try that as a fallback)"} for ${cashNoneCount} ticker(s).`);
   }
   statusEl.textContent = msgParts.join(" ");
   statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
@@ -4673,6 +4882,22 @@ try{
     fetchLiveBtn.addEventListener("click", fetchLiveDataForAllAssets);
   } else {
     console.warn("fetchLiveBtn not found in the page — index.html may be out of date.");
+  }
+
+  const alphaVantageApiKeyInput = document.getElementById("alphaVantageApiKeyInput");
+  if(alphaVantageApiKeyInput) alphaVantageApiKeyInput.value = getSavedAlphaVantageKey();
+
+  const saveAlphaVantageKeyBtn = document.getElementById("saveAlphaVantageKeyBtn");
+  if(saveAlphaVantageKeyBtn){
+    saveAlphaVantageKeyBtn.addEventListener("click", () => {
+      const key = document.getElementById("alphaVantageApiKeyInput").value.trim();
+      saveAlphaVantageKey(key);
+      const statusEl = document.getElementById("alphaVantageKeyStatus");
+      if(statusEl){
+        statusEl.textContent = key ? "Key saved in this browser." : "Key cleared — Cash & Equivalents will only try SEC EDGAR.";
+        statusEl.style.color = "var(--emerald)";
+      }
+    });
   }
 }catch(err){
   console.error("Failed to wire up live-data controls:", err);
