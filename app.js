@@ -1,4 +1,36 @@
-// APP.JS BUILD: v5.54 (Fixes a bug from v5.53: Past Purchases' default starting
+// APP.JS BUILD: v5.55 (1. Added Alpha Vantage as its own independent "Fetch live
+// data" source (Current Price, P/E, ROA, Revenue Growth, Net Margin, Beta) —
+// fetchAlphaVantageLiveDataForAllAssets() — completely separate from Finnhub's own
+// fetchLiveDataForAllAssets(): different key, different button (#fetchAlphaVantageLiveBtn),
+// different status element (#alphaVantageFetchStatus), different in-memory map
+// (alphaVantageLiveDataMap vs. liveDataMap). getMergedLiveData() combines the two only
+// at render time — Finnhub wins per-field when it has data, Alpha Vantage only fills
+// gaps — so neither button's fetch can be triggered or clobbered by the other.
+// 2. Investigated the "Current Price disappears on refresh" report: by design, a
+// live fetch's results live only in memory (liveDataMap/alphaVantageLiveDataMap) and
+// are never persisted, so they reset to the static/override value on a real page
+// reload until "Fetch live data" runs again — no separate race-condition bug found;
+// openDashboard() already awaits the cloud pull before any rendering happens.
+// 3. Forward P/E now sits immediately after P/E Multiple in NEW_USER_DEFAULT_COLUMN_ORDER,
+// plus a one-time reorderForwardPEIfNeeded() migration repositions it for existing
+// accounts' already-saved column order too.
+// 4. Parameter glossary: stripped the repeated "Fixed column on the main Portfolio
+// Lists table..." boilerplate from every row — definitions now stick to the metric
+// itself.
+// 5. All Information/Disclaimer boxes now consistently use the same light-blue style
+// as the Live data panel (a single default .disclaimer color instead of per-box
+// overrides), converted to point-form bullets, and the "How each mandate calculates"
+// / "Parameter glossary" section notes use the same light blue. Outdated disclaimer
+// text (the old "manually entered placeholder figures" banner; "Past Purchases starts
+// completely empty") was rewritten to match current behavior.
+// 6. Past Purchases' Date Purchased and Date Sale both default to blank instead of
+// today's date for a newly-added ticker — fixed at the source
+// (getNewUserDefaultPastPurchasesParams()) — and the same "blank stays blank, only the
+// explicit __today__ sentinel resolves to today" fix was applied to the shared
+// PARAM_PRESETS "Date Purchased" preset and to addCustomParam() (previously ANY blank
+// date default silently became today's date there, on the Portfolio Lists side).
+//
+// v5.54 (Fixes a bug from v5.53: Past Purchases' default starting
 // columns were seeded only inside initializeNewUserDefaults(), which ONLY runs for a
 // truly brand-new signup (gated on portfolioLists === null) — so an existing account
 // that simply hadn't configured Past Purchases yet never got them, showing just a bare
@@ -28,7 +60,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.54 (fix: Past Purchases starting columns now seed for existing accounts too, not just brand-new signups; pending banner left-aligned)");
+console.log("app.js loaded — build v5.55 (independent Alpha Vantage \"Fetch live data\", Forward P/E column reorder, glossary/disclaimer cleanup, Past Purchases dates default blank)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -51,7 +83,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -333,6 +365,12 @@ async function openDashboard(user){
   // yet) whose pastPurchasesParams the cloud pull above just left unset — then
   // pushes that seed up right away so it isn't lost before the next auto-sync.
   if(seedPastPurchasesDefaultParamsIfNeeded()){
+    pushSnapshotToCloud();
+  }
+
+  // One more one-time migration, same pattern: moves Forward P/E to sit right after
+  // P/E Multiple in this account's own saved column order, if it isn't already there.
+  if(reorderForwardPEIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -681,6 +719,158 @@ function fetchAlphaVantageCashAndEquivalents(ticker, apiKey){
 
 function fetchAlphaVantageOperatingExpenses(ticker, apiKey){
   return fetchAlphaVantageReportField(ticker, apiKey, "INCOME_STATEMENT", "operatingExpenses");
+}
+
+// --- Alpha Vantage as its OWN standalone "Fetch live data" source ---
+// A separate, independently-triggered counterpart to Finnhub's "Fetch live data"
+// button above (see fetchLiveDataForAllAssets) — pulls Current Price, P/E, ROA,
+// Revenue Growth, Net Margin, and Beta straight from Alpha Vantage, for anyone who
+// doesn't have a Finnhub key or wants a second source to compare against. This is
+// deliberately kept separate end-to-end so the two "Fetch live data" buttons never
+// cross-function: each reads only its own saved API key, writes only into its own
+// map (alphaVantageLiveDataMap here vs. liveDataMap for Finnhub), and reports to
+// its own status element (#alphaVantageFetchStatus vs. #fetchStatus) — clicking
+// one never triggers, requires, or clears the other's key, data, or status text.
+// The only place the two ever meet is getMergedLiveData() below, at render time,
+// where Alpha Vantage's value for a field is used only if Finnhub's own fetch
+// didn't already return one for that same ticker+field — the same "layered
+// fallback" shape already used for Cash Runway's SEC-then-Alpha-Vantage pair,
+// not a merge that lets either button overwrite what the other one fetched.
+async function fetchAlphaVantageQuoteForPrice(ticker, apiKey){
+  const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`);
+  const data = await res.json();
+  if(data.Note || data.Information) throw new Error(data.Note || data.Information); // rate-limit/invalid-key messages
+  const quote = data["Global Quote"];
+  const price = quote && Number(quote["05. price"]);
+  if(!price || isNaN(price)) throw new Error("no price returned");
+  return price;
+}
+
+// Alpha Vantage's OVERVIEW endpoint reports ROA/margins/growth as decimal fractions
+// (e.g. 0.1234), unlike Finnhub's roaTTM/netProfitMarginTTM which already come back
+// as whole percentages (e.g. 12.34) — every "(%)"-labeled field here is scaled ×100
+// so it lands in the same units the rest of the app (static defaults, the scoring
+// formulas, Finnhub's own fetch) already expects. No Debt-to-Equity field exists on
+// this endpoint, so that one field is intentionally left for Finnhub/static/manual
+// only rather than guessing at the wrong source field.
+async function fetchAlphaVantageOverview(ticker, apiKey){
+  const res = await fetch(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`);
+  const data = await res.json();
+  if(data.Note || data.Information) throw new Error(data.Note || data.Information);
+  if(!data || !data.Symbol) return {}; // unknown ticker / empty response — leave every field undefined
+
+  const toNum = raw => (raw === undefined || raw === null || raw === "None" || raw === "-") ? undefined : (isNaN(Number(raw)) ? undefined : Number(raw));
+  const roaFraction = toNum(data.ReturnOnAssetsTTM);
+  const revenueGrowthFraction = toNum(data.QuarterlyRevenueGrowthYOY);
+  const netMarginFraction = toNum(data.ProfitMargin);
+
+  return {
+    pe: toNum(data.PERatio),
+    roa: roaFraction !== undefined ? roaFraction * 100 : undefined,
+    revenueGrowth: revenueGrowthFraction !== undefined ? revenueGrowthFraction * 100 : undefined,
+    netMargin: netMarginFraction !== undefined ? netMarginFraction * 100 : undefined,
+    beta: toNum(data.Beta),
+  };
+}
+
+// Alpha Vantage's own live-data store — kept entirely separate from Finnhub's
+// liveDataMap (see the big comment above) so neither "Fetch live data" button's
+// results ever get silently clobbered or claimed by the other one.
+let alphaVantageLiveDataMap = {};
+let alphaVantageFetchFailedTickers = new Set();
+let lastAlphaVantageFetchTime = null;
+
+// Combines both sources for rendering/scoring: Finnhub wins per-field whenever it
+// has a value for that ticker; Alpha Vantage only fills in a field Finnhub's own
+// fetch left blank. Returns undefined if NEITHER source has ever fetched this
+// ticker, matching liveDataMap's own "not fetched" convention.
+function getMergedLiveData(ticker){
+  const fh = liveDataMap[ticker];
+  const av = alphaVantageLiveDataMap[ticker];
+  if(!fh && !av) return undefined;
+  const pick = field => (fh && fh[field] !== undefined) ? fh[field] : (av ? av[field] : undefined);
+  return {
+    price: pick("price"),
+    pe: pick("pe"),
+    roa: pick("roa"),
+    revenueGrowth: pick("revenueGrowth"),
+    netMargin: pick("netMargin"),
+    debtToEquity: pick("debtToEquity"),
+    beta: pick("beta"),
+  };
+}
+
+async function fetchAlphaVantageLiveDataForAllAssets(){
+  const statusEl = document.getElementById("alphaVantageFetchStatus");
+  const apiKey = getSavedAlphaVantageKey();
+  if(!apiKey){
+    if(statusEl){ statusEl.textContent = "Add and save an Alpha Vantage API key first."; statusEl.style.color = "var(--amber)"; }
+    return;
+  }
+
+  const workingAssets = getWorkingData();
+  if(workingAssets.length === 0){
+    if(statusEl){ statusEl.textContent = "No tickers on this list to fetch."; statusEl.style.color = "var(--amber)"; }
+    return;
+  }
+
+  // Alpha Vantage's free tier caps at ~25 requests/day, and this needs 2 per ticker
+  // (a quote call plus an overview call) — confirm once, up front, rather than
+  // prompting per ticker like the Cash Runway fallback does, since here Alpha
+  // Vantage is the primary source being asked to cover the whole list, not an
+  // occasional fallback for two fields.
+  const callsNeeded = workingAssets.length * 2;
+  const alreadyToday = getAlphaVantageCallCountToday();
+  if(alreadyToday + callsNeeded > 25){
+    const proceed = confirm(`This will make about ${callsNeeded} Alpha Vantage requests (2 per ticker). You've used ${alreadyToday}/25 free-tier requests today already, so this run may run out partway through and leave some tickers unfetched. Continue anyway?`);
+    if(!proceed){
+      if(statusEl){ statusEl.textContent = "Cancelled — would exceed today's Alpha Vantage free-tier quota."; statusEl.style.color = "var(--amber)"; }
+      return;
+    }
+  }
+
+  if(statusEl){ statusEl.textContent = "Fetching live data via Alpha Vantage… this can take a while (the free tier allows about 5 requests/minute)."; statusEl.style.color = "var(--text-secondary)"; }
+
+  let successCount = 0, failCount = 0;
+  const failedTickers = [];
+
+  for(let i = 0; i < workingAssets.length; i++){
+    const asset = workingAssets[i];
+    try{
+      const price = await fetchAlphaVantageQuoteForPrice(asset.ticker, apiKey);
+      recordAlphaVantageCall();
+      await sleep(13000); // stay under Alpha Vantage's free-tier ~5-requests/minute cap
+      const overview = await fetchAlphaVantageOverview(asset.ticker, apiKey);
+      recordAlphaVantageCall();
+      alphaVantageLiveDataMap[asset.ticker] = { price, ...overview };
+      alphaVantageFetchFailedTickers.delete(asset.ticker);
+      successCount++;
+    }catch(err){
+      alphaVantageLiveDataMap[asset.ticker] = undefined;
+      alphaVantageFetchFailedTickers.add(asset.ticker);
+      failCount++;
+      failedTickers.push(asset.ticker);
+    }
+    if(i < workingAssets.length - 1) await sleep(13000);
+  }
+
+  lastAlphaVantageFetchTime = new Date();
+  runMatrixOptimization();
+
+  // Same reasoning as Finnhub's own fetch: re-pull into Past Purchases now, so any
+  // column mirroring a Portfolio Lists field (e.g. Current Price) picks this up too.
+  if(typeof refreshPastPurchasesFromPortfolio === "function"){
+    refreshPastPurchasesFromPortfolio();
+    if(typeof renderPastPurchasesTable === "function") renderPastPurchasesTable();
+    if(typeof renderPastPurchasesParamList === "function") renderPastPurchasesParamList();
+  }
+
+  if(statusEl){
+    statusEl.textContent = failCount === 0
+      ? `Live data updated for all ${successCount} tickers via Alpha Vantage at ${lastAlphaVantageFetchTime.toLocaleTimeString()}.`
+      : `Updated ${successCount}/${workingAssets.length} tickers via Alpha Vantage at ${lastAlphaVantageFetchTime.toLocaleTimeString()}. Failed (using Finnhub/static fallback): ${failedTickers.join(", ")}.`;
+    statusEl.style.color = failCount === 0 ? "var(--emerald)" : "var(--amber)";
+  }
 }
 
 // --- Combined orchestrator: SEC EDGAR first, Alpha Vantage only if needed ---
@@ -1502,7 +1692,7 @@ const PARAM_PRESETS = [
   { label: "Units Purchased", type: "number", defaultValue: 0 },
   { label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
   { label: "To Buy Price", type: "number", defaultValue: 0 },
-  { label: "Date Purchased", type: "date", defaultValue: "__today__" },
+  { label: "Date Purchased", type: "date", defaultValue: "" },
   { label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { label: "Dividend Payout Ratio (%)", type: "number", defaultValue: 0 },
   { label: "EPS Diluted ($)", type: "number", defaultValue: 0 },
@@ -1640,7 +1830,11 @@ function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDiv
   const isDate = type === "date";
   let resolvedDefault;
   if(isDate){
-    resolvedDefault = (!defaultValue || defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : defaultValue;
+    // Only the explicit "__today__" sentinel resolves to today's date — an
+    // ordinary blank default stays blank, rather than every unfilled date field
+    // silently claiming today's date (same fix as Past Purchases' own
+    // addPastPurchaseParam, and for the same reason — see its comment).
+    resolvedDefault = (defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : (defaultValue || "");
   } else if(isText){
     resolvedDefault = defaultValue || "";
   } else {
@@ -1924,8 +2118,9 @@ function getWorkingData(explicitList){
 
 // Resolves a ticker's BUILTIN_COLUMNS values (Current Price, ROA, P/E, etc.)
 // using the exact same precedence the main table itself renders with — manual
-// override > live Finnhub fetch > static default — regardless of which list(s)
-// the ticker happens to belong to. This is what lets Past Purchases pull a
+// override > live fetch (Finnhub, or Alpha Vantage filling in whatever Finnhub
+// didn't have — see getMergedLiveData) > static default — regardless of which
+// list(s) the ticker happens to belong to. This is what lets Past Purchases pull a
 // currently-accurate "Current Price" (etc.) rather than a stale one, including
 // right after a live "Fetch live data" run. Returns null for a ticker that has
 // never appeared on the main table at all (no base data and no overrides), so
@@ -1936,7 +2131,7 @@ function getResolvedBuiltinAssetValues(ticker){
   if(!baseAsset && Object.keys(ov).length === 0) return null;
   const shell = baseAsset || { name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med",
     revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, operatingExpenses: 0, beta: 1.0 };
-  const live = liveDataMap[ticker];
+  const live = getMergedLiveData(ticker);
   const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : shell.freeCashFlow;
   const cashAndEquivalents = ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : shell.cashAndEquivalents;
   const operatingExpenses = ov.operatingExpenses !== undefined ? ov.operatingExpenses : shell.operatingExpenses;
@@ -2086,7 +2281,9 @@ function renameTicker(oldTicker, newTicker){
 
   // Live data was fetched under the old symbol; it doesn't necessarily apply to
   // the new one, so clear it and let the next "Fetch live data" refresh it properly.
+  // Both sources are cleared — Finnhub's own map and Alpha Vantage's separate one.
   delete liveDataMap[oldTicker];
+  delete alphaVantageLiveDataMap[oldTicker];
 }
 
 function importListInto(sourceListId){
@@ -2469,6 +2666,34 @@ function migrateLegacyMarketTickersToCustomIfNeeded(){
     if(anyPromoted) saveAllLists(lists);
     localStorage.setItem("legacyMarketTickersMigrated", "1");
     return anyPromoted;
+  }catch(e){ return false; }
+}
+
+// One-time-per-account migration: moves "Forward P/E" to sit immediately after
+// "P/E Multiple" in an existing account's saved column order. NEW_USER_DEFAULT_COLUMN_ORDER
+// above already places it there for a brand-new signup, but that constant is only
+// ever read once, at account creation — an existing account's own columnOrder is a
+// separate, already-saved array that changing the default never touches on its own
+// (the same class of gap fixed for Past Purchases' starting columns — see
+// seedPastPurchasesDefaultParamsIfNeeded()'s own comment). Gated by the
+// "forwardPeReordered" flag (a SYNC_KEY) so it runs exactly once per account and
+// never re-fights a deliberate reorder the user makes afterward.
+function reorderForwardPEIfNeeded(){
+  try{
+    if(localStorage.getItem("forwardPeReordered") === "1") return false;
+    localStorage.setItem("forwardPeReordered", "1");
+    const raw = localStorage.getItem("columnOrder");
+    if(!raw) return false; // no saved order yet — the default array above already has it right
+    const order = JSON.parse(raw);
+    const peIdx = order.indexOf("pe");
+    const fpeIdx = order.indexOf("custom_forward_pe");
+    if(peIdx === -1 || fpeIdx === -1) return false; // one or both not present — nothing to reorder
+    if(fpeIdx === peIdx + 1) return false; // already exactly where it should be
+    order.splice(fpeIdx, 1);
+    const newPeIdx = order.indexOf("pe"); // re-find pe's index — the splice above may have shifted it
+    order.splice(newPeIdx + 1, 0, "custom_forward_pe");
+    saveColumnOrder(order);
+    return true;
   }catch(e){ return false; }
 }
 
@@ -4530,9 +4755,10 @@ function runMatrixOptimization() {
 
   let processedAssets = workingData.map(asset => {
     const ov = asset._overrides || {};
-    const live = liveDataMap[asset.ticker];
+    const live = getMergedLiveData(asset.ticker);
 
-    // Precedence for every editable field: manual override > live fetch > static default.
+    // Precedence for every editable field: manual override > live fetch (Finnhub,
+    // or Alpha Vantage filling in whatever Finnhub didn't have) > static default.
     const name = ov.name !== undefined ? ov.name : asset.name;
     const currentPrice = ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : asset.currentPrice);
     const pe = ov.pe !== undefined ? ov.pe : ((live && live.pe !== undefined) ? live.pe : asset.pe);
@@ -4556,7 +4782,9 @@ function runMatrixOptimization() {
     const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
     const isLive = !!(live && live.price !== undefined) && !priceRelevantOverride;
     const isEdited = priceRelevantOverride;
-    const fetchFailed = fetchFailedTickers.has(asset.ticker) && !priceRelevantOverride;
+    // Only flagged when BOTH sources were tried and neither came back with a price —
+    // if either Finnhub or Alpha Vantage succeeded, isLive above already covers it.
+    const fetchFailed = (fetchFailedTickers.has(asset.ticker) || alphaVantageFetchFailedTickers.has(asset.ticker)) && !priceRelevantOverride && !isLive;
 
     // Guarded against currentPrice === 0 (a brand-new, not-yet-fetched asset, or
     // any other zero/blank price) — without this, division by zero would show
@@ -4739,7 +4967,7 @@ function runMatrixOptimization() {
     let badge;
     if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${item.ticker}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
     else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
-    else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="Finnhub couldn't return data for this ticker">⚠ fetch failed</span>`;
+    else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="The last live fetch attempt (Finnhub and/or Alpha Vantage) couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
 
     const columnOrder = getColumnOrder();
@@ -5181,10 +5409,20 @@ try{
       saveAlphaVantageKey(key);
       const statusEl = document.getElementById("alphaVantageKeyStatus");
       if(statusEl){
-        statusEl.textContent = key ? "Key saved in this browser." : "Key cleared — Cash & Equivalents will only try SEC EDGAR.";
+        statusEl.textContent = key ? "Key saved in this browser." : "Key cleared — Cash & Equivalents will only try SEC EDGAR, and Alpha Vantage's own \"Fetch live data\" button won't work.";
         statusEl.style.color = "var(--emerald)";
       }
     });
+  }
+
+  // Alpha Vantage's own "Fetch live data" button — a separate control, wired to a
+  // separate function, with its own status element (#alphaVantageFetchStatus), so
+  // it never cross-functions with Finnhub's "Fetch live data" button above.
+  const fetchAlphaVantageLiveBtn = document.getElementById("fetchAlphaVantageLiveBtn");
+  if(fetchAlphaVantageLiveBtn){
+    fetchAlphaVantageLiveBtn.addEventListener("click", fetchAlphaVantageLiveDataForAllAssets);
+  } else {
+    console.warn("fetchAlphaVantageLiveBtn not found in the page — index.html may be out of date.");
   }
 }catch(err){
   console.error("Failed to wire up live-data controls:", err);
@@ -5607,9 +5845,9 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
   "name", "allocationWeight", "calculatedUpside",
   "custom_actual_upside_pct", "custom_units_purchased", "custom_avg_purchase_price",
   "currentPrice", "targetPrice", "custom_to_buy_price",
-  "stability", "roa", "pe", "revenueGrowth", "pegRatio", "debtToEquity",
+  "stability", "roa", "pe", "custom_forward_pe", "revenueGrowth", "pegRatio", "debtToEquity",
   "freeCashFlow", "cashAndEquivalents", "operatingExpenses", "cashRunway", "beta", "netMargin",
-  "custom_dividend_yield_pct", "custom_market_cap_b", "custom_forward_pe",
+  "custom_dividend_yield_pct", "custom_market_cap_b",
 ];
 
 // Past Purchases (the "List 1" default list) starts with no columns at all
@@ -5618,16 +5856,15 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
 // Average Purchase Price ($), Selling Price, Date Sale, Current Price, Missed
 // Gain % (Ticker/Asset itself is a fixed identity column, not a param). Fixed
 // ids (rather than addPastPurchaseParam()'s timestamped ones), same reasoning
-// as NEW_USER_DEFAULT_CUSTOM_PARAMS above. Built fresh each call (a function,
-// not a static array) so "Date Purchased"'s "__today__" default resolves to
-// the actual date a brand-new account is created, not a date baked in at the
-// time this file was last edited.
+// as NEW_USER_DEFAULT_CUSTOM_PARAMS above. Date Purchased and Date Sale both
+// default to blank — a newly-added ticker shouldn't silently claim today's date
+// for either one; the user fills each in deliberately via the calendar picker
+// when they actually know the date, even if the column happens to be hidden.
 function getNewUserDefaultPastPurchasesParams(){
-  const todayStr = new Date().toISOString().slice(0, 10);
   return [
     { id: "pp_sale_profit", label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
     { id: "pp_book_value", label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
-    { id: "pp_date_purchased", label: "Date Purchased", type: "date", defaultValue: todayStr },
+    { id: "pp_date_purchased", label: "Date Purchased", type: "date", defaultValue: "" },
     { id: "pp_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
     { id: "pp_avg_purchase_price", label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
     { id: "pp_selling_price", label: "Selling Price", type: "number", defaultValue: 0 },
@@ -5675,6 +5912,9 @@ function initializeNewUserDefaults(){
     // set its flag now so that migration never runs against this fresh list (see its
     // own comment for why running it against a fresh list would be wrong).
     localStorage.setItem("legacyMarketTickersMigrated", "1");
+    // Same reasoning: NEW_USER_DEFAULT_COLUMN_ORDER above already places Forward P/E
+    // right after P/E Multiple, so reorderForwardPEIfNeeded() has nothing to fix here.
+    localStorage.setItem("forwardPeReordered", "1");
     // Past Purchases' own starting columns are seeded separately, by
     // seedPastPurchasesDefaultParamsIfNeeded() (called from openDashboard) — see
     // its own comment for why that's a better gate than this function's
