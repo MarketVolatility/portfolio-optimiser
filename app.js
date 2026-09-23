@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.49 (Cash Runway (yr) formula changed to Cash & Equivalents ($M) ÷ Operating Expenses ($M) — a "zero revenue" runway that no longer depends on profitability, so every company with both figures gets a real number instead of an "∞ (profitable)" special case; the old FCF-based formula and its ∞ display are retired. New "Operating Expenses ($M)" column added, auto-fetched the same way Cash & Equivalents already is: free SEC EDGAR first (OperatingExpenses, falling back to CostsAndExpenses), then Alpha Vantage's INCOME_STATEMENT as a fallback, sharing the same 25/day quota warning.)
-console.log("app.js loaded — build v5.49 (Cash Runway (yr) = Cash & Equivalents ÷ Operating Expenses; new Operating Expenses ($M) column, auto-fetched via SEC EDGAR/Alpha Vantage)");
+// APP.JS BUILD: v5.50 (1. "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" are now also excluded from the "Detailed Update for Selected Assets" AI-paste prompt — they were already never fetched from Finnhub/SEC/Alpha Vantage, but are now strictly manual-entry/Import-Excel only everywhere, matched by label via MANUAL_ONLY_FIELD_LABELS. 2. "Reset my account data" now requires re-entering and verifying the account password, via Supabase signInWithPassword, before the wipe proceeds. 3. Detailed Update's ✓/✕ checklist selected-colors changed: ✕ excluded is now a dull pink (was red), ✓ included is now green (was blue). 4. Added a "Request all for current Portfolio list: [name]" quick-select button to Detailed Update that marks every asset on the currently active Portfolio List as ✓ included in one click.)
+console.log("app.js loaded — build v5.50 (Detailed Update: 4 fields now excluded from AI-paste, dull-pink/green checklist colors, new 'Request all for current list' button; Reset my account data now requires password verification)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1099,12 +1099,21 @@ function ensureTickerInActiveList(ticker, name){
   addAsset({ ticker, name });
 }
 
+// These fields are strictly manual-entry (typed in by hand) or Import-Excel
+// only — never fetched from the internet, and never asked of an AI via the
+// Detailed Update / Brief Update paste flows either, since that's still an
+// external source providing the number rather than the user's own manual
+// entry or spreadsheet import. Matched by label (not id) so this also catches
+// a user manually re-adding one of these via the "+/- Parameter" preset
+// dropdown, which generates its own non-deterministic id.
+const MANUAL_ONLY_FIELD_LABELS = ["Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)", "To Buy Price"];
+
 // getEditableMainColumnDefs is defined further below (with the Excel sample/import
 // feature) but, as a function declaration, is hoisted — safe to call here at
 // runtime since this only ever runs from a click handler, after the whole file
 // has loaded.
 function getDetailedUpdateFields(){
-  return getEditableMainColumnDefs().filter(d => d.type === "number");
+  return getEditableMainColumnDefs().filter(d => d.type === "number" && !MANUAL_ONLY_FIELD_LABELS.includes(d.label));
 }
 
 // A few numeric fields use an app-specific sentinel value instead of a plain
@@ -1136,8 +1145,24 @@ function buildDetailedUpdatePrompt(assets){
   return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
 }
 
+// Selected-state colors for the ✕ / ✓ checklist buttons below. Grey/undecided
+// stays var(--text-secondary) regardless. ✕ excluded uses a dull/dusty pink
+// (not the app's usual bright red, which reads as more of an alarm/error
+// color) and ✓ included uses green, per the user's explicit request.
+const DUS_EXCLUDED_COLOR = "#c98a9e";
+const DUS_INCLUDED_COLOR = "var(--emerald)";
+
+function updateDusSelectAllLabel(){
+  const label = document.getElementById("dusCurrentListNameLabel");
+  if(!label) return;
+  let name = "";
+  try{ name = getActiveList().name || ""; }catch(e){ /* not ready yet */ }
+  label.textContent = name;
+}
+
 function renderDusRequestList(){
   const container = document.getElementById("dusRequestList");
+  updateDusSelectAllLabel();
   if(!container) return;
   const assets = getAllPortfolioAssetsForDetailedUpdate();
   const states = getDusAssetStates();
@@ -1151,8 +1176,8 @@ function renderDusRequestList(){
     const row = document.createElement("div");
     row.className = "remove-chip";
     row.innerHTML = `<span>${a.ticker} — ${a.name || a.ticker}</span>` +
-      `<button data-ticker="${a.ticker}" data-state="excluded" title="Exclude ${a.ticker} from the request" style="color:${state === 'excluded' ? '#ef4444' : 'var(--text-secondary)'};">&#10007;</button>` +
-      `<button data-ticker="${a.ticker}" data-state="included" title="Include ${a.ticker} in the request" style="color:${state === 'included' ? 'var(--accent-blue)' : 'var(--text-secondary)'};">&#10003;</button>`;
+      `<button data-ticker="${a.ticker}" data-state="excluded" title="Exclude ${a.ticker} from the request" style="color:${state === 'excluded' ? DUS_EXCLUDED_COLOR : 'var(--text-secondary)'};">&#10007;</button>` +
+      `<button data-ticker="${a.ticker}" data-state="included" title="Include ${a.ticker} in the request" style="color:${state === 'included' ? DUS_INCLUDED_COLOR : 'var(--text-secondary)'};">&#10003;</button>`;
     row.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
         const newState = btn.getAttribute("data-state");
@@ -1168,6 +1193,17 @@ function renderDusRequestList(){
   });
 }
 
+// "Request all for current Portfolio list" quick-select: marks every ticker
+// already on the currently active Portfolio List as ✓ included, in one click,
+// instead of checking them one by one. Assets on OTHER lists are left as-is.
+function selectAllCurrentListForDetailedUpdate(){
+  const list = getActiveList();
+  const workingData = getWorkingData(list);
+  workingData.forEach(asset => setDusAssetState(asset.ticker, "included"));
+  renderDusRequestList();
+  return { list, count: workingData.length };
+}
+
 function wireUpDetailedUpdate(){
   const addBtn = document.getElementById("dusAddBtn");
   const tickerInput = document.getElementById("dusTicker");
@@ -1181,9 +1217,20 @@ function wireUpDetailedUpdate(){
   const promptStatus = document.getElementById("dusPromptStatus");
   const parseStatus = document.getElementById("dusParseStatus");
   const pasteInput = document.getElementById("dusPasteInput");
+  const selectAllCurrentListBtn = document.getElementById("dusSelectAllCurrentListBtn");
   if(!addBtn || !generateBtn || !parseBtn || !promptBox) return; // index.html may be out of date
 
   renderDusRequestList();
+
+  if(selectAllCurrentListBtn){
+    selectAllCurrentListBtn.addEventListener("click", () => {
+      const { list, count } = selectAllCurrentListForDetailedUpdate();
+      addStatus.textContent = count > 0
+        ? `Marked all ${count} asset(s) on "${list.name}" as ✓ included in the request.`
+        : `"${list.name}" has no assets yet.`;
+      addStatus.style.color = count > 0 ? "var(--emerald)" : "var(--amber)";
+    });
+  }
 
   addBtn.addEventListener("click", () => {
     const ticker = (tickerInput.value || "").trim().toUpperCase();
@@ -4663,6 +4710,7 @@ try{
       renderRemoveList();
       renderListSelector();
       runMatrixOptimization();
+      if(typeof updateDusSelectAllLabel === "function") updateDusSelectAllLabel();
       showListActionStatus(`Switched to "${getActiveList().name}". Fetching live data…`);
       await fetchLiveDataForAllAssets();
       showListActionStatus(`Switched to "${getActiveList().name}".`);
@@ -5021,6 +5069,27 @@ try{
     resetAccountDataBtn.addEventListener("click", async () => {
       const syncStatusEl = document.getElementById("syncStatus");
       if(!confirm("Reset this account's data? This permanently replaces everything currently saved for this account — locally and in the cloud — with the default starting Sample List. This cannot be undone. Continue?")) return;
+
+      // Extra security gate: require re-entering the account password before this
+      // irreversible wipe proceeds. Verified against Supabase itself via
+      // signInWithPassword (the same call the login form uses), rather than
+      // trusting anything typed locally, so a wrong password can't slip through.
+      const emailInline = document.getElementById("loggedInEmailInline");
+      const currentEmail = (emailInline && emailInline.textContent || "").trim();
+      const enteredPassword = prompt(`For your security, re-enter the password for ${currentEmail || "this account"} to confirm the reset:`);
+      if(enteredPassword === null) return; // cancelled
+      if(!enteredPassword){
+        if(syncStatusEl){ syncStatusEl.textContent = "Reset cancelled — a password is required."; syncStatusEl.style.color = "var(--amber)"; }
+        return;
+      }
+      if(syncStatusEl){ syncStatusEl.textContent = "Verifying password…"; syncStatusEl.style.color = "var(--sub)"; }
+      try{
+        const { error: verifyError } = await getAuthClient().auth.signInWithPassword({ email: currentEmail, password: enteredPassword });
+        if(verifyError) throw verifyError;
+      }catch(verifyError){
+        if(syncStatusEl){ syncStatusEl.textContent = `Reset cancelled — password could not be verified: ${authError(verifyError)}`; syncStatusEl.style.color = "#ef4444"; }
+        return;
+      }
 
       clearAllLocalAppData();
       initializeNewUserDefaults();
