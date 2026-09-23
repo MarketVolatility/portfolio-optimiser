@@ -1,4 +1,35 @@
-// APP.JS BUILD: v5.55 (1. Added Alpha Vantage as its own independent "Fetch live
+// APP.JS BUILD: v5.56 (1. "Sale Profit" is now labeled "Realized Gain" everywhere
+// (Past Purchases and, if added there too, the main Portfolio Lists table) — same
+// id/formula ("salesProfitPP"), so nothing about how it's computed or how existing
+// values are stored changes, only the label. A one-time
+// renameSaleProfitToRealizedGainIfNeeded() migration relabels any already-added
+// column on an existing account; a brand-new account gets the new label from the
+// start via getNewUserDefaultPastPurchasesParams().
+// 2. Added a new computed "Unrealized Gain" column — Units Purchased × (Current
+// Price − Average Purchase Price), shown only while a position is still unsold
+// (Selling Price is 0); once sold, that gain becomes Realized Gain instead and this
+// reverts to 0/not-ready. Green when positive, dusty pink (#c98a9e, the same token
+// used elsewhere for "excluded") when negative. Sits immediately after Realized Gain
+// in the default column layout, the "+/- Parameter" preset list (available on both
+// tables, like the other sale-tracking presets), and every render/export code path
+// that already handled Realized Gain/Book Value. A one-time
+// insertUnrealizedGainColumnIfNeeded() migration adds it to existing accounts'
+// already-seeded Past Purchases columns, right after their Realized Gain column.
+// 3. Confirmed (no code change needed): the monthly "Realized Gain for month of X
+// of Y" footer/export subtotals already group strictly by each row's own Date Sale
+// value, not by any other date — verified against the exact numbers from a user
+// report via an automated test using the real production code.
+// 4. Hardened that same monthly grouping (live footer + export) against a stray
+// duplicate "Date Sale" column: it now checks every column labeled "Date Sale" for
+// a row's date instead of only the first one found, so a row's contribution can no
+// longer be silently dropped from its month's subtotal just because its date
+// happens to be stored under a second column with the same label. (Investigated a
+// report of one asset's profit missing from a month's total; the grouping math
+// itself checked out correctly against clean data in an automated test, so this is
+// a defensive hardening for the leading alternate explanation, not a confirmed
+// root-cause fix — please let us know if a total still looks off after this.)
+//
+// v5.55 (1. Added Alpha Vantage as its own independent "Fetch live
 // data" source (Current Price, P/E, ROA, Revenue Growth, Net Margin, Beta) —
 // fetchAlphaVantageLiveDataForAllAssets() — completely separate from Finnhub's own
 // fetchLiveDataForAllAssets(): different key, different button (#fetchAlphaVantageLiveBtn),
@@ -54,7 +85,7 @@
 // when user activate live update." banner row now appears in the Portfolio table
 // whenever every visible asset still has a zero Current Price, and disappears the
 // moment any one gets real data. 3. Past Purchases' default "List 1" now starts
-// pre-seeded with 9 columns (Sale Profit, Book Value, Date Purchased, Units Purchased,
+// pre-seeded with 10 columns (Realized Gain, Unrealized Gain, Book Value, Date Purchased, Units Purchased,
 // Average Purchase Price ($), Selling Price, Date Sale, Current Price, Missed Gain %)
 // for a brand-new account, via getNewUserDefaultPastPurchasesParams(). 4. "Delete List"
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
@@ -83,7 +114,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -203,7 +234,7 @@ function applyAllCollapsedSections(){
 // yet (Selling Price = 0, or there's no Selling Price column at all, in which case
 // nothing counts as sold) are shown in the table body and included in exports —
 // this is purely a display filter, so the footer totals (Total Current Book Value,
-// Total Sale Profit to date, monthly breakdowns) keep summarizing the WHOLE list
+// Total Realized Gain to date, monthly breakdowns) keep summarizing the WHOLE list
 // regardless, the same way they already don't change based on sort order.
 function getPpShowCurrentHoldingsOnly(){
   try{ return localStorage.getItem("ppShowCurrentHoldingsOnly") === "true"; }
@@ -371,6 +402,17 @@ async function openDashboard(user){
   // One more one-time migration, same pattern: moves Forward P/E to sit right after
   // P/E Multiple in this account's own saved column order, if it isn't already there.
   if(reorderForwardPEIfNeeded()){
+    pushSnapshotToCloud();
+  }
+
+  // Relabels "Sale Profit" to "Realized Gain" wherever it's already been added,
+  // then inserts the new "Unrealized Gain" column right after it — same
+  // "act on the just-pulled real data, then push the result back up right away"
+  // pattern as every migration above.
+  if(renameSaleProfitToRealizedGainIfNeeded()){
+    pushSnapshotToCloud();
+  }
+  if(insertUnrealizedGainColumnIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -2347,13 +2389,16 @@ function renderImportListSelect(){
 // (both dropdowns share the exact same full preset list — see PP_PARAM_PRESETS
 // below — so nothing is Past-Purchases-exclusive by omission anymore):
 //
-// 1. Sale-tracking fields: "Date Sale" / "Selling Price" (plain manual fields)
-//    and "Sale Profit" (computed: Units Purchased × (Selling Price − Average
-//    Purchase Price), looked up by label among the table's OWN columns —
-//    mirrors how the main table's "Actual Upside %" preset looks up "Average
-//    Purchase Price ($)" among ITS own custom params. When "Sale Profit" is
-//    added on the main table, the main table's own scoring/render code
-//    resolves it the same way, independently, among ITS custom params).
+// 1. Sale-tracking fields: "Date Sale" / "Selling Price" (plain manual fields),
+//    "Realized Gain" (computed: Units Purchased × (Selling Price − Average
+//    Purchase Price), only once Selling Price is actually entered), and
+//    "Unrealized Gain" (computed: Units Purchased × (Current Price − Average
+//    Purchase Price), only WHILE the position is still unsold) — all looked
+//    up by label among the table's OWN columns, mirroring how the main
+//    table's "Actual Upside %" preset looks up "Average Purchase Price ($)"
+//    among ITS own custom params. When either is added on the main table,
+//    the main table's own scoring/render code resolves it the same way,
+//    independently, among ITS custom params).
 //
 // 2. Fundamentals fields that mirror the main table's BUILTIN_COLUMNS
 //    (ROA, P/E, Current Price, Consensus Target Price, Rev Growth, Net Margin, PEG,
@@ -2375,7 +2420,8 @@ function renderImportListSelect(){
 const PP_ONLY_PARAM_PRESETS = [
   { label: "Date Sale", type: "date", defaultValue: "" },
   { label: "Selling Price", type: "number", defaultValue: 0 },
-  { label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+  { label: "Realized Gain", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+  { label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" },
   { label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
   { label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
   { label: "ROA (%)", type: "number", defaultValue: 0 },
@@ -2693,6 +2739,72 @@ function reorderForwardPEIfNeeded(){
     const newPeIdx = order.indexOf("pe"); // re-find pe's index — the splice above may have shifted it
     order.splice(newPeIdx + 1, 0, "custom_forward_pe");
     saveColumnOrder(order);
+    return true;
+  }catch(e){ return false; }
+}
+
+// One-time-per-account migration: relabels the "Sale Profit" preset/column to
+// "Realized Gain" everywhere it's already been added (Past Purchases' own
+// columns AND any main-table custom param using the same preset — same two
+// places renameBuyPriceParamsIfNeeded() above touches, for the same reason:
+// only the LABEL changes, never the id or the "salesProfitPP" formula, so
+// every existing row's stored values, sort/footer lookups, and exports keep
+// working unchanged once they're updated to look for the new label). Gated
+// by the "saleProfitRenamedToRealizedGain" flag (a SYNC_KEY) so it runs
+// exactly once per account and never re-fights a user who deliberately
+// relabels their own column back to something else afterward.
+function renameSaleProfitToRealizedGainIfNeeded(){
+  const isSaleProfit = label => String(label).trim().toLowerCase() === "sale profit";
+  try{
+    if(localStorage.getItem("saleProfitRenamedToRealizedGain") === "1") return false;
+    localStorage.setItem("saleProfitRenamedToRealizedGain", "1");
+    let anyChanged = false;
+    try{
+      const mainParams = getCustomParams();
+      let changed = false;
+      mainParams.forEach(p => { if(p.computed && p.formula === "salesProfitPP" && isSaleProfit(p.label)){ p.label = "Realized Gain"; changed = true; } });
+      if(changed){ saveCustomParams(mainParams); anyChanged = true; }
+    }catch(e){ /* localStorage unavailable */ }
+    try{
+      const ppParams = getPastPurchasesParams();
+      let changed = false;
+      ppParams.forEach(p => { if(p.computed && p.formula === "salesProfitPP" && isSaleProfit(p.label)){ p.label = "Realized Gain"; changed = true; } });
+      if(changed){ savePastPurchasesParams(ppParams); anyChanged = true; }
+    }catch(e){ /* localStorage unavailable */ }
+    return anyChanged;
+  }catch(e){ return false; }
+}
+
+// One-time-per-account migration: inserts a new computed "Unrealized Gain"
+// column — (Current Price − Average Purchase Price) × Units Purchased, for a
+// position that hasn't been sold yet — into every existing Past Purchases
+// column list that already has a "Realized Gain"/"Sale Profit" column
+// (formula "salesProfitPP"), positioned immediately after it, mirroring
+// where NEW_USER_DEFAULT_PAST_PURCHASES_PARAMS now places it for a brand-new
+// account. Only touches Past Purchases' own param list — unlike the rename
+// above, this doesn't retroactively add a new column to the main table's
+// custom params, since the main table has no equivalent auto-seeded starting
+// layout to keep in sync with. Gated by the "unrealizedGainColumnAdded" flag
+// (a SYNC_KEY) so it runs exactly once per account; also defensively checks
+// for an existing "unrealizedGainPP" column first, so it's a no-op if one is
+// somehow already there (e.g. a brand-new account whose fresh defaults
+// already include it).
+function insertUnrealizedGainColumnIfNeeded(){
+  try{
+    if(localStorage.getItem("unrealizedGainColumnAdded") === "1") return false;
+    localStorage.setItem("unrealizedGainColumnAdded", "1");
+    const raw = localStorage.getItem("pastPurchasesParams");
+    if(raw === null) return false; // never seeded yet — seedPastPurchasesDefaultParamsIfNeeded() will include it fresh
+    const params = JSON.parse(raw);
+    if(params.some(p => p.computed && p.formula === "unrealizedGainPP")) return false; // already present
+    const saleProfitIdx = params.findIndex(p => p.computed && p.formula === "salesProfitPP");
+    const newParam = { id: "pp_unrealized_gain_" + Date.now().toString(36), label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" };
+    if(saleProfitIdx === -1){
+      params.push(newParam); // no Realized Gain column on this list — just append it
+    } else {
+      params.splice(saleProfitIdx + 1, 0, newParam);
+    }
+    savePastPurchasesParams(params);
     return true;
   }catch(e){ return false; }
 }
@@ -3059,7 +3171,7 @@ function renderPastPurchasesRowOrderList(){
 }
 
 // Resolves every column's effective value for one row: stored value (or the
-// column's default) for plain columns, and a live calculation for "Sale Profit"
+// column's default) for plain columns, and a live calculation for "Realized Gain"
 // looked up by label among THIS table's own columns (Units Purchased, Average
 // Purchase Price, Selling Price) — same precedence pattern as the main table's
 // own computed presets, just scoped to Past Purchases' own data.
@@ -3106,7 +3218,7 @@ function resolvePastPurchaseRowValues(row){
     }
     if(p.computed && p.formula === 'bookValuePP'){
       // Units Purchased × Average Purchase Price — what the position cost, independent
-      // of whether it's been sold yet (unlike Sale Profit, this doesn't need a Selling
+      // of whether it's been sold yet (unlike Realized Gain, this doesn't need a Selling
       // Price at all).
       const norm = s => String(s).trim().toLowerCase();
       const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
@@ -3115,6 +3227,27 @@ function resolvePastPurchaseRowValues(row){
       const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
       const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0;
       resolved[p.id] = ready ? units * avg : 0;
+      resolved['_' + p.id + '_ready'] = ready;
+    }
+    if(p.computed && p.formula === 'unrealizedGainPP'){
+      // Units Purchased × (Current Price − Average Purchase Price) — the gain (or
+      // loss) on a position that HASN'T been sold yet. Current Price is resolved
+      // live (override > live fetch > static default), same as Missed Gain %, so
+      // this fluctuates automatically as the market price does. Once a Selling
+      // Price is entered, that gain becomes "realized" — Realized Gain takes over
+      // and this reverts to not-ready/0, same "not double-counted" convention as
+      // Total Current Book Value's own Selling-Price-is-0 check.
+      const norm = s => String(s).trim().toLowerCase();
+      const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
+      const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
+      const sellParam = params.find(pp => !pp.computed && norm(pp.label) === 'selling price');
+      const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
+      const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
+      const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
+      const builtin = row.asset ? getResolvedBuiltinAssetValues(row.asset.trim().toUpperCase()) : null;
+      const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
+      const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0 && !!builtin;
+      resolved[p.id] = ready ? units * (current - avg) : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
   });
@@ -3162,7 +3295,7 @@ function getPastPurchasesSortedRows(){
   else if(sortMode === 'param-date-purchased-old') sortByParamLabel('Date Purchased', 'asc'); // oldest purchase first
   else if(sortMode === 'param-date-sale') sortByParamLabel('Date Sale', 'desc'); // most recently sold first
   else if(sortMode === 'param-date-sale-old') sortByParamLabel('Date Sale', 'asc'); // oldest sale first
-  else if(sortMode === 'param-sale-profit') sortByParamLabel('Sale Profit', 'desc'); // highest profit first
+  else if(sortMode === 'param-sale-profit') sortByParamLabel('Realized Gain', 'desc'); // highest profit first
   else if(sortMode === 'param-missed-gain') sortByParamLabel('Missed Gain %', 'desc'); // biggest missed gain first
   // 'custom' (or anything else): leave as the persisted order.
   return rows;
@@ -3258,7 +3391,7 @@ function renderPastPurchasesTable(){
         : "No assets yet — add one above, or import a list.");
     tr.appendChild(td);
     tbody.appendChild(tr);
-    // The footer (Total Current Book Value, Total Sale Profit to date, etc.) still
+    // The footer (Total Current Book Value, Total Realized Gain to date, etc.) still
     // reflects the FULL list even when the filtered body is empty, so only skip it
     // when there's genuinely nothing on the list at all.
     if(tfoot && orderedRows.length === 0) tfoot.innerHTML = "";
@@ -3286,6 +3419,16 @@ function renderPastPurchasesTable(){
         const sign = val >= 0 ? '+' : '-';
         const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : '#ef4444');
         const titleAttr = ready ? '' : ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."`;
+        rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
+      } else if(p.computed && p.formula === 'unrealizedGainPP'){
+        const val = resolved[p.id] || 0;
+        const ready = resolved['_' + p.id + '_ready'];
+        const sign = val >= 0 ? '+' : '-';
+        // Green when positive, dull/dusty pink (the app's existing "excluded" pink
+        // token) when negative — matches the user's spec, kept distinct from
+        // Realized Gain's brighter red so the two "gain" columns aren't confusable.
+        const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : DUS_EXCLUDED_COLOR);
+        const titleAttr = ready ? '' : ` title="Add Units Purchased and Average Purchase Price columns (and make sure this asset has Current Price data), with no Selling Price entered yet, to compute this."`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed && p.formula === 'missedGainPct'){
         const val = resolved[p.id] || 0;
@@ -3361,7 +3504,7 @@ function renderPastPurchasesTable(){
         if(isNaN(value)) value = 0;
       }
       setPastPurchaseValue(rowId, field, value);
-      renderPastPurchasesTable(); // refresh any computed "Sale Profit" cells + the totals rows
+      renderPastPurchasesTable(); // refresh any computed "Realized Gain" cells + the totals rows
     });
     el.addEventListener('keydown', (e) => {
       if(e.key === 'Enter' && el.tagName === 'INPUT'){
@@ -3400,13 +3543,19 @@ function renderPastPurchasesTable(){
 }
 
 // Builds the Past Purchases tfoot summary rows — Total Current Book Value, then
-// Total Sale Profit to date immediately below it, then the per-month Sales Profit
+// Total Realized Gain to date immediately below it, then the per-month Realized Gain
 // breakdown (most recent month first) below both. Always summarizes the FULL list
 // passed in (orderedRows), independent of the "Current Holdings" display filter or
 // whatever sort order the table body itself is currently showing.
 function renderPastPurchasesFooter(tfoot, params, orderedRows){
   const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
-  const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
+  // Collect EVERY "Date Sale"-labeled column, not just the first — normally
+  // there's only one, but this makes the monthly grouping below resilient to a
+  // stray duplicate column (e.g. left over from an older version of this app)
+  // instead of silently dropping any row whose real date happens to live under
+  // a second "Date Sale" column that a plain single .find() would miss.
+  const dateSaleParams = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
+  const dateSaleParam = dateSaleParams[0];
   const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
   const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
   let footHtml = '';
@@ -3436,7 +3585,7 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
     const sign = total >= 0 ? '+' : '-';
     const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
     const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-    footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Sale Profit to date</td>`;
+    footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Realized Gain to date</td>`;
     params.forEach((p, idx) => {
       footHtml += idx === colIndex
         ? `<td style="font-weight:700; color:${color};">${sign}$${Math.abs(total).toFixed(2)}</td>`
@@ -3447,11 +3596,17 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
 
   if(saleProfitParam && dateSaleParam){
     // Group rows that actually have a Date Sale entered into per-month subtotals,
-    // most recent month first.
+    // most recent month first. Checks every "Date Sale"-labeled column per row
+    // (see dateSaleParams above) so a row isn't silently dropped just because its
+    // real date happens to live under a second, duplicate "Date Sale" column.
     const groups = {};
     orderedRows.forEach(row => {
-      const dateVal = (row.values && row.values[dateSaleParam.id]) || '';
-      const parsed = ppParseDateSale(dateVal);
+      let parsed = null;
+      for(const dsp of dateSaleParams){
+        const dateVal = (row.values && row.values[dsp.id]) || '';
+        parsed = ppParseDateSale(dateVal);
+        if(parsed) break;
+      }
       if(!parsed) return;
       const key = parsed.year + '-' + String(parsed.month).padStart(2, '0');
       if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
@@ -3466,7 +3621,7 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
       const g = groups[key];
       const sign = g.total >= 0 ? '+' : '-';
       const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
-      const label = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      const label = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
       footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
       params.forEach((p, idx) => {
         footHtml += idx === colIndex
@@ -3513,6 +3668,7 @@ const EXPORT_COLORS = {
   grey: "#64748b",
   blue: "#2563eb",
   lightBlue: "#0ea5e9",
+  dustyPink: "#c98a9e",
 };
 
 // --- On-demand CDN loading with retry + multi-host fallback, for the Excel export
@@ -3709,6 +3865,11 @@ function getMainTableExportValue(item, colDef){
       const num = Number(val) || 0;
       return (num >= 0 ? "+" : "-") + "$" + Math.abs(num).toFixed(2);
     }
+    if(colDef.computed && colDef.formula === "unrealizedGainPP"){
+      if(isDefault) return "—";
+      const num = Number(val) || 0;
+      return (num >= 0 ? "+" : "-") + "$" + Math.abs(num).toFixed(2);
+    }
     if(colDef.computed && colDef.formula === "bookValuePP"){
       if(isDefault) return "—";
       return "$" + Math.abs(Number(val) || 0).toFixed(2);
@@ -3722,7 +3883,7 @@ function getMainTableExportValue(item, colDef){
 // Companion to getMainTableExportValue: returns an EXPORT_COLORS value for a cell
 // that's colored on the live table, or null for a cell that renders in the default
 // text color. Mirrors renderCellHTML's color decisions exactly (Implied Upside,
-// Sale Profit, Missed Gain %, Book Value), just using the print-legible export
+// Realized Gain, Unrealized Gain, Missed Gain %, Book Value), just using the print-legible export
 // palette instead of the live dark-theme hex values.
 function getMainTableExportColor(item, colDef){
   if(colDef.id === "calculatedUpside") return item.calculatedUpside >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
@@ -3737,6 +3898,11 @@ function getMainTableExportColor(item, colDef){
       if(isDefault) return EXPORT_COLORS.grey;
       const num = Number(val) || 0;
       return num >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
+    }
+    if(colDef.computed && colDef.formula === "unrealizedGainPP"){
+      if(isDefault) return EXPORT_COLORS.grey;
+      const num = Number(val) || 0;
+      return num >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.dustyPink;
     }
     if(colDef.computed && colDef.formula === "missedGainPct"){
       const num = Number(val) || 0;
@@ -3780,6 +3946,12 @@ function getPastPurchasesExportRowColors(resolved, params){
       const val = resolved[p.id] || 0;
       return val >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
     }
+    if(p.computed && p.formula === "unrealizedGainPP"){
+      const ready = resolved["_" + p.id + "_ready"];
+      if(!ready) return EXPORT_COLORS.grey;
+      const val = resolved[p.id] || 0;
+      return val >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.dustyPink;
+    }
     if(p.computed && p.formula === "missedGainPct"){
       const ready = resolved["_" + p.id + "_ready"];
       const val = resolved[p.id] || 0;
@@ -3822,6 +3994,12 @@ function buildPastPurchasesExportTable(){
         const val = resolved[p.id] || 0;
         return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
       }
+      if(p.computed && p.formula === "unrealizedGainPP"){
+        const ready = resolved["_" + p.id + "_ready"];
+        if(!ready) return "—";
+        const val = resolved[p.id] || 0;
+        return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
+      }
       if(p.computed && p.formula === "bookValuePP"){
         const ready = resolved["_" + p.id + "_ready"];
         if(!ready) return "—";
@@ -3839,7 +4017,11 @@ function buildPastPurchasesExportTable(){
   });
 
   const saleProfitParam = params.find(p => p.computed && p.formula === "salesProfitPP");
-  const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  // See renderPastPurchasesFooter's own comment: collect every "Date Sale"-labeled
+  // column, not just the first, so the export's monthly grouping matches the
+  // live table's resilience to a stray duplicate column.
+  const dateSaleParams = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  const dateSaleParam = dateSaleParams[0];
   const bookValueParam = params.find(p => p.computed && p.formula === "bookValuePP");
   const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
 
@@ -3868,7 +4050,7 @@ function buildPastPurchasesExportTable(){
     const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
     const row = new Array(headers.length).fill("");
     const rowColors = new Array(headers.length).fill(null);
-    row[0] = "Total Sale Profit to date";
+    row[0] = "Total Realized Gain to date";
     row[colIndex + 1] = (total >= 0 ? "+" : "-") + "$" + Math.abs(total).toFixed(2);
     rowColors[colIndex + 1] = total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
     rows.push(row);
@@ -3878,8 +4060,12 @@ function buildPastPurchasesExportTable(){
   if(saleProfitParam && dateSaleParam){
     const groups = {};
     orderedRows.forEach(row => {
-      const dateVal = (row.values && row.values[dateSaleParam.id]) || "";
-      const parsed = ppParseDateSale(dateVal);
+      let parsed = null;
+      for(const dsp of dateSaleParams){
+        const dateVal = (row.values && row.values[dsp.id]) || "";
+        parsed = ppParseDateSale(dateVal);
+        if(parsed) break;
+      }
       if(!parsed) return;
       const key = parsed.year + "-" + String(parsed.month).padStart(2, "0");
       if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
@@ -3893,7 +4079,7 @@ function buildPastPurchasesExportTable(){
       const g = groups[key];
       const row = new Array(headers.length).fill("");
       const rowColors = new Array(headers.length).fill(null);
-      row[0] = `Sales Profit for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      row[0] = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
       rowColors[0] = EXPORT_COLORS.grey;
       row[colIndex + 1] = (g.total >= 0 ? "+" : "-") + "$" + Math.abs(g.total).toFixed(2);
       rowColors[colIndex + 1] = g.total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
@@ -3925,7 +4111,7 @@ function withBuyTargetColumnMainTable(headers, rows){
 }
 
 // Same idea for Past Purchases, but its export rows include summary/footer rows
-// AFTER the per-asset ones (Total Current Book Value, Total Sale Profit to date,
+// AFTER the per-asset ones (Total Current Book Value, Total Realized Gain to date,
 // monthly breakdowns — see buildPastPurchasesExportTable above) — only the first
 // visibleRows.length rows are real assets, so only those get a Yes/No; footer
 // rows get a blank cell, matching how every other non-participating column in
@@ -4634,6 +4820,13 @@ function renderCellHTML(colDef, item, badge){
       const titleAttr = isDefault ? ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."` : '';
       return `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(num).toFixed(2)}</td>`;
     }
+    if(colDef.computed && colDef.formula === 'unrealizedGainPP'){
+      const num = Number(val) || 0;
+      const sign = num >= 0 ? '+' : '-';
+      const color = isDefault ? 'var(--text-secondary)' : (num >= 0 ? 'var(--emerald)' : DUS_EXCLUDED_COLOR);
+      const titleAttr = isDefault ? ` title="Add Units Purchased and Average Purchase Price columns, with no Selling Price entered yet, to compute this."` : '';
+      return `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(num).toFixed(2)}</td>`;
+    }
     if(colDef.computed && colDef.formula === 'missedGainPct'){
       const num = Number(val) || 0;
       // Per spec: negative = red, positive = green, exactly zero (or not yet
@@ -4839,7 +5032,7 @@ function runMatrixOptimization() {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
-      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
+      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "unrealizedGainPP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
         // resolved in pass 2, once their sibling custom params (if present) are available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
@@ -4869,6 +5062,21 @@ function runMatrixOptimization() {
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam && sellParam) && units !== 0 && sell !== 0;
         customValues[p.id] = ready ? units * (sell - avg) : 0;
+        customIsDefault[p.id] = !ready;
+      } else if(p.computed && p.formula === "unrealizedGainPP"){
+        // Same formula and "ready" logic as the Past Purchases table's own
+        // Unrealized Gain column (see resolvePastPurchaseRowValues): Units
+        // Purchased × (Current Price − Average Purchase Price), only while
+        // Selling Price is still 0 (not yet sold).
+        const norm = s => String(s).trim().toLowerCase();
+        const unitsParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "units purchased");
+        const avgParam = allCustomParams.find(cp => !cp.computed && (norm(cp.label) === "average purchase price ($)" || norm(cp.label) === "average purchase price"));
+        const sellParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "selling price");
+        const units = unitsParam ? (Number(customValues[unitsParam.id]) || 0) : 0;
+        const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
+        const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
+        const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0;
+        customValues[p.id] = ready ? units * (currentPrice - avg) : 0;
         customIsDefault[p.id] = !ready;
       } else if(p.computed && p.formula === "missedGainPct"){
         // (Current Price − Selling Price) ÷ Selling Price × 100, using the already-
@@ -5682,11 +5890,11 @@ try{
 
   // Same preset list as the main table's "+/- Parameter" panel, plus this
   // table's own additions: sale-tracking fields (Date Sale, Selling Price,
-  // Sale Profit) and fundamentals fields that mirror the main table's fixed
+  // Realized Gain) and fundamentals fields that mirror the main table's fixed
   // columns (Current Price, ROA, P/E, Consensus Target Price, Rev Growth, Net Margin,
   // PEG, D/E, FCF, Cash Runway, Beta, Stability) — offered here since Past
   // Purchases has no fixed columns of its own to hold them.
-  // Picking a plain preset autofills name/type/default; picking "Sale Profit"
+  // Picking a plain preset autofills name/type/default; picking "Realized Gain"
   // also flags it as computed so it gets calculated rather than typed in.
   let ppSelectedPresetMeta = null;
   const ppNewParamPreset = document.getElementById("ppNewParamPreset");
@@ -5852,17 +6060,19 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
 
 // Past Purchases (the "List 1" default list) starts with no columns at all
 // otherwise — see the comment above PP_ONLY_PARAM_PRESETS. Requested starting
-// layout, in order: Sale Profit, Book Value, Date Purchased, Units Purchased,
-// Average Purchase Price ($), Selling Price, Date Sale, Current Price, Missed
-// Gain % (Ticker/Asset itself is a fixed identity column, not a param). Fixed
-// ids (rather than addPastPurchaseParam()'s timestamped ones), same reasoning
-// as NEW_USER_DEFAULT_CUSTOM_PARAMS above. Date Purchased and Date Sale both
-// default to blank — a newly-added ticker shouldn't silently claim today's date
-// for either one; the user fills each in deliberately via the calendar picker
-// when they actually know the date, even if the column happens to be hidden.
+// layout, in order: Realized Gain, Unrealized Gain, Book Value, Date Purchased,
+// Units Purchased, Average Purchase Price ($), Selling Price, Date Sale,
+// Current Price, Missed Gain % (Ticker/Asset itself is a fixed identity
+// column, not a param). Fixed ids (rather than addPastPurchaseParam()'s
+// timestamped ones), same reasoning as NEW_USER_DEFAULT_CUSTOM_PARAMS above.
+// Date Purchased and Date Sale both default to blank — a newly-added ticker
+// shouldn't silently claim today's date for either one; the user fills each
+// in deliberately via the calendar picker when they actually know the date,
+// even if the column happens to be hidden.
 function getNewUserDefaultPastPurchasesParams(){
   return [
-    { id: "pp_sale_profit", label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+    { id: "pp_sale_profit", label: "Realized Gain", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+    { id: "pp_unrealized_gain", label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" },
     { id: "pp_book_value", label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
     { id: "pp_date_purchased", label: "Date Purchased", type: "date", defaultValue: "" },
     { id: "pp_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
@@ -5915,6 +6125,12 @@ function initializeNewUserDefaults(){
     // Same reasoning: NEW_USER_DEFAULT_COLUMN_ORDER above already places Forward P/E
     // right after P/E Multiple, so reorderForwardPEIfNeeded() has nothing to fix here.
     localStorage.setItem("forwardPeReordered", "1");
+    // Same reasoning again: a brand-new account's Past Purchases columns are seeded
+    // fresh from getNewUserDefaultPastPurchasesParams() below, which already has the
+    // "Realized Gain" label and the "Unrealized Gain" column in place — nothing for
+    // either migration to fix here.
+    localStorage.setItem("saleProfitRenamedToRealizedGain", "1");
+    localStorage.setItem("unrealizedGainColumnAdded", "1");
     // Past Purchases' own starting columns are seeded separately, by
     // seedPastPurchasesDefaultParamsIfNeeded() (called from openDashboard) — see
     // its own comment for why that's a better gate than this function's
