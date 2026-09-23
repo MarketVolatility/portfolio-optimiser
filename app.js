@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.48 (Cash & Equivalents ($M) is now auto-fetched as part of "Fetch live data", since Finnhub's free tier has no source for it: tries free/no-key SEC EDGAR first (the real balance-sheet figure via /companyconcept), then falls back to a new optional Alpha Vantage API key (BALANCE_SHEET endpoint) if SEC has nothing for that ticker — e.g. foreign filers like TSM. Alpha Vantage's free tier is capped at 25 requests/day, so past 20 uses today it shows a confirm popup with the exact count (e.g. "21/25") before every further call, and declining stops it from asking again for the rest of that fetch run. Neither source ever overwrites a manually-entered or AI-pasted value unless it actually finds fresh data.)
-console.log("app.js loaded — build v5.48 (Cash & Equivalents ($M) auto-fetch: SEC EDGAR primary, Alpha Vantage fallback with a 25/day quota warning)");
+// APP.JS BUILD: v5.49 (Cash Runway (yr) formula changed to Cash & Equivalents ($M) ÷ Operating Expenses ($M) — a "zero revenue" runway that no longer depends on profitability, so every company with both figures gets a real number instead of an "∞ (profitable)" special case; the old FCF-based formula and its ∞ display are retired. New "Operating Expenses ($M)" column added, auto-fetched the same way Cash & Equivalents already is: free SEC EDGAR first (OperatingExpenses, falling back to CostsAndExpenses), then Alpha Vantage's INCOME_STATEMENT as a fallback, sharing the same 25/day quota warning.)
+console.log("app.js loaded — build v5.49 (Cash Runway (yr) = Cash & Equivalents ÷ Operating Expenses; new Operating Expenses ($M) column, auto-fetched via SEC EDGAR/Alpha Vantage)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -434,15 +434,17 @@ function saveApiKey(key){
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-// --- Cash & Equivalents ($M): SEC EDGAR (primary, free/unlimited/no key) ---
-// --- falling back to Alpha Vantage (secondary, free key, capped at 25/day) ---
-// Neither Finnhub's free /stock/metric endpoint nor its /quote endpoint expose
-// the actual balance-sheet "Cash and Cash Equivalents" dollar figure (only a
-// cashRatio ratio) — see the SEC EDGAR / Alpha Vantage research this was built
-// from. Both sources below are tried automatically as part of "Fetch live
-// data"; nothing here ever overwrites a value the user entered by hand or via
-// the Detailed/Brief Update paste flows unless a fresh number was actually
-// found (mirrors how price/P-E/ROA already behave).
+// --- Cash & Equivalents ($M) and Operating Expenses ($M): SEC EDGAR (primary, ---
+// --- free/unlimited/no key) falling back to Alpha Vantage (secondary, free ---
+// --- key, capped at 25/day) ---
+// Cash Runway (yr) = Cash & Equivalents ÷ Operating Expenses (see
+// computeCashRunway) needs both figures, and Finnhub's free tier has no source
+// for either raw balance-sheet/income-statement dollar figure (only ratios) —
+// see the SEC EDGAR / Alpha Vantage research this was built from. Both fields
+// are fetched the same way, tried automatically as part of "Fetch live data";
+// nothing here ever overwrites a value the user entered by hand or via the
+// Detailed/Brief Update paste flows unless a fresh number was actually found
+// (mirrors how price/P-E/ROA already behave).
 
 function getSavedAlphaVantageKey(){
   try{ return localStorage.getItem("alphaVantageApiKey") || ""; }
@@ -499,26 +501,47 @@ async function getSecTickerCikMap(){
   return secTickerCikMapPromise;
 }
 
-async function fetchSecCashAndEquivalents(ticker){
+// Fetches one us-gaap XBRL concept's most recent 10-K/10-Q value for a ticker,
+// in $M. `concepts` is tried in order — useful because different filers tag
+// the "same" line item under different us-gaap concept names depending on how
+// their income statement is presented (see fetchSecOperatingExpenses below);
+// the first concept that actually has data wins.
+async function fetchSecConceptValue(ticker, concepts){
   const map = await getSecTickerCikMap();
   const cik = map && map[ticker.toUpperCase()];
   if(!cik) return undefined; // not a US SEC filer under this ticker, or map unavailable
 
-  const res = await fetch(`https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/us-gaap/CashAndCashEquivalentsAtCarryingValue.json`);
-  if(!res.ok) return undefined; // 404 is normal here — e.g. foreign private issuers (20-F filers, like TSM) often don't tag this us-gaap concept at all
-  const data = await res.json();
-  const entries = data?.units?.USD;
-  if(!Array.isArray(entries) || entries.length === 0) return undefined;
+  for(const concept of concepts){
+    const res = await fetch(`https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/us-gaap/${concept}.json`);
+    if(!res.ok) continue; // 404 is normal here — e.g. foreign private issuers (20-F filers, like TSM) often don't tag us-gaap concepts at all; try the next concept, if any
+    const data = await res.json();
+    const entries = data?.units?.USD;
+    if(!Array.isArray(entries) || entries.length === 0) continue;
 
-  // Prefer an actual 10-K/10-Q figure over other filing types, and within
-  // those, the most recently REPORTED period (not just most recently filed —
-  // "end" is the balance-sheet date the figure is as-of).
-  const relevant = entries.filter(e => e.form === "10-K" || e.form === "10-Q");
-  const pool = relevant.length ? relevant : entries;
-  const latest = pool.reduce((best, e) => (!best || e.end > best.end) ? e : best, null);
-  if(!latest || typeof latest.val !== "number") return undefined;
+    // Prefer an actual 10-K/10-Q figure over other filing types, and within
+    // those, the most recently REPORTED period (not just most recently filed —
+    // "end" is the balance-sheet/period date the figure is as-of).
+    const relevant = entries.filter(e => e.form === "10-K" || e.form === "10-Q");
+    const pool = relevant.length ? relevant : entries;
+    const latest = pool.reduce((best, e) => (!best || e.end > best.end) ? e : best, null);
+    if(latest && typeof latest.val === "number") return latest.val / 1e6; // USD -> $M
+  }
+  return undefined;
+}
 
-  return latest.val / 1e6; // USD -> $M, matching this column's existing convention
+function fetchSecCashAndEquivalents(ticker){
+  return fetchSecConceptValue(ticker, ["CashAndCashEquivalentsAtCarryingValue"]);
+}
+
+// "OperatingExpenses" (SG&A + R&D + etc., excluding cost of revenue) is the
+// closer name match for "total operating expenses," and is what companies
+// that separately break out a cost-of-revenue line tend to tag; a filer whose
+// income statement doesn't present that subtotal separately (common outside
+// software/tech) more often tags the broader "CostsAndExpenses" (cost of
+// revenue + operating expenses combined) instead — tried second, as the next
+// best "total spend" figure, only if the first concept has no data.
+function fetchSecOperatingExpenses(ticker){
+  return fetchSecConceptValue(ticker, ["OperatingExpenses", "CostsAndExpenses"]);
 }
 
 // --- Alpha Vantage (fallback) ---
@@ -560,29 +583,45 @@ function confirmAlphaVantageQuota(){
   return confirm(`Alpha Vantage free-tier requests today (this device): ${next}/25. This is close to (or over) the daily free limit — further requests today may start failing once it's reached. Continue and use one more?`);
 }
 
-async function fetchAlphaVantageCashAndEquivalents(ticker, apiKey){
-  const res = await fetch(`https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`);
+// Fetches one field from an Alpha Vantage fundamentals endpoint's most recent
+// report (quarterly preferred over annual, same as the cash-equivalents call).
+// `apiFunction` is "BALANCE_SHEET" or "INCOME_STATEMENT"; `reportField` is the
+// field name Alpha Vantage uses on that report object.
+async function fetchAlphaVantageReportField(ticker, apiKey, apiFunction, reportField){
+  const res = await fetch(`https://www.alphavantage.co/query?function=${apiFunction}&symbol=${encodeURIComponent(ticker)}&apikey=${apiKey}`);
   const data = await res.json();
   if(data.Note || data.Information) throw new Error(data.Note || data.Information); // rate-limit/invalid-key messages come back as 200 OK with one of these instead of report data
   const report = (data.quarterlyReports && data.quarterlyReports[0]) || (data.annualReports && data.annualReports[0]);
   if(!report) return undefined;
-  const raw = report.cashAndCashEquivalentsAtCarryingValue;
+  const raw = report[reportField];
   if(raw === undefined || raw === null || raw === "None") return undefined;
   const val = Number(raw);
   if(isNaN(val)) return undefined;
   return val / 1e6; // USD -> $M
 }
 
+function fetchAlphaVantageCashAndEquivalents(ticker, apiKey){
+  return fetchAlphaVantageReportField(ticker, apiKey, "BALANCE_SHEET", "cashAndCashEquivalentsAtCarryingValue");
+}
+
+function fetchAlphaVantageOperatingExpenses(ticker, apiKey){
+  return fetchAlphaVantageReportField(ticker, apiKey, "INCOME_STATEMENT", "operatingExpenses");
+}
+
 // --- Combined orchestrator: SEC EDGAR first, Alpha Vantage only if needed ---
-// batchCtx is an optional shared {avDeclined} object passed by a caller looping
-// over many tickers, so declining the Alpha Vantage quota prompt once stops it
-// from being asked again (silently skipping Alpha Vantage) for the rest of
-// that same run, instead of popping up once per remaining ticker.
-async function fetchCashAndEquivalentsForTicker(ticker, batchCtx){
+// Shared by both Cash & Equivalents and Operating Expenses — same SEC-then-AV
+// fallback shape, just pointed at different fetchers and a different override
+// field. batchCtx is an optional shared {avDeclined} object passed by a caller
+// looping over many tickers (and, within one ticker, shared across BOTH the
+// cash and opex calls — see fetchCashRunwayInputsForTicker below), so declining
+// the Alpha Vantage quota prompt once stops it from being asked again (silently
+// skipping Alpha Vantage) for the rest of that same run, instead of popping up
+// once per remaining ticker or per remaining field.
+async function fetchFieldFromSecThenAv(ticker, batchCtx, { secFetch, avFetch, overrideField }){
   try{
-    const secVal = await fetchSecCashAndEquivalents(ticker);
+    const secVal = await secFetch(ticker);
     if(secVal !== undefined){
-      setGlobalOverride(ticker, "cashAndEquivalents", secVal);
+      setGlobalOverride(ticker, overrideField, secVal);
       return { ok: true, source: "sec" };
     }
   }catch(e){ /* SEC EDGAR failed (CORS, network, no data) — fall through to Alpha Vantage */ }
@@ -599,14 +638,40 @@ async function fetchCashAndEquivalentsForTicker(ticker, batchCtx){
   recordAlphaVantageCall();
 
   try{
-    const avVal = await fetchAlphaVantageCashAndEquivalents(ticker, avKey);
+    const avVal = await avFetch(ticker, avKey);
     if(avVal !== undefined){
-      setGlobalOverride(ticker, "cashAndEquivalents", avVal);
+      setGlobalOverride(ticker, overrideField, avVal);
       return { ok: true, source: "av" };
     }
   }catch(e){ /* no source had data for this ticker today */ }
 
   return { ok: false, source: null };
+}
+
+function fetchCashAndEquivalentsForTicker(ticker, batchCtx){
+  return fetchFieldFromSecThenAv(ticker, batchCtx, {
+    secFetch: fetchSecCashAndEquivalents,
+    avFetch: fetchAlphaVantageCashAndEquivalents,
+    overrideField: "cashAndEquivalents",
+  });
+}
+
+function fetchOperatingExpensesForTicker(ticker, batchCtx){
+  return fetchFieldFromSecThenAv(ticker, batchCtx, {
+    secFetch: fetchSecOperatingExpenses,
+    avFetch: fetchAlphaVantageOperatingExpenses,
+    overrideField: "operatingExpenses",
+  });
+}
+
+// Fetches BOTH Cash Runway inputs for one ticker, sharing one batchCtx (so an
+// Alpha Vantage quota decline on the first field suppresses the prompt for the
+// second field too, not just for the next ticker). Returns a small summary
+// used to roll up "N via SEC, N via Alpha Vantage, N with no source" messaging.
+async function fetchCashRunwayInputsForTicker(ticker, batchCtx){
+  const cash = await fetchCashAndEquivalentsForTicker(ticker, batchCtx);
+  const opex = await fetchOperatingExpensesForTicker(ticker, batchCtx);
+  return { cash, opex };
 }
 
 async function fetchFinnhubQuote(ticker, apiKey){
@@ -702,10 +767,11 @@ async function fetchLiveDataForOneTicker(ticker){
     result = { ok: false, reason: err.message };
   }
   // Best-effort, independent of whether the Finnhub price/metrics call above
-  // succeeded — Finnhub has no free-tier source for this figure at all (see
-  // fetchCashAndEquivalentsForTicker's own comments), so this always tries
-  // SEC EDGAR, then Alpha Vantage, on its own.
-  try{ await fetchCashAndEquivalentsForTicker(ticker); }catch(e){ /* non-fatal to this ticker's live-data result */ }
+  // succeeded — Finnhub has no free-tier source for either Cash Runway input
+  // (see fetchFieldFromSecThenAv's own comments), so this always tries SEC
+  // EDGAR, then Alpha Vantage, on its own for both Cash & Equivalents and
+  // Operating Expenses.
+  try{ await fetchCashRunwayInputsForTicker(ticker); }catch(e){ /* non-fatal to this ticker's live-data result */ }
   return result;
 }
 
@@ -726,11 +792,12 @@ async function fetchLiveDataForAllAssets(){
   const failedTickers = [];
   const noPeTickers = [];
 
-  // Shared across the whole run: once the Alpha Vantage daily-quota prompt is
-  // declined for one ticker, stop asking again for every remaining ticker —
-  // see fetchCashAndEquivalentsForTicker's own comment.
+  // Shared across the whole run (both fields, every ticker): once the Alpha
+  // Vantage daily-quota prompt is declined once, stop asking again — see
+  // fetchFieldFromSecThenAv's own comment.
   const cashFetchCtx = { avDeclined: false };
   let cashSecCount = 0, cashAvCount = 0, cashNoneCount = 0;
+  let opexSecCount = 0, opexAvCount = 0, opexNoneCount = 0;
 
   const workingAssets = getWorkingData();
   for(const asset of workingAssets){
@@ -757,16 +824,19 @@ async function fetchLiveDataForAllAssets(){
       failedTickers.push(asset.ticker);
     }
 
-    // Cash & Equivalents ($M): Finnhub has no free source for this at all, so
-    // this is tried independently of whether the Finnhub call above succeeded
-    // — SEC EDGAR first (free/unlimited), Alpha Vantage as a fallback (free
-    // key, capped at 25/day — see confirmAlphaVantageQuota).
+    // Cash Runway (yr)'s two inputs: Finnhub has no free source for either, so
+    // both are tried independently of whether the Finnhub call above succeeded
+    // — SEC EDGAR first (free/unlimited) for each, Alpha Vantage as a fallback
+    // (free key, capped at 25/day — see confirmAlphaVantageQuota).
     try{
-      const cashResult = await fetchCashAndEquivalentsForTicker(asset.ticker, cashFetchCtx);
+      const { cash: cashResult, opex: opexResult } = await fetchCashRunwayInputsForTicker(asset.ticker, cashFetchCtx);
       if(cashResult.source === "sec") cashSecCount++;
       else if(cashResult.source === "av") cashAvCount++;
       else cashNoneCount++;
-    }catch(e){ cashNoneCount++; }
+      if(opexResult.source === "sec") opexSecCount++;
+      else if(opexResult.source === "av") opexAvCount++;
+      else opexNoneCount++;
+    }catch(e){ cashNoneCount++; opexNoneCount++; }
 
     // Stagger calls to stay well under Finnhub's free-tier rate limit (60/min).
     await sleep(120);
@@ -798,6 +868,11 @@ async function fetchLiveDataForAllAssets(){
     msgParts.push(`Cash & Equivalents updated for ${cashSecCount + cashAvCount}/${workingAssets.length} tickers (${cashSecCount} via SEC EDGAR, ${cashAvCount} via Alpha Vantage)${cashNoneCount > 0 ? `; no source had data for ${cashNoneCount}` : ""}.`);
   } else if(cashNoneCount > 0){
     msgParts.push(`Cash & Equivalents: no data found via SEC EDGAR${getSavedAlphaVantageKey() ? " or Alpha Vantage" : " (add an Alpha Vantage key above to also try that as a fallback)"} for ${cashNoneCount} ticker(s).`);
+  }
+  if(opexSecCount > 0 || opexAvCount > 0){
+    msgParts.push(`Operating Expenses updated for ${opexSecCount + opexAvCount}/${workingAssets.length} tickers (${opexSecCount} via SEC EDGAR, ${opexAvCount} via Alpha Vantage)${opexNoneCount > 0 ? `; no source had data for ${opexNoneCount}` : ""}.`);
+  } else if(opexNoneCount > 0){
+    msgParts.push(`Operating Expenses: no data found via SEC EDGAR${getSavedAlphaVantageKey() ? " or Alpha Vantage" : " (add an Alpha Vantage key above to also try that as a fallback)"} for ${opexNoneCount} ticker(s).`);
   }
   statusEl.textContent = msgParts.join(" ");
   statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
@@ -1037,8 +1112,9 @@ function getDetailedUpdateFields(){
 // hint it reliably answers a literal 0 for these instead, which then LOOKS
 // like a real (and wrong) value once pasted back in. Nothing uses this right
 // now — Cash Runway (yr) used to (see computeCashRunway), but it's now
-// computed in-app from FCF and "Cash & Equivalents ($M)" instead of asked of
-// the AI at all, so it's no longer part of getDetailedUpdateFields()'s output.
+// computed in-app from "Cash & Equivalents ($M)" and "Operating Expenses ($M)"
+// instead of asked of the AI at all, so it's no longer part of
+// getDetailedUpdateFields()'s output.
 // Left in place, keyed by BUILTIN_COLUMNS/custom-param id, for the next field
 // that turns out to need this treatment.
 const DETAILED_UPDATE_FIELD_HINTS = {};
@@ -1235,6 +1311,7 @@ const BUILTIN_COLUMNS = [
   { id: "debtToEquity", label: "D/E Ratio", type: "number", computed: false },
   { id: "freeCashFlow", label: "FCF ($M)", type: "number", computed: false },
   { id: "cashAndEquivalents", label: "Cash & Equivalents ($M)", type: "number", computed: false },
+  { id: "operatingExpenses", label: "Operating Expenses ($M)", type: "number", computed: false },
   { id: "cashRunway", label: "Cash Runway (yr)", type: "number", computed: true },
   { id: "beta", label: "Beta", type: "number", computed: false },
   { id: "calculatedUpside", label: "Implied Upside", type: "number", computed: true },
@@ -1242,22 +1319,27 @@ const BUILTIN_COLUMNS = [
   { id: "allocationWeight", label: "Optimized Weight Allocation", type: "number", computed: true },
 ];
 
-// Cash Runway (yr) is now COMPUTED, not a manually/AI-filled number: years of
-// runway = Cash & Equivalents ÷ how much cash is being burned per year. A
-// company that isn't burning cash (freeCashFlow >= 0) has no runway to run
-// out, so it gets the app's long-standing 99999 sentinel ("not a cash-runway
-// concern") — the same value 28 of the 30 built-in tickers ship with. A
-// cash-burning company with no "Cash & Equivalents ($M)" on file yet ALSO
-// gets 99999 rather than a scary (and made-up) low number — fill in Cash &
-// Equivalents (via Sample Excel, Import Excel, Detailed/Brief Update, or by
-// typing it directly into the table) to get a real computed years-of-runway
-// figure for that ticker; it recalculates automatically from then on,
-// including every time live data or Cash & Equivalents changes.
-function computeCashRunway(freeCashFlow, cashAndEquivalents){
-  const fcf = Number(freeCashFlow) || 0;
+// Cash Runway (yr) is COMPUTED, not a manually/AI-filled number:
+//   Cash Runway (yr) = Cash & Equivalents ($M) ÷ Annual Operating Expenses ($M)
+// This is a "zero revenue" runway — how long the company's current cash would
+// last covering its total annual operating expenses alone, regardless of how
+// much revenue is actually offsetting that spend — so, unlike the previous
+// FCF-based version of this metric, it no longer depends on whether the
+// company is profitable: a profitable company still gets a real (typically
+// large) number of years here, not an "infinite" special case. The 99999
+// sentinel now means exactly one thing — missing data — and only fires when
+// either figure isn't on file yet (0/blank is this app's existing convention
+// for "not entered" on every other numeric field, so 0 is treated as missing
+// here too, not as a real zero). Fill in Cash & Equivalents ($M) and/or
+// Operating Expenses ($M) (via Sample Excel, Import Excel, Detailed/Brief
+// Update, "Fetch live data", or by typing directly into the table) to get a
+// real computed years-of-runway figure; it recalculates automatically every
+// time either input changes.
+function computeCashRunway(cashAndEquivalents, operatingExpenses){
   const cash = Number(cashAndEquivalents) || 0;
-  if(fcf >= 0 || cash <= 0) return 99999;
-  return cash / Math.abs(fcf);
+  const opex = Number(operatingExpenses) || 0;
+  if(cash <= 0 || opex <= 0) return 99999;
+  return cash / opex;
 }
 
 function getCustomParams(){
@@ -1693,7 +1775,7 @@ function getWorkingData(explicitList){
     const shell = baseAsset
       ? { ...baseAsset }
       : { ticker, name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "",
-          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, beta: 1.0 };
+          revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, operatingExpenses: 0, beta: 1.0 };
     return { ...shell, _overrides: overrides[ticker] || {} };
   });
 }
@@ -1711,10 +1793,11 @@ function getResolvedBuiltinAssetValues(ticker){
   const ov = getGlobalOverrides()[ticker] || {};
   if(!baseAsset && Object.keys(ov).length === 0) return null;
   const shell = baseAsset || { name: ticker, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med",
-    revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, beta: 1.0 };
+    revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, operatingExpenses: 0, beta: 1.0 };
   const live = liveDataMap[ticker];
   const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : shell.freeCashFlow;
   const cashAndEquivalents = ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : shell.cashAndEquivalents;
+  const operatingExpenses = ov.operatingExpenses !== undefined ? ov.operatingExpenses : shell.operatingExpenses;
   return {
     name: ov.name !== undefined ? ov.name : shell.name,
     currentPrice: ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : shell.currentPrice),
@@ -1728,7 +1811,8 @@ function getResolvedBuiltinAssetValues(ticker){
     debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : shell.debtToEquity),
     freeCashFlow,
     cashAndEquivalents,
-    cashRunway: computeCashRunway(freeCashFlow, cashAndEquivalents),
+    operatingExpenses,
+    cashRunway: computeCashRunway(cashAndEquivalents, operatingExpenses),
     beta: ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : shell.beta),
   };
 }
@@ -1838,6 +1922,7 @@ function renameTicker(oldTicker, newTicker){
     debtToEquity: ov.debtToEquity !== undefined ? ov.debtToEquity : current.debtToEquity,
     freeCashFlow: ov.freeCashFlow !== undefined ? ov.freeCashFlow : current.freeCashFlow,
     cashAndEquivalents: ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : current.cashAndEquivalents,
+    operatingExpenses: ov.operatingExpenses !== undefined ? ov.operatingExpenses : current.operatingExpenses,
     beta: ov.beta !== undefined ? ov.beta : current.beta,
   };
   // Carry over any custom parameter values too, whatever custom params currently exist.
@@ -3199,8 +3284,7 @@ function getMainTableExportValue(item, colDef){
   if(colDef.id === "calculatedUpside") return (item.calculatedUpside >= 0 ? "+" : "") + (item.calculatedUpside * 100).toFixed(1) + "%";
   if(colDef.id === "allocationWeight") return item.allocationWeight.toFixed(2) + "%";
   if(colDef.id === "cashRunway"){
-    if(item.freeCashFlow >= 0) return "Infinite (profitable)";
-    if(item.cashRunway >= 99999) return "N/A (needs Cash & Equivalents)";
+    if(item.cashRunway >= 99999) return "N/A (needs Cash & Equivalents / Operating Expenses)";
     return item.cashRunway.toFixed(1);
   }
   if(colDef.isCustom){
@@ -4111,25 +4195,18 @@ function renderCellHTML(colDef, item, badge){
     return `<td><span class="allocation-badge">${item.allocationWeight.toFixed(2)}%</span></td>`;
   }
   if(colDef.id === 'cashRunway'){
-    // Computed, read-only — see computeCashRunway(). The 99999 sentinel covers
-    // two DIFFERENT situations that read very differently to a user, so they
-    // get distinct labels instead of both being an unexplained "N/A":
-    //   - FCF >= 0: income covers spending, so under the definition ("years
-    //     before completely running out of cash, assuming current spending and
-    //     income remain constant") cash mathematically never runs out — this is
-    //     a genuine, permanent "∞ (profitable)", not missing data.
-    //   - FCF < 0 but no "Cash & Equivalents ($M)" on file: the company IS
-    //     burning cash, so a real number exists in principle, it's just not
-    //     computable yet — "N/A — enter Cash & Equivalents" prompts the fix.
-    const isProfitable = item.freeCashFlow >= 0;
-    const isMissingData = !isProfitable && item.cashRunway >= 99999;
-    const display = isProfitable ? '∞' : (isMissingData ? 'N/A' : `${item.cashRunway.toFixed(1)} yr`);
-    const color = (isProfitable || isMissingData) ? 'var(--text-secondary)' : (item.cashRunway < 1 ? '#ef4444' : (item.cashRunway < 2 ? 'var(--amber)' : 'inherit'));
-    const title = isProfitable
-      ? 'Computed: free-cash-flow positive — income covers spending, so cash mathematically never runs out under current conditions. This is a genuine infinite runway, not missing data.'
-      : (isMissingData
-        ? 'This company IS burning cash (negative FCF), but no "Cash & Equivalents ($M)" is on file for it yet, so a real number of years can\'t be computed. Fill in Cash & Equivalents ($M) to get one.'
-        : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ |FCF| (${Math.abs(item.freeCashFlow)}) = ${item.cashRunway.toFixed(2)} years of runway at the current burn rate.`);
+    // Computed, read-only — see computeCashRunway(): Cash & Equivalents ÷ Annual
+    // Operating Expenses, a "zero revenue" runway that no longer depends on
+    // whether the company is profitable, so every company gets a real number
+    // here as long as both inputs are on file. The 99999 sentinel now means
+    // exactly one thing: one or both inputs are missing (or zero, this app's
+    // existing convention for "not entered" everywhere else).
+    const isMissingData = item.cashRunway >= 99999;
+    const display = isMissingData ? 'N/A' : `${item.cashRunway.toFixed(1)} yr`;
+    const color = isMissingData ? 'var(--text-secondary)' : (item.cashRunway < 1 ? '#ef4444' : (item.cashRunway < 2 ? 'var(--amber)' : 'inherit'));
+    const title = isMissingData
+      ? 'Cash & Equivalents ($M) and/or Operating Expenses ($M) aren\'t on file for this ticker yet, so a real number of years can\'t be computed. Fill in both to get one — "Fetch live data" tries this automatically via SEC EDGAR/Alpha Vantage.'
+      : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ Operating Expenses (${item.operatingExpenses}) = ${item.cashRunway.toFixed(2)} years of runway covering current spending alone, regardless of revenue.`;
     return `<td style="color:${color}; font-weight:600;" title="${escAttr(title)}">${display}</td>`;
   }
   if(colDef.isCustom){
@@ -4283,7 +4360,8 @@ function runMatrixOptimization() {
     const debtToEquity = ov.debtToEquity !== undefined ? ov.debtToEquity : ((live && live.debtToEquity !== undefined) ? live.debtToEquity : asset.debtToEquity);
     const freeCashFlow = ov.freeCashFlow !== undefined ? ov.freeCashFlow : asset.freeCashFlow;
     const cashAndEquivalents = ov.cashAndEquivalents !== undefined ? ov.cashAndEquivalents : asset.cashAndEquivalents;
-    const cashRunway = computeCashRunway(freeCashFlow, cashAndEquivalents);
+    const operatingExpenses = ov.operatingExpenses !== undefined ? ov.operatingExpenses : asset.operatingExpenses;
+    const cashRunway = computeCashRunway(cashAndEquivalents, operatingExpenses);
     const beta = ov.beta !== undefined ? ov.beta : ((live && live.beta !== undefined) ? live.beta : asset.beta);
 
     const priceRelevantOverride = ov.currentPrice !== undefined || ov.pe !== undefined || ov.roa !== undefined;
@@ -4396,7 +4474,7 @@ function runMatrixOptimization() {
     });
 
     return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
-      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, cashRunway, beta, customValues, customIsDefault,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, operatingExpenses, cashRunway, beta, customValues, customIsDefault,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
@@ -5308,12 +5386,14 @@ const NEW_USER_DEFAULT_CUSTOM_PARAMS = [
 // (upside via targetPrice/currentPrice, revenueGrowth, beta, stability, pe,
 // netMargin, debtToEquity, freeCashFlow, pegRatio, roa, cashRunway) already has
 // an explicit slot below — nothing scoring-relevant needed appending at the end.
+// operatingExpenses (added alongside cashAndEquivalents as Cash Runway's other
+// input — see computeCashRunway) sits right next to it, matching that pairing.
 const NEW_USER_DEFAULT_COLUMN_ORDER = [
   "name", "allocationWeight", "calculatedUpside",
   "custom_actual_upside_pct", "custom_units_purchased", "custom_avg_purchase_price",
   "currentPrice", "targetPrice", "custom_to_buy_price",
   "stability", "roa", "pe", "revenueGrowth", "pegRatio", "debtToEquity",
-  "freeCashFlow", "cashAndEquivalents", "cashRunway", "beta", "netMargin",
+  "freeCashFlow", "cashAndEquivalents", "operatingExpenses", "cashRunway", "beta", "netMargin",
   "custom_dividend_yield_pct", "custom_market_cap_b", "custom_forward_pe",
 ];
 
