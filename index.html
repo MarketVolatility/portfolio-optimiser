@@ -236,7 +236,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.46 (Renamed "Brief Update for all Assets" to "Update Current Price and Consensus Target Price for all assets", updated its disclaimer/placeholder text for the reduced 2-field scope, and updated the Detailed Update disclaimer's cross-reference) — app.js v5.52 trims that feature's fields from 7 down to Current Price and Consensus Target Price only
+      HTML build: v5.47 (Added a "requires password verification" title to Delete List on both Portfolio Lists and Past Purchases, matching Reset my account data) — app.js v5.53 trims data.js to a blank 9-ticker Sample List with a "New User. Pending data..." banner, seeds Past Purchases' default List 1 with 9 starting columns, and password-gates both Delete List actions
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
@@ -322,7 +322,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <select id="listSelector" class="form-input" style="min-width:180px;"></select>
     <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
-    <button id="deleteListBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+    <button id="deleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
   </div>
 
   <div class="control-panel" style="flex-wrap: wrap;">
@@ -464,7 +464,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <select id="ppListSelector" class="form-input" style="min-width:180px;"></select>
     <button id="ppNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="ppRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
-    <button id="ppDeleteListBtn" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+    <button id="ppDeleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
   </div>
 
   <div class="disclaimer" style="background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1;">
