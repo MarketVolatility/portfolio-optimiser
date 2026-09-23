@@ -224,15 +224,23 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="viewMobileBtn" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">📱 Mobile interface</button>
   </div>
 
+  <div class="control-panel" style="flex-wrap: wrap; align-items: center;">
+    <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
+    <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
+    <button id="resetAccountDataBtn" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Reset my account data</button>
+    <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
+    <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
   <header>
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.40 (Detailed Update's "Requested assets" is now a ✓/✕ checklist of every asset across all Portfolio Lists, with a "Refresh asset list" button) — app.js v5.47 fixes a security issue where a different account on the same device could see a previous account's data, and adds a "Reset my account data" button
+      HTML build: v5.42 (Added an optional Alpha Vantage API key field, used only as a fallback source for Cash & Equivalents ($M)) — app.js v5.48 auto-fetches Cash & Equivalents ($M) via free SEC EDGAR data first, then Alpha Vantage if needed, with a daily-quota warning past 20 Alpha Vantage calls
     </div>
   </header>
   <div class="disclaimer" style="background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); color: #93c5fd;">
-    <strong>Live data panel.</strong> This can pull <em>live price, P/E, and ROA</em> from Finnhub's free API. Target prices and the stability/moat commentary are still manually written editorial content — no free API provides analyst price targets or qualitative "moat" ratings, so those stay static and are labeled as such below.
+    <strong>Live data panel.</strong> This can pull <em>live price, P/E, and ROA</em> from Finnhub's free API. Target prices and the stability/moat commentary are still manually written editorial content — no free API provides analyst price targets or qualitative "moat" ratings, so those stay static and are labeled as such below. Cash & Equivalents ($M) comes from a separate pair of sources — free, no-signup SEC EDGAR data first, then Alpha Vantage's free tier as a fallback (Alpha Vantage key optional; add one below only if you want that fallback) — since Finnhub's free tier has no source for that figure at all.
   </div>
   <div class="control-panel" style="flex-wrap: wrap;">
     <label for="apiKey" style="flex:1; min-width:220px;">Finnhub API key <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
@@ -240,6 +248,12 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="saveKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
     <button id="fetchLiveBtn">Fetch live data</button>
     <span id="fetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="alphaVantageApiKeyInput" style="flex:1; min-width:220px;">Alpha Vantage API key — optional, Cash & Equivalents fallback only <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
+    <input id="alphaVantageApiKeyInput" type="text" placeholder="paste key here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
+    <button id="saveAlphaVantageKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
+    <span id="alphaVantageKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
@@ -291,14 +305,6 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <button id="qpuParseBtn" type="button">Parse & Update</button>
       <span id="qpuParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
     </div>
-  </div>
-
-  <div class="control-panel" style="flex-wrap: wrap; align-items: center;">
-    <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
-    <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
-    <button id="resetAccountDataBtn" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Reset my account data</button>
-    <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
-    <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
