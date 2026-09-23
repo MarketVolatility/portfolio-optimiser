@@ -1,4 +1,20 @@
-// APP.JS BUILD: v5.56 (1. "Sale Profit" is now labeled "Realized Gain" everywhere
+// APP.JS BUILD: v5.57 (Follow-up on the "TSM missing from September's total"
+// report: re-verified the monthly grouping/summing logic line by line — given the
+// current code, a row that's visible in the Past Purchases table body is
+// mathematically guaranteed to be included in its own list's monthly totals below
+// it (the footer sums the exact same array the table body renders from, via the
+// exact same per-row calculation). So the two most likely explanations left, if
+// this is still happening after loading this exact build, are: (a) the deployed
+// site is still serving an older cached copy of these files (try a hard refresh —
+// Ctrl/Cmd+Shift+R — after redeploying), or (b) the two rows are actually on two
+// DIFFERENT Past Purchases lists (see the list dropdown near the top of the Past
+// Purchases section) rather than one, so each list's own September total is
+// separately correct but doesn't include the other list's row. Added a hover
+// tooltip on every "Realized Gain for month of X of Y" row — hovering it now shows
+// exactly which tickers (and how many rows) were added into that total, which
+// should make either of those two situations immediately obvious.
+//
+// v5.56 (1. "Sale Profit" is now labeled "Realized Gain" everywhere
 // (Past Purchases and, if added there too, the main Portfolio Lists table) — same
 // id/formula ("salesProfitPP"), so nothing about how it's computed or how existing
 // values are stored changes, only the label. A one-time
@@ -3609,8 +3625,9 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
       }
       if(!parsed) return;
       const key = parsed.year + '-' + String(parsed.month).padStart(2, '0');
-      if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
+      if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0, tickers: [] };
       groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
+      groups[key].tickers.push(row.asset); // for the hover tooltip below — makes it obvious at a glance which rows fed this month's total
     });
     const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
     const groupKeys = Object.keys(groups).sort((a, b) => {
@@ -3622,7 +3639,11 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
       const sign = g.total >= 0 ? '+' : '-';
       const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
       const label = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
-      footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
+      // Hover shows exactly which tickers (and how many rows) fed this total — the
+      // fastest way to tell "this row wasn't counted" apart from "this total is
+      // just wrong", if a number here ever looks off again.
+      const tickerTitle = ` title="Includes: ${escAttr(g.tickers.join(', '))} (${g.tickers.length} row${g.tickers.length === 1 ? '' : 's'})"`;
+      footHtml += `<tr style="background:rgba(255,255,255,0.02);"${tickerTitle}><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
       params.forEach((p, idx) => {
         footHtml += idx === colIndex
           ? `<td style="font-weight:600; color:${color};">${sign}$${Math.abs(g.total).toFixed(2)}</td>`
