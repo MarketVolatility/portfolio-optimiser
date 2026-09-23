@@ -1,5 +1,20 @@
-// APP.JS BUILD: v5.52 ("Brief Update for all Assets" renamed to "Update Current Price and Consensus Target Price for all assets" and scoped down from 7 fields to just 2 (Current Price, Consensus Target Price) — QPU_FIELDS trimmed accordingly, so its generated prompt, expected-token-count check, and Parse & Update all follow automatically. Carries forward v5.51: "Reset request list" button on Detailed Update, ✓ included recolored to yellow.)
-console.log("app.js loaded — build v5.52 ('Brief Update' renamed to 'Update Current Price and Consensus Target Price for all assets', now requests only those 2 fields instead of 7)");
+// APP.JS BUILD: v5.53 (New users' first impression: 1. data.js trimmed to just the
+// 9-ticker Sample List with every financial field zeroed/blank instead of fabricated
+// example numbers — see data.js's own header comment; a new migrateLegacyMarketTickersToCustomIfNeeded()
+// (run once per account, from openDashboard) promotes any of the 21 removed legacy
+// tickers an EXISTING account still had visible into a "custom" ticker so nothing
+// silently vanishes; calculatedUpside's (targetPrice-currentPrice)/currentPrice is now
+// guarded against currentPrice===0 (was NaN/Infinity). 2. A "New User. Pending data
+// when user activate live update." banner row now appears in the Portfolio table
+// whenever every visible asset still has a zero Current Price, and disappears the
+// moment any one gets real data. 3. Past Purchases' default "List 1" now starts
+// pre-seeded with 9 columns (Sale Profit, Book Value, Date Purchased, Units Purchased,
+// Average Purchase Price ($), Selling Price, Date Sale, Current Price, Missed Gain %)
+// for a brand-new account, via getNewUserDefaultPastPurchasesParams(). 4. "Delete List"
+// on both Portfolio Lists and Past Purchases now requires re-entering and verifying
+// the account password first, via the same verifyAccountPasswordForDestructiveAction()
+// helper "Reset my account data" now also shares.)
+console.log("app.js loaded — build v5.53 (blank new-user sample data + pending banner, Past Purchases List 1 starting columns, password-verified Delete List)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -22,7 +37,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -192,6 +207,36 @@ function authError(error){
   return error.message || 'Authentication failed. Please try again.';
 }
 
+// Shared password re-verification gate for irreversible/destructive actions
+// (resetting account data, deleting a Portfolio List or a Past Purchases
+// list). Prompts for the account's password and verifies it against Supabase
+// itself via signInWithPassword — the same call the login form uses — rather
+// than trusting anything typed locally, so a wrong password can't slip
+// through. `actionLabel` is a lowercase noun phrase used in the prompt/status
+// text (e.g. "the reset", "deleting this list"). `statusEl`, if given, gets a
+// cancelled/failure message written to it; the caller still gets a plain
+// true/false back either way. Returns true only once the password has
+// actually been confirmed correct.
+async function verifyAccountPasswordForDestructiveAction(actionLabel, statusEl){
+  const emailInline = document.getElementById("loggedInEmailInline");
+  const currentEmail = (emailInline && emailInline.textContent || "").trim();
+  const enteredPassword = prompt(`For your security, re-enter the password for ${currentEmail || "this account"} to confirm ${actionLabel}:`);
+  if(enteredPassword === null) return false; // cancelled
+  if(!enteredPassword){
+    if(statusEl){ statusEl.textContent = `Cancelled — a password is required to confirm ${actionLabel}.`; statusEl.style.color = "var(--amber)"; }
+    return false;
+  }
+  if(statusEl){ statusEl.textContent = "Verifying password…"; statusEl.style.color = "var(--sub)"; }
+  try{
+    const { error: verifyError } = await getAuthClient().auth.signInWithPassword({ email: currentEmail, password: enteredPassword });
+    if(verifyError) throw verifyError;
+    return true;
+  }catch(verifyError){
+    if(statusEl){ statusEl.textContent = `Cancelled — password could not be verified: ${authError(verifyError)}`; statusEl.style.color = "#ef4444"; }
+    return false;
+  }
+}
+
 async function authAction(event, messageId, action){
   event.preventDefault();
   const button = event.currentTarget.querySelector('button[type="submit"]');
@@ -258,6 +303,14 @@ async function openDashboard(user){
   // reach the cloud on the next 8-second auto-sync tick, or not at all if the tab
   // closes before then, letting it "un-rename" itself again on the next pull.
   if(renameBuyPriceParamsIfNeeded()){
+    pushSnapshotToCloud();
+  }
+
+  // Same reasoning as above, for the data.js legacy-ticker trim: this needs to run
+  // against the just-pulled (real, possibly pre-trim) data, and push back up right
+  // away if it actually changed anything, so a legacy ticker that got promoted to
+  // "custom" here stays that way rather than reverting on the next pull.
+  if(migrateLegacyMarketTickersToCustomIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -2350,6 +2403,53 @@ function isAtOrBelowBuyPriceTarget(currentPrice, params, valuesById){
   return Number(currentPrice) <= buyPriceVal;
 }
 
+// One-time-per-account migration for data.js's marketData trim (30-ish legacy
+// tickers down to just the 9-ticker Sample List). Before that trim, any of these
+// tickers could be a list's *base* ticker (useBaseData: true, not in that list's
+// own removedTickers) with no entry in includedCustomTickers at all — now that
+// they're gone from marketData, getWorkingData() would silently drop them from
+// view entirely unless they're promoted to a "custom" ticker here first. A list
+// that already had one of these tickers in removedTickers (the user's own
+// deliberate exclusion) is left alone — it's already hidden either way. Any of
+// the user's own overrides for that ticker in globalOverrides are untouched and
+// keep applying on top of the "custom ticker" shell in getWorkingData.
+//
+// Gated by the "legacyMarketTickersMigrated" flag (a SYNC_KEY) so it runs
+// exactly once per account, against that account's REAL pre-trim list data —
+// never against a genuinely fresh account's brand-new list. That's what
+// initializeNewUserDefaults() setting this flag preemptively (see below) is
+// for: a brand-new list is created directly from the already-trimmed
+// marketData, so there is nothing to migrate for it, and letting this function
+// run against a fresh list's empty removedTickers would incorrectly re-inject
+// every legacy ticker into it. Being a SYNC_KEY means applyRemoteSnapshot()
+// correctly clears a locally-set flag once a real (older, flag-less) cloud
+// snapshot is pulled in for an existing account, so the migration still runs
+// for them exactly once, using their real data, the first time this ships.
+const LEGACY_REMOVED_MARKET_TICKERS = ["WDC", "MA", "MELI", "ANET", "ASML", "LLY", "ELF", "APH", "UBER", "WMT", "PG", "XOM", "JPM", "DELL", "PANW", "MSCI", "TSLA", "AMD", "3968", "IONQ", "INFQ"];
+function migrateLegacyMarketTickersToCustomIfNeeded(){
+  try{
+    if(localStorage.getItem("legacyMarketTickersMigrated") === "1") return false;
+    const lists = getAllLists();
+    let anyPromoted = false;
+    Object.keys(lists).forEach(id => {
+      const list = lists[id];
+      if(!list.useBaseData) return;
+      const removed = list.removedTickers || [];
+      const included = list.includedCustomTickers || [];
+      LEGACY_REMOVED_MARKET_TICKERS.forEach(ticker => {
+        if(!removed.includes(ticker) && !included.includes(ticker)){
+          included.push(ticker);
+          anyPromoted = true;
+        }
+      });
+      list.includedCustomTickers = included;
+    });
+    if(anyPromoted) saveAllLists(lists);
+    localStorage.setItem("legacyMarketTickersMigrated", "1");
+    return anyPromoted;
+  }catch(e){ return false; }
+}
+
 function addPastPurchaseRow(asset){
   const rows = getPastPurchasesRows();
   const id = "pp_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -4436,7 +4536,10 @@ function runMatrixOptimization() {
     const isEdited = priceRelevantOverride;
     const fetchFailed = fetchFailedTickers.has(asset.ticker) && !priceRelevantOverride;
 
-    let upsidePercentage = (targetPrice - currentPrice) / currentPrice;
+    // Guarded against currentPrice === 0 (a brand-new, not-yet-fetched asset, or
+    // any other zero/blank price) — without this, division by zero would show
+    // "NaN%"/"Infinity%" in the Implied Upside column instead of a clean 0%.
+    let upsidePercentage = currentPrice !== 0 ? (targetPrice - currentPrice) / currentPrice : 0;
     let attributionScore = 0;
 
     if (mandate === 'tactical') {
@@ -4594,6 +4697,19 @@ function runMatrixOptimization() {
   }
 
   lastMainTableProcessedAssets = processedAssets;
+
+  // "New User. Pending data..." banner: shown only while EVERY asset in the
+  // currently displayed table still has a zero/blank Current Price — i.e.
+  // nothing has been fetched, imported, pasted, or manually entered yet for
+  // any of them. The moment any single asset gets a real (non-zero) price
+  // from any source, this row stops appearing on its own, with no separate
+  // flag to maintain — matching the user's own "does not appear when there
+  // are numbers in the table" spec.
+  const isPendingNewUserData = processedAssets.length > 0 && processedAssets.every(item => Number(item.currentPrice) === 0);
+  if(isPendingNewUserData){
+    const bannerColspan = getColumnOrder().length + 1; // +1 for the always-present Ticker column
+    tbody.insertAdjacentHTML('beforeend', `<tr class="new-user-pending-row"><td colspan="${bannerColspan}" style="text-align:center; font-style:italic; color:var(--text-secondary); padding:0.75rem;">New User. Pending data when user activate live update.</td></tr>`);
+  }
 
   processedAssets.forEach((item, rowIdx) => {
     const rowElement = document.createElement('tr');
@@ -4771,10 +4887,13 @@ try{
 
   const deleteListBtn = document.getElementById("deleteListBtn");
   if(deleteListBtn){
-    deleteListBtn.addEventListener("click", () => {
+    deleteListBtn.addEventListener("click", async () => {
       const current = getActiveList();
       const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
       if(!confirmed) return;
+      const statusEl = document.getElementById("listActionStatus");
+      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl);
+      if(!verified) return;
       deleteActiveList();
       renderListSelector();
       renderRemoveList();
@@ -5090,26 +5209,8 @@ try{
       const syncStatusEl = document.getElementById("syncStatus");
       if(!confirm("Reset this account's data? This permanently replaces everything currently saved for this account — locally and in the cloud — with the default starting Sample List. This cannot be undone. Continue?")) return;
 
-      // Extra security gate: require re-entering the account password before this
-      // irreversible wipe proceeds. Verified against Supabase itself via
-      // signInWithPassword (the same call the login form uses), rather than
-      // trusting anything typed locally, so a wrong password can't slip through.
-      const emailInline = document.getElementById("loggedInEmailInline");
-      const currentEmail = (emailInline && emailInline.textContent || "").trim();
-      const enteredPassword = prompt(`For your security, re-enter the password for ${currentEmail || "this account"} to confirm the reset:`);
-      if(enteredPassword === null) return; // cancelled
-      if(!enteredPassword){
-        if(syncStatusEl){ syncStatusEl.textContent = "Reset cancelled — a password is required."; syncStatusEl.style.color = "var(--amber)"; }
-        return;
-      }
-      if(syncStatusEl){ syncStatusEl.textContent = "Verifying password…"; syncStatusEl.style.color = "var(--sub)"; }
-      try{
-        const { error: verifyError } = await getAuthClient().auth.signInWithPassword({ email: currentEmail, password: enteredPassword });
-        if(verifyError) throw verifyError;
-      }catch(verifyError){
-        if(syncStatusEl){ syncStatusEl.textContent = `Reset cancelled — password could not be verified: ${authError(verifyError)}`; syncStatusEl.style.color = "#ef4444"; }
-        return;
-      }
+      const verified = await verifyAccountPasswordForDestructiveAction("the reset", syncStatusEl);
+      if(!verified) return;
 
       clearAllLocalAppData();
       initializeNewUserDefaults();
@@ -5194,10 +5295,13 @@ try{
 
   const ppDeleteListBtn = document.getElementById("ppDeleteListBtn");
   if(ppDeleteListBtn){
-    ppDeleteListBtn.addEventListener("click", () => {
+    ppDeleteListBtn.addEventListener("click", async () => {
       const current = getActivePastPurchasesList();
       const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
       if(!confirmed) return;
+      const statusEl = document.getElementById("ppListActionStatus");
+      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl);
+      if(!verified) return;
       deleteActivePastPurchasesList();
       renderPPListSelector();
       renderPastPurchasesTickerList();
@@ -5486,6 +5590,31 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
   "custom_dividend_yield_pct", "custom_market_cap_b", "custom_forward_pe",
 ];
 
+// Past Purchases (the "List 1" default list) starts with no columns at all
+// otherwise — see the comment above PP_ONLY_PARAM_PRESETS. Requested starting
+// layout, in order: Sale Profit, Book Value, Date Purchased, Units Purchased,
+// Average Purchase Price ($), Selling Price, Date Sale, Current Price, Missed
+// Gain % (Ticker/Asset itself is a fixed identity column, not a param). Fixed
+// ids (rather than addPastPurchaseParam()'s timestamped ones), same reasoning
+// as NEW_USER_DEFAULT_CUSTOM_PARAMS above. Built fresh each call (a function,
+// not a static array) so "Date Purchased"'s "__today__" default resolves to
+// the actual date a brand-new account is created, not a date baked in at the
+// time this file was last edited.
+function getNewUserDefaultPastPurchasesParams(){
+  const todayStr = new Date().toISOString().slice(0, 10);
+  return [
+    { id: "pp_sale_profit", label: "Sale Profit", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
+    { id: "pp_book_value", label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
+    { id: "pp_date_purchased", label: "Date Purchased", type: "date", defaultValue: todayStr },
+    { id: "pp_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
+    { id: "pp_avg_purchase_price", label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
+    { id: "pp_selling_price", label: "Selling Price", type: "number", defaultValue: 0 },
+    { id: "pp_date_sale", label: "Date Sale", type: "date", defaultValue: "" },
+    { id: "pp_current_price", label: "Current Price", type: "number", defaultValue: 0 },
+    { id: "pp_missed_gain_pct", label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
+  ];
+}
+
 function initializeNewUserDefaults(){
   try{
     if(localStorage.getItem("portfolioLists") !== null) return; // not a first-ever visit — leave everything alone
@@ -5495,6 +5624,17 @@ function initializeNewUserDefaults(){
       [DEFAULT_LIST_ID]: { name: "Sample List", useBaseData: true, includedCustomTickers: [], removedTickers: getDefaultSampleListRemovedTickers() }
     };
     localStorage.setItem("portfolioLists", JSON.stringify(lists));
+    // A brand-new list is created directly from the already-trimmed marketData, so
+    // there is nothing for migrateLegacyMarketTickersToCustomIfNeeded() to fix here —
+    // set its flag now so that migration never runs against this fresh list (see its
+    // own comment for why running it against a fresh list would be wrong).
+    localStorage.setItem("legacyMarketTickersMigrated", "1");
+    // Past Purchases' own default list ("List 1") starts with its own fixed set of
+    // columns too — see getNewUserDefaultPastPurchasesParams(). getAllPastPurchasesLists()
+    // creates "List 1" itself the first time it's called (from whatever's in
+    // pastPurchasesRows, [] here since this is a first-ever visit), so only the
+    // params need seeding directly.
+    localStorage.setItem("pastPurchasesParams", JSON.stringify(getNewUserDefaultPastPurchasesParams()));
   }catch(e){ /* localStorage unavailable — the app's own existing defaults still apply */ }
 }
 initializeNewUserDefaults();
