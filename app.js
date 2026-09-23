@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.50 (1. "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" are now also excluded from the "Detailed Update for Selected Assets" AI-paste prompt — they were already never fetched from Finnhub/SEC/Alpha Vantage, but are now strictly manual-entry/Import-Excel only everywhere, matched by label via MANUAL_ONLY_FIELD_LABELS. 2. "Reset my account data" now requires re-entering and verifying the account password, via Supabase signInWithPassword, before the wipe proceeds. 3. Detailed Update's ✓/✕ checklist selected-colors changed: ✕ excluded is now a dull pink (was red), ✓ included is now green (was blue). 4. Added a "Request all for current Portfolio list: [name]" quick-select button to Detailed Update that marks every asset on the currently active Portfolio List as ✓ included in one click.)
-console.log("app.js loaded — build v5.50 (Detailed Update: 4 fields now excluded from AI-paste, dull-pink/green checklist colors, new 'Request all for current list' button; Reset my account data now requires password verification)");
+// APP.JS BUILD: v5.51 (Detailed Update for Selected Assets: added a "Reset request list" button next to "Request all for current Portfolio list" that clears every asset's ✓/✕ choice back to grey/undecided in one click, across every Portfolio List, instead of clicking ✕ on each asset one by one — new resetDetailedUpdateSelections(). Also, ✓ included's checklist color changed from green to a plain yellow (#eab308), since var(--amber) reads more orange and is already used app-wide for warnings. Carries forward v5.50: 4 manual-only fields excluded from the AI-paste prompt, dull-pink ✕ excluded color, "Request all for current Portfolio list" button, and password-verified "Reset my account data".)
+console.log("app.js loaded — build v5.51 (Detailed Update: new 'Reset request list' button clears the whole checklist to grey in one click; ✓ included recolored from green to yellow)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1148,9 +1148,11 @@ function buildDetailedUpdatePrompt(assets){
 // Selected-state colors for the ✕ / ✓ checklist buttons below. Grey/undecided
 // stays var(--text-secondary) regardless. ✕ excluded uses a dull/dusty pink
 // (not the app's usual bright red, which reads as more of an alarm/error
-// color) and ✓ included uses green, per the user's explicit request.
+// color) and ✓ included uses a plain yellow (not var(--amber), which is
+// visually more orange and is already used app-wide for warning states),
+// per the user's explicit request.
 const DUS_EXCLUDED_COLOR = "#c98a9e";
-const DUS_INCLUDED_COLOR = "var(--emerald)";
+const DUS_INCLUDED_COLOR = "#eab308";
 
 function updateDusSelectAllLabel(){
   const label = document.getElementById("dusCurrentListNameLabel");
@@ -1204,6 +1206,18 @@ function selectAllCurrentListForDetailedUpdate(){
   return { list, count: workingData.length };
 }
 
+// "Reset request list" — clears every asset's ✓/✕ choice back to grey/
+// undecided, across every Portfolio List, in one click. This is the
+// counterpart to the one-by-one problem "Request all..." solves: there was
+// previously no way to blank out the whole checklist except clicking ✕ on
+// each asset individually (which sets it to "excluded," not undecided).
+function resetDetailedUpdateSelections(){
+  const count = Object.keys(getDusAssetStates()).length;
+  saveDusAssetStates({});
+  renderDusRequestList();
+  return { count };
+}
+
 function wireUpDetailedUpdate(){
   const addBtn = document.getElementById("dusAddBtn");
   const tickerInput = document.getElementById("dusTicker");
@@ -1218,6 +1232,7 @@ function wireUpDetailedUpdate(){
   const parseStatus = document.getElementById("dusParseStatus");
   const pasteInput = document.getElementById("dusPasteInput");
   const selectAllCurrentListBtn = document.getElementById("dusSelectAllCurrentListBtn");
+  const resetSelectionsBtn = document.getElementById("dusResetSelectionsBtn");
   if(!addBtn || !generateBtn || !parseBtn || !promptBox) return; // index.html may be out of date
 
   renderDusRequestList();
@@ -1229,6 +1244,16 @@ function wireUpDetailedUpdate(){
         ? `Marked all ${count} asset(s) on "${list.name}" as ✓ included in the request.`
         : `"${list.name}" has no assets yet.`;
       addStatus.style.color = count > 0 ? "var(--emerald)" : "var(--amber)";
+    });
+  }
+
+  if(resetSelectionsBtn){
+    resetSelectionsBtn.addEventListener("click", () => {
+      const { count } = resetDetailedUpdateSelections();
+      addStatus.textContent = count > 0
+        ? `Reset ${count} asset(s) back to grey/undecided.`
+        : "Nothing was selected — already all grey/undecided.";
+      addStatus.style.color = "var(--text-secondary)";
     });
   }
 
