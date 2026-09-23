@@ -1,4 +1,18 @@
-// APP.JS BUILD: v5.53 (New users' first impression: 1. data.js trimmed to just the
+// APP.JS BUILD: v5.54 (Fixes a bug from v5.53: Past Purchases' default starting
+// columns were seeded only inside initializeNewUserDefaults(), which ONLY runs for a
+// truly brand-new signup (gated on portfolioLists === null) — so an existing account
+// that simply hadn't configured Past Purchases yet never got them, showing just a bare
+// "TICKER" column with "Add at least one parameter above to start tracking data for
+// these assets" even after adding a ticker row. Fixed by extracting the seed into its
+// own independently-gated seedPastPurchasesDefaultParamsIfNeeded() — checked directly
+// against localStorage.getItem("pastPurchasesParams") !== null, so it distinguishes
+// "never touched" (null) from "deliberately emptied" (stored as "[]") — and calling it
+// from openDashboard() (same one-time-migration pattern as migrateLegacyMarketTickersToCustomIfNeeded()),
+// so it now retroactively reaches any existing account too, on next login/reload. Also,
+// the "New User. Pending data when user activate live update." banner row is now
+// left-aligned instead of centered.
+//
+// v5.53 (New users' first impression: 1. data.js trimmed to just the
 // 9-ticker Sample List with every financial field zeroed/blank instead of fabricated
 // example numbers — see data.js's own header comment; a new migrateLegacyMarketTickersToCustomIfNeeded()
 // (run once per account, from openDashboard) promotes any of the 21 removed legacy
@@ -14,7 +28,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.53 (blank new-user sample data + pending banner, Past Purchases List 1 starting columns, password-verified Delete List)");
+console.log("app.js loaded — build v5.54 (fix: Past Purchases starting columns now seed for existing accounts too, not just brand-new signups; pending banner left-aligned)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -311,6 +325,14 @@ async function openDashboard(user){
   // away if it actually changed anything, so a legacy ticker that got promoted to
   // "custom" here stays that way rather than reverting on the next pull.
   if(migrateLegacyMarketTickersToCustomIfNeeded()){
+    pushSnapshotToCloud();
+  }
+
+  // Same reasoning again: seeds Past Purchases' starting columns for any account
+  // (brand-new, or an existing one that has simply never touched Past Purchases
+  // yet) whose pastPurchasesParams the cloud pull above just left unset — then
+  // pushes that seed up right away so it isn't lost before the next auto-sync.
+  if(seedPastPurchasesDefaultParamsIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -4708,7 +4730,7 @@ function runMatrixOptimization() {
   const isPendingNewUserData = processedAssets.length > 0 && processedAssets.every(item => Number(item.currentPrice) === 0);
   if(isPendingNewUserData){
     const bannerColspan = getColumnOrder().length + 1; // +1 for the always-present Ticker column
-    tbody.insertAdjacentHTML('beforeend', `<tr class="new-user-pending-row"><td colspan="${bannerColspan}" style="text-align:center; font-style:italic; color:var(--text-secondary); padding:0.75rem;">New User. Pending data when user activate live update.</td></tr>`);
+    tbody.insertAdjacentHTML('beforeend', `<tr class="new-user-pending-row"><td colspan="${bannerColspan}" style="text-align:left; font-style:italic; color:var(--text-secondary); padding:0.75rem;">New User. Pending data when user activate live update.</td></tr>`);
   }
 
   processedAssets.forEach((item, rowIdx) => {
@@ -5615,6 +5637,30 @@ function getNewUserDefaultPastPurchasesParams(){
   ];
 }
 
+// Seeds Past Purchases' starting columns the first time this app version ever
+// sees an account whose pastPurchasesParams has genuinely never been set —
+// checked directly against localStorage (not getPastPurchasesParams(), whose
+// "|| []" fallback can't tell "never touched" apart from "explicitly emptied").
+// This is DELIBERATELY a separate, independent gate from initializeNewUserDefaults()'s
+// "portfolioLists === null" check, not folded into it: Past Purchases has its
+// own lifecycle, so an account that has used Portfolio Lists for months but
+// never once opened Past Purchases legitimately still has no pastPurchasesParams
+// set at all — that account is not "a first-ever visit" (initializeNewUserDefaults()
+// correctly leaves it alone), but it should still get these starting columns
+// the first time this update reaches it. An account that deliberately removed
+// every Past Purchases column, on the other hand, has pastPurchasesParams
+// explicitly stored as "[]" (not absent) via removePastPurchaseParam(), so this
+// correctly leaves that choice alone. Called from openDashboard(), after the
+// cloud pull, so it sees the account's real, current state — same reasoning as
+// migrateLegacyMarketTickersToCustomIfNeeded() right above it.
+function seedPastPurchasesDefaultParamsIfNeeded(){
+  try{
+    if(localStorage.getItem("pastPurchasesParams") !== null) return false; // already has a value, even "[]" — leave it alone
+    savePastPurchasesParams(getNewUserDefaultPastPurchasesParams());
+    return true;
+  }catch(e){ return false; }
+}
+
 function initializeNewUserDefaults(){
   try{
     if(localStorage.getItem("portfolioLists") !== null) return; // not a first-ever visit — leave everything alone
@@ -5629,12 +5675,10 @@ function initializeNewUserDefaults(){
     // set its flag now so that migration never runs against this fresh list (see its
     // own comment for why running it against a fresh list would be wrong).
     localStorage.setItem("legacyMarketTickersMigrated", "1");
-    // Past Purchases' own default list ("List 1") starts with its own fixed set of
-    // columns too — see getNewUserDefaultPastPurchasesParams(). getAllPastPurchasesLists()
-    // creates "List 1" itself the first time it's called (from whatever's in
-    // pastPurchasesRows, [] here since this is a first-ever visit), so only the
-    // params need seeding directly.
-    localStorage.setItem("pastPurchasesParams", JSON.stringify(getNewUserDefaultPastPurchasesParams()));
+    // Past Purchases' own starting columns are seeded separately, by
+    // seedPastPurchasesDefaultParamsIfNeeded() (called from openDashboard) — see
+    // its own comment for why that's a better gate than this function's
+    // "portfolioLists === null" check.
   }catch(e){ /* localStorage unavailable — the app's own existing defaults still apply */ }
 }
 initializeNewUserDefaults();
