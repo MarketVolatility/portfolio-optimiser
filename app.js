@@ -1,5 +1,5 @@
-// APP.JS BUILD: v5.51 (Detailed Update for Selected Assets: added a "Reset request list" button next to "Request all for current Portfolio list" that clears every asset's ✓/✕ choice back to grey/undecided in one click, across every Portfolio List, instead of clicking ✕ on each asset one by one — new resetDetailedUpdateSelections(). Also, ✓ included's checklist color changed from green to a plain yellow (#eab308), since var(--amber) reads more orange and is already used app-wide for warnings. Carries forward v5.50: 4 manual-only fields excluded from the AI-paste prompt, dull-pink ✕ excluded color, "Request all for current Portfolio list" button, and password-verified "Reset my account data".)
-console.log("app.js loaded — build v5.51 (Detailed Update: new 'Reset request list' button clears the whole checklist to grey in one click; ✓ included recolored from green to yellow)");
+// APP.JS BUILD: v5.52 ("Brief Update for all Assets" renamed to "Update Current Price and Consensus Target Price for all assets" and scoped down from 7 fields to just 2 (Current Price, Consensus Target Price) — QPU_FIELDS trimmed accordingly, so its generated prompt, expected-token-count check, and Parse & Update all follow automatically. Carries forward v5.51: "Reset request list" button on Detailed Update, ✓ included recolored to yellow.)
+console.log("app.js loaded — build v5.52 ('Brief Update' renamed to 'Update Current Price and Consensus Target Price for all assets', now requests only those 2 fields instead of 7)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -878,31 +878,26 @@ async function fetchLiveDataForAllAssets(){
   statusEl.style.color = failCount === 0 && noPeTickers.length === 0 ? "var(--emerald)" : "var(--amber)";
 }
 
-// --- Quick Paste Update ---
+// --- Quick Paste Update ("Update Current Price and Consensus Target Price for all assets") ---
 // A network-free companion to "Fetch live data": generates a fixed-order prompt
 // listing every ticker across ALL Portfolio Lists (deduplicated) for a fixed set of
-// 7 fields, that the user can hand to any AI assistant, then pastes the AI's numeric
+// fields, that the user can hand to any AI assistant, then pastes the AI's numeric
 // reply back in to apply it. Applied via setGlobalOverride (ticker-keyed, not
 // list-keyed) — exactly like a manual cell edit or a "Fetch live data" result — so a
 // paste updates a ticker's values everywhere that ticker appears, across every
 // Portfolio List at once, and takes the same "manual override beats live fetch beats
 // static default" precedence used everywhere else in the app.
 //
-// The 7 fields are a deliberate mix: 4 are always-present BUILTIN_COLUMNS fields
-// (targetPrice, pegRatio, freeCashFlow, currentPrice), and 3 (Dividend Yield,
-// Market Cap, Forward P/E) are normally-optional custom params that the user would
-// otherwise have to add by hand via "+ Parameter" first — resolveQpuFieldId adds
-// them automatically (matching the exact PARAM_PRESETS definition "Fetch live data"
-// already knows how to fill, including its finnhubField mapping) the first time
-// "Parse & Update" actually runs, so the feature works without that manual step.
+// Deliberately scoped down (per the user's explicit request) to just the two
+// always-present BUILTIN_COLUMNS fields most worth a quick, no-API-key refresh:
+// Current Price and Consensus Target Price. resolveQpuFieldId is kept generic
+// (rather than hard-coded to these two ids) in case this list needs to grow again
+// later — it still supports an optional custom-param entry (no builtinId) that
+// gets added automatically the first time "Parse & Update" runs, the way Dividend
+// Yield/Market Cap/Forward P/E used to when this list carried 7 fields.
 const QPU_FIELDS = [
-  { label: "Consensus Target Price", builtinId: "targetPrice" },
-  { label: "PEG Ratio", builtinId: "pegRatio" },
-  { label: "FCF ($M)", builtinId: "freeCashFlow" },
-  { label: "Dividend Yield (%)" },
-  { label: "Market Cap ($B)" },
   { label: "Current Price", builtinId: "currentPrice" },
-  { label: "Forward P/E" },
+  { label: "Consensus Target Price", builtinId: "targetPrice" },
 ];
 
 // Resolves the override-able field id for one QPU_FIELDS entry: the fixed
@@ -1040,7 +1035,7 @@ function wireUpQuickPasteUpdate(){
 // localStorage under DUS_STATES_KEY so the choices survive a reload/re-login)
 // and covering EVERY numeric
 // parameter currently on the Portfolio table — built-in and custom alike —
-// rather than the fixed 7-field QPU_FIELDS set. Non-numeric columns (Company
+// rather than the fixed 2-field QPU_FIELDS set. Non-numeric columns (Company
 // Name, Stability, any text/date custom param) are left out since the AI
 // reply is numbers-only, matching the prompt's own instructions.
 // Every asset across every Portfolio List is shown as a checklist row here —
