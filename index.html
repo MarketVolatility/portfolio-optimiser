@@ -245,7 +245,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.52 (New "Lot Matching (FIFO)" read-only section under the Past Purchases table) — app.js v5.60: shows exactly which purchase(s) each sale was matched against, oldest purchase first, splitting rows wherever a purchase fed more than one sale or a sale drew from more than one purchase
+      HTML build: v5.53 (no markup changes this round) — app.js v5.62: Lot Matching (FIFO) table now has the same columns and the same sort/shift-left/shift-right/remove header controls as the Past Purchases table above it (shared, so changing one changes both), and now lists every purchase and sale on the list — including a ticker you've never sold, shown as its own "(held)" row — instead of only tickers with a matched sale. Ticker column also got its own sort button on every table.
     </div>
   </header>
   <div class="disclaimer">
