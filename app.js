@@ -1,4 +1,17 @@
-// APP.JS BUILD: v5.62 (Lot Matching (FIFO) table now has full column parity with
+// APP.JS BUILD: v5.63 (Moved the summary totals — Total Current Book Value, Total
+// Realized Gain to date, per-month Realized Gain breakdown — OFF the main Past
+// Purchases table and onto the Lot Matching (FIFO) table below it instead: a
+// per-row total on the editable table isn't reliably accurate once a purchase or
+// sale has been split across multiple lots, so the FIFO-matched fragments are now
+// the sole, accurate source for these totals (also removed from the Past Purchases
+// Excel/Text/PDF export, which no longer carries a footer). Unrealized Gain, on
+// BOTH the Past Purchases table and the Lot Matching table, now also computes for
+// units that have ALREADY been sold — a hypothetical "what would this have been
+// worth today, at its original buy price, had it never been sold" — instead of
+// showing "—" once something is fully or partially sold. A never-sold row/fragment
+// is unaffected (identical number as before).
+//
+// v5.62 (Lot Matching (FIFO) table now has full column parity with
 // the main Past Purchases table: same header row (every current parameter,
 // including computed columns like Current Price and Missed Gain %), and the same
 // per-column sort/move-left/move-right/remove controls, sharing the main table's
@@ -184,7 +197,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.62 (Lot Matching table: full column parity + shared sort/move/remove with the main table, shows every ticker including never-sold holdings, fixed buy-target highlight; ticker sort button added to all tables)");
+console.log("app.js loaded — build v5.63 (summary totals moved from Past Purchases table to Lot Matching table; Unrealized Gain now also shows a hypothetical value for already-sold units)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3697,13 +3710,14 @@ function resolvePastPurchaseRowValues(row){
       resolved['_' + p.id + '_ready'] = ready;
     }
     if(p.computed && p.formula === 'unrealizedGainPP'){
-      // Units Purchased × (Current Price − Average Purchase Price) — the gain (or
-      // loss) on a position that HASN'T been sold yet. Current Price is resolved
-      // live (override > live fetch > static default), same as Missed Gain %, so
-      // this fluctuates automatically as the market price does. Once a Selling
-      // Price is entered, that gain becomes "realized" — Realized Gain takes over
-      // and this reverts to not-ready/0, same "not double-counted" convention as
-      // Total Current Book Value's own Selling-Price-is-0 check.
+      // Units Purchased × (Current Price − Average Purchase Price). Current Price is
+      // resolved live (override > live fetch > static default), same as Missed Gain %,
+      // so this fluctuates automatically as the market price does.
+      // v5.63: uses the row's FULL original Units Purchased (not just heldUnits), so
+      // this now also computes for a row that's been partially or fully sold — a
+      // hypothetical "what would my unrealized gain be right now had none of this
+      // purchase ever been sold?" On a never-sold row, units === heldUnits, so the
+      // number is identical to the real current unrealized gain, same as before.
       const norm = s => String(s).trim().toLowerCase();
       const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
       const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
@@ -3713,10 +3727,9 @@ function resolvePastPurchaseRowValues(row){
       const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
       const builtin = row.asset ? getResolvedBuiltinAssetValues(row.asset.trim().toUpperCase()) : null;
       const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
-      // v5.59: on the units still held after sale-row matching (see ledger).
       void sell;
-      const ready = !!(unitsParam && avgParam) && isPurchaseRow && units !== 0 && avg !== 0 && ledgerInfo.heldUnits > PP_EPS && !!builtin;
-      resolved[p.id] = ready ? ledgerInfo.heldUnits * (current - avg) : 0;
+      const ready = !!(unitsParam && avgParam) && isPurchaseRow && units !== 0 && avg !== 0 && !!builtin;
+      resolved[p.id] = ready ? units * (current - avg) : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
   });
@@ -3891,11 +3904,12 @@ function renderPastPurchasesTable(){
         : "No assets yet — add one above, or import a list.");
     tr.appendChild(td);
     tbody.appendChild(tr);
-    // The footer (Total Current Book Value, Total Realized Gain to date, etc.) still
-    // reflects the FULL list even when the filtered body is empty, so only skip it
-    // when there's genuinely nothing on the list at all.
-    if(tfoot && orderedRows.length === 0) tfoot.innerHTML = "";
-    else if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
+    // v5.63: the summary totals (Total Current Book Value, Total Realized Gain to
+    // date, per-month breakdown) moved OFF this table and onto the Lot Matching
+    // (FIFO) table below — this table's own per-row numbers follow the Cost Basis
+    // selector (Average/FIFO) and aren't reliably additive across multi-lot
+    // buy/sell rows, so a real total is only accurate after FIFO lot matching.
+    if(tfoot) tfoot.innerHTML = "";
     // Lot Matching always reflects the FULL list (orderedRows), independent of the
     // "Current Holdings" filter that emptied visibleRows here, so it still needs to
     // run even though the body itself has nothing to show.
@@ -3944,10 +3958,17 @@ function renderPastPurchasesTable(){
         // Realized Gain's brighter red so the two "gain" columns aren't confusable.
         const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : DUS_EXCLUDED_COLOR);
         let ugTip = '';
-        if(ready) ugTip = `On ${ppFmtNum(li.heldUnits)} unit(s) still held.`;
-        else if(li.kind === 'sale') ugTip = 'Sale row — unrealized gain is tracked on the purchase row(s).';
-        else if((li.kind === 'buy' || li.kind === 'buy+sale') && li.heldUnits <= PP_EPS) ugTip = 'Fully sold — no units left to have an unrealized gain.';
-        else ugTip = 'Add Units Purchased and Average Purchase Price columns (and make sure this asset has Current Price data) to compute this.';
+        if(ready && li.heldUnits <= PP_EPS){
+          ugTip = `Fully sold — hypothetical: what this row's ${ppFmtNum(li.units)} unit(s) would be worth today had none of it been sold.`;
+        } else if(ready && li.heldUnits < li.units - PP_EPS){
+          ugTip = `${ppFmtNum(li.heldUnits)} of ${ppFmtNum(li.units)} unit(s) still held (real gain); the rest is hypothetical — what the full ${ppFmtNum(li.units)} would be worth today had none of it been sold.`;
+        } else if(ready){
+          ugTip = `On ${ppFmtNum(li.heldUnits)} unit(s) still held.`;
+        } else if(li.kind === 'sale'){
+          ugTip = 'Sale row — unrealized gain is tracked on the purchase row(s).';
+        } else {
+          ugTip = 'Add Units Purchased and Average Purchase Price columns (and make sure this asset has Current Price data) to compute this.';
+        }
         const titleAttr = ` title="${escAttr(ugTip)}"`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed && p.formula === 'missedGainPct'){
@@ -4068,7 +4089,9 @@ function renderPastPurchasesTable(){
     });
   });
 
-  if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
+  // v5.63: no summary tfoot on this table anymore (see the matching comment in the
+  // early-return branch above) — the totals live on the Lot Matching table instead.
+  if(tfoot) tfoot.innerHTML = "";
   renderPastPurchasesLotMatchBreakdown(params, orderedRows);
 }
 
@@ -4124,7 +4147,11 @@ function resolveFifoFragmentValues(fragment, isMatch, params, rowsById, builtinC
       resolved[p.id] = isMatch ? fragment.realized : 0;
       resolved["_" + p.id + "_ready"] = isMatch;
     } else if(p.formula === "unrealizedGainPP"){
-      const ready = !isMatch && buyPrice !== 0 && !!builtin;
+      // v5.63: no longer gated on `!isMatch` — a MATCHED (sold) fragment now also
+      // computes this, as a hypothetical: what this exact matched quantity would be
+      // worth today, at its own buy price, had it never been sold. An unmatched
+      // (still-held) fragment's value is unchanged (the real current gain).
+      const ready = buyPrice !== 0 && !!builtin;
       resolved[p.id] = ready ? qty * (current - buyPrice) : 0;
       resolved["_" + p.id + "_ready"] = ready;
     } else if(p.formula === "bookValuePP"){
@@ -4270,38 +4297,39 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
     <table>
       <thead id="ppLotMatchHead"></thead>
       <tbody>${bodyHtml}</tbody>
+      <tfoot id="ppLotMatchFoot"></tfoot>
     </table>
   </div>${issuesHtml}`;
 
   const lotHead = document.getElementById("ppLotMatchHead");
   lotHead.innerHTML = buildPastPurchasesHeaderRow(params);
   wirePastPurchasesHeaderButtons(lotHead);
+
+  const lotFoot = document.getElementById("ppLotMatchFoot");
+  if(lotFoot) lotFoot.innerHTML = renderFifoLotMatchFooter(params, fragments);
 }
 
-// Builds the Past Purchases tfoot summary rows — Total Current Book Value, then
-// Total Realized Gain to date immediately below it, then the per-month Realized Gain
-// breakdown (most recent month first) below both. Always summarizes the FULL list
-// passed in (orderedRows), independent of the "Current Holdings" display filter or
-// whatever sort order the table body itself is currently showing.
-function renderPastPurchasesFooter(tfoot, params, orderedRows){
-  const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
-  // Collect EVERY "Date Sale"-labeled column, not just the first — normally
-  // there's only one, but this makes the monthly grouping below resilient to a
-  // stray duplicate column (e.g. left over from an older version of this app)
-  // instead of silently dropping any row whose real date happens to live under
-  // a second "Date Sale" column that a plain single .find() would miss.
-  const dateSaleParams = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
-  const dateSaleParam = dateSaleParams[0];
+// v5.63: the summary totals that used to live on the main Past Purchases table's
+// own tfoot (Total Current Book Value, Total Realized Gain to date, per-month
+// Realized Gain breakdown) now live HERE instead — totaling the FIFO fragments
+// (this table's own rows) rather than the raw editable rows, since a per-row total
+// on the table above isn't reliably accurate once a purchase or sale has been split
+// across multiple lots/rows; the FIFO-matched fragments are the accurate source.
+// Mirrors renderPastPurchasesFooter's old row-building exactly, one column per
+// current param (same column count/order as buildPastPurchasesHeaderRow), just
+// summing over `fragments` (each with its own pre-resolved values from
+// resolveFifoFragmentValues) instead of `orderedRows`.
+function renderFifoLotMatchFooter(params, fragments){
   const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
-  const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
+  const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
+  const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
   let footHtml = '';
 
-  // v5.59: Book Value is already "cost of units still held" per purchase row (after
-  // sale-row matching), so the current total is simply the column's sum.
-  void sellParamForBookValue;
   if(bookValueParam){
     const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-    const totalBookValue = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0), 0);
+    const totalBookValue = fragments.reduce((sum, f) => {
+      return sum + (f.resolved['_' + bookValueParam.id + '_ready'] ? (f.resolved[bookValueParam.id] || 0) : 0);
+    }, 0);
     footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
     params.forEach((p, idx) => {
       footHtml += idx === colIndex
@@ -4311,13 +4339,13 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
     footHtml += `</tr>`;
   }
 
-  // Grand total, positioned immediately below Total Current Book Value — the
-  // per-month breakdown (further below) is supporting detail for this number.
   if(saleProfitParam){
-    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
+    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
+    const total = fragments.reduce((sum, f) => {
+      return sum + (f.resolved['_' + saleProfitParam.id + '_ready'] ? (f.resolved[saleProfitParam.id] || 0) : 0);
+    }, 0);
     const sign = total >= 0 ? '+' : '-';
     const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
-    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
     footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Realized Gain to date</td>`;
     params.forEach((p, idx) => {
       footHtml += idx === colIndex
@@ -4328,23 +4356,15 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
   }
 
   if(saleProfitParam && dateSaleParam){
-    // Group rows that actually have a Date Sale entered into per-month subtotals,
-    // most recent month first. Checks every "Date Sale"-labeled column per row
-    // (see dateSaleParams above) so a row isn't silently dropped just because its
-    // real date happens to live under a second, duplicate "Date Sale" column.
     const groups = {};
-    orderedRows.forEach(row => {
-      let parsed = null;
-      for(const dsp of dateSaleParams){
-        const dateVal = (row.values && row.values[dsp.id]) || '';
-        parsed = ppParseDateSale(dateVal);
-        if(parsed) break;
-      }
+    fragments.forEach(f => {
+      if(!f.isMatch) return; // only a matched (sold) fragment has a real Date Sale
+      const parsed = ppParseDateSale(f.resolved[dateSaleParam.id] || '');
       if(!parsed) return;
       const key = parsed.year + '-' + String(parsed.month).padStart(2, '0');
       if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0, tickers: [] };
-      groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
-      groups[key].tickers.push(row.asset); // for the hover tooltip below — makes it obvious at a glance which rows fed this month's total
+      groups[key].total += (f.resolved['_' + saleProfitParam.id + '_ready'] ? (f.resolved[saleProfitParam.id] || 0) : 0);
+      groups[key].tickers.push(f.ticker);
     });
     const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
     const groupKeys = Object.keys(groups).sort((a, b) => {
@@ -4356,9 +4376,6 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
       const sign = g.total >= 0 ? '+' : '-';
       const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
       const label = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
-      // Hover shows exactly which tickers (and how many rows) fed this total — the
-      // fastest way to tell "this row wasn't counted" apart from "this total is
-      // just wrong", if a number here ever looks off again.
       const tickerTitle = ` title="Includes: ${escAttr(g.tickers.join(', '))} (${g.tickers.length} row${g.tickers.length === 1 ? '' : 's'})"`;
       footHtml += `<tr style="background:rgba(255,255,255,0.02);"${tickerTitle}><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
       params.forEach((p, idx) => {
@@ -4370,7 +4387,7 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
     });
   }
 
-  tfoot.innerHTML = footHtml;
+  return footHtml;
 }
 
 // --- Export: Excel / Text / PDF, for both tables ---
@@ -4714,10 +4731,10 @@ function getPastPurchasesExportRowColors(resolved, params){
 function buildPastPurchasesExportTable(){
   const params = getPastPurchasesParams();
   // Body rows mirror exactly what's currently visible on screen (respecting the
-  // "Current Holdings" filter, if it's on); footer totals below always summarize
-  // the FULL list, same as the live table's own tfoot.
+  // "Current Holdings" filter, if it's on). v5.63: no more summary/total rows here —
+  // this table no longer carries its own tfoot (see renderPastPurchasesTable); the
+  // accurate totals are the Lot Matching (FIFO) table's own summary rows instead.
   const visibleRows = lastPastPurchasesVisibleRows || lastPastPurchasesOrderedRows || [];
-  const orderedRows = lastPastPurchasesOrderedRows || [];
   const headers = ["Ticker", ...params.map(p => p.label)];
 
   const rows = [];
@@ -4752,75 +4769,6 @@ function buildPastPurchasesExportTable(){
     rows.push([row.asset, ...cells]);
     colors.push(getPastPurchasesExportRowColors(resolved, params));
   });
-
-  const saleProfitParam = params.find(p => p.computed && p.formula === "salesProfitPP");
-  // See renderPastPurchasesFooter's own comment: collect every "Date Sale"-labeled
-  // column, not just the first, so the export's monthly grouping matches the
-  // live table's resilience to a stray duplicate column.
-  const dateSaleParams = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
-  const dateSaleParam = dateSaleParams[0];
-  const bookValueParam = params.find(p => p.computed && p.formula === "bookValuePP");
-  const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
-
-  if(bookValueParam){
-    const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-    void sellParamForBookValue;
-    const totalBookValue = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0), 0);
-    const row = new Array(headers.length).fill("");
-    const rowColors = new Array(headers.length).fill(null);
-    row[0] = "Total Current Book Value";
-    rowColors[0] = EXPORT_COLORS.grey;
-    row[colIndex + 1] = "$" + totalBookValue.toFixed(2);
-    rowColors[colIndex + 1] = EXPORT_COLORS.blue;
-    rows.push(row);
-    colors.push(rowColors);
-  }
-
-  // Grand total, positioned immediately below Total Current Book Value — matches
-  // the live table's tfoot order (the per-month breakdown below is supporting
-  // detail for this number).
-  if(saleProfitParam){
-    const total = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0), 0);
-    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-    const row = new Array(headers.length).fill("");
-    const rowColors = new Array(headers.length).fill(null);
-    row[0] = "Total Realized Gain to date";
-    row[colIndex + 1] = (total >= 0 ? "+" : "-") + "$" + Math.abs(total).toFixed(2);
-    rowColors[colIndex + 1] = total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
-    rows.push(row);
-    colors.push(rowColors);
-  }
-
-  if(saleProfitParam && dateSaleParam){
-    const groups = {};
-    orderedRows.forEach(row => {
-      let parsed = null;
-      for(const dsp of dateSaleParams){
-        const dateVal = (row.values && row.values[dsp.id]) || "";
-        parsed = ppParseDateSale(dateVal);
-        if(parsed) break;
-      }
-      if(!parsed) return;
-      const key = parsed.year + "-" + String(parsed.month).padStart(2, "0");
-      if(!groups[key]) groups[key] = { year: parsed.year, month: parsed.month, total: 0 };
-      groups[key].total += resolvePastPurchaseRowValues(row)[saleProfitParam.id] || 0;
-    });
-    const colIndex = params.findIndex(p => p.id === saleProfitParam.id);
-    Object.keys(groups).sort((a, b) => {
-      if(groups[b].year !== groups[a].year) return groups[b].year - groups[a].year;
-      return groups[b].month - groups[a].month;
-    }).forEach(key => {
-      const g = groups[key];
-      const row = new Array(headers.length).fill("");
-      const rowColors = new Array(headers.length).fill(null);
-      row[0] = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
-      rowColors[0] = EXPORT_COLORS.grey;
-      row[colIndex + 1] = (g.total >= 0 ? "+" : "-") + "$" + Math.abs(g.total).toFixed(2);
-      rowColors[colIndex + 1] = g.total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
-      rows.push(row);
-      colors.push(rowColors);
-    });
-  }
 
   return { headers, rows, colors };
 }
