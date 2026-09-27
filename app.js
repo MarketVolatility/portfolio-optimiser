@@ -1,4 +1,21 @@
-// APP.JS BUILD: v5.59 (Past Purchases can now record buys and sells on SEPARATE
+// APP.JS BUILD: v5.60 (Added a read-only "Lot Matching (FIFO)" section under the
+// Past Purchases table: shows exactly which purchase(s) each sale was matched
+// against, oldest purchase first, splitting a purchase across several lines if it
+// fed more than one sale, or a sale across several lines if it drew from more
+// than one purchase. E.g. buy 10 @ $200 (D1), buy 10 @ $210 (D2), sell 8 @ $215
+// (D3), sell 5 @ $220 (D4) -> "D1 buy 8 -> D3 sell 8" (+$120), "D1 buy 2 -> D4
+// sell 2" (+$40), "D2 buy 3 -> D4 sell 3" (+$30), "D2 buy 7, still held". Always
+// uses FIFO here regardless of the "Cost basis" selector (which only drives the
+// aggregate Realized Gain column on the main table) — Average cost blends prices
+// across lots and has nothing clean to split into rows this way. Purely derived
+// for display (computePastPurchasesFifoLotBreakdown) — never writes to any row,
+// so your entered/imported rows are unaffected and stay fully editable; recomputes
+// automatically from whatever's on the active list, so an Excel import that adds
+// separate buy/sell lines is reflected here with no extra steps. A ticker only
+// appears once it has an actual sale to reconcile — a plain, never-sold holding
+// isn't listed. See renderPastPurchasesLotMatchBreakdown().)
+//
+// v5.59 (Past Purchases can now record buys and sells on SEPARATE
 // rows, with Realized Gain computed per sale: e.g. buy 10 A @ $2, then sale rows
 // "sell 5 @ $3" and "sell 5 @ $5" -> +$5 and +$15, $20 total. See
 // computePastPurchasesLedger(). A sale row = Units Sold + Selling Price + Date Sale
@@ -137,7 +154,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.59 (Past Purchases: separate buy/sell rows with per-sale Realized Gain, cost-basis selector, row-level Excel import with conflict chooser)");
+console.log("app.js loaded — build v5.60 (Past Purchases: read-only FIFO Lot Matching breakdown showing which purchase(s) fed each sale)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3484,6 +3501,106 @@ function getPastPurchaseRowLedgerInfo(row){
   return computePastPurchasesLedger([row], getPastPurchasesParams(), getPpCostBasisMethod())[row.id];
 }
 
+// v5.60: read-only "Lot Matching" breakdown — shows exactly which purchase lot(s)
+// each sale was matched against, splitting a purchase across several output lines
+// whenever it feeds more than one sale, or splitting a sale across several lines
+// whenever it draws from more than one purchase. E.g. buy 10 @ $200 (D1), buy 10 @
+// $210 (D2), sell 8 @ $215 (D3), sell 5 @ $220 (D4) becomes:
+//   D1 buy 8 @ $200 -> D3 sell 8 @ $215   (+$120)
+//   D1 buy 2 @ $200 -> D4 sell 2 @ $220   (+$40)
+//   D2 buy 3 @ $210 -> D4 sell 3 @ $220   (+$30)
+//   D2 buy 7 @ $210 -> still held
+// ALWAYS matches oldest-purchase-first (FIFO), independent of the account-wide
+// "Cost basis" setting (getPpCostBasisMethod/computePastPurchasesLedger above),
+// which only drives the aggregate Realized Gain shown per row on the main Past
+// Purchases table — FIFO is the only method that resolves into clean, non-
+// overlapping pairs like this; Average cost blends prices across held lots, so it
+// has nothing meaningful to split into discrete rows here. Purely derived for
+// display: takes rows/params as plain data, never reads/writes localStorage or a
+// row's own values, so the source rows (typed or imported, on one line or split
+// across several) are completely unaffected and stay exactly as entered.
+function computePastPurchasesFifoLotBreakdown(rows, params){
+  const unitsP = ppFindParamByLabel(params, "units purchased");
+  const avgP = ppFindParamByLabel(params, ["average purchase price ($)", "average purchase price"]);
+  const sellP = ppFindParamByLabel(params, "selling price");
+  const soldP = ppFindParamByLabel(params, "units sold");
+  const datePurchasedP = ppFindParamByLabel(params, "date purchased");
+  const dateSalePs = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  const valOf = (row, p) => { const v = row.values || {}; return v[p.id] !== undefined ? v[p.id] : p.defaultValue; };
+  const numOf = (row, p) => p ? (Number(valOf(row, p)) || 0) : 0;
+  const dateOf = (row, p) => { const d = p ? String(valOf(row, p) || "") : ""; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+
+  // Pass 1: turn each row into a "buy" (adds to the FIFO queue), a "match" (a
+  // single row with its own Units Purchased AND Selling Price — resolved directly
+  // against its own price, same convention as the ledger's "buy+sale" rows; any
+  // leftover units still join the queue), or a "sale" (consumes from the queue).
+  const eventsByTicker = {};
+  rows.forEach((row, idx) => {
+    const ticker = String(row.asset || "").trim().toUpperCase();
+    if(!ticker) return;
+    const units = numOf(row, unitsP), avg = numOf(row, avgP), sell = numOf(row, sellP), sold = numOf(row, soldP);
+    const datePurchased = dateOf(row, datePurchasedP);
+    let dateSale = "";
+    for(const dsp of dateSalePs){ dateSale = dateOf(row, dsp); if(dateSale) break; }
+    const hasSaleData = sell !== 0 || sold > PP_EPS;
+    if(!eventsByTicker[ticker]) eventsByTicker[ticker] = [];
+    const events = eventsByTicker[ticker];
+
+    if(units > PP_EPS){
+      let residual = units;
+      if(hasSaleData && sell !== 0 && !(sold > units + PP_EPS)){
+        const qty = sold > PP_EPS ? sold : units;
+        events.push({ type: "match", date: datePurchased, idx, buyRowId: row.id, buyDate: datePurchased, buyPrice: avg, sellRowId: row.id, sellDate: dateSale, sellPrice: sell, qty });
+        residual = units - qty;
+      }
+      if(residual > PP_EPS) events.push({ type: "buy", date: datePurchased, idx, rowId: row.id, units: residual, price: avg });
+    } else if(hasSaleData && sold > PP_EPS && sellP){
+      events.push({ type: "sale", date: dateSale, idx, rowId: row.id, qty: sold, sell });
+    }
+  });
+
+  // Pass 2: per ticker, walk events oldest-first (buys/same-row matches before a
+  // plain sale on the same date, so a same-day purchase is available to it), and
+  // consume the FIFO queue for each sale — emitting one output row per lot touched.
+  const breakdown = {};
+  Object.keys(eventsByTicker).forEach(ticker => {
+    const events = eventsByTicker[ticker];
+    events.sort((a, b) => {
+      if(a.date !== b.date) return a.date < b.date ? -1 : 1;
+      const rank = t => (t === "sale" ? 1 : 0);
+      if(rank(a.type) !== rank(b.type)) return rank(a.type) - rank(b.type);
+      return a.idx - b.idx;
+    });
+    const lots = [];
+    const out = { matches: [], unmatched: [], issues: [] };
+    events.forEach(ev => {
+      if(ev.type === "buy"){ lots.push({ rowId: ev.rowId, date: ev.date, price: ev.price, remaining: ev.units }); return; }
+      if(ev.type === "match"){
+        out.matches.push({ ticker, buyRowId: ev.buyRowId, buyDate: ev.buyDate, buyPrice: ev.buyPrice, sellRowId: ev.sellRowId, sellDate: ev.sellDate, sellPrice: ev.sellPrice, qty: ev.qty, realized: ev.qty * (ev.sellPrice - ev.buyPrice) });
+        return;
+      }
+      // ev.type === "sale": draw from the oldest lot(s) with units remaining.
+      let left = ev.qty;
+      for(const lot of lots){
+        if(left <= PP_EPS) break;
+        if(lot.remaining <= PP_EPS) continue;
+        const take = Math.min(lot.remaining, left);
+        out.matches.push({ ticker, buyRowId: lot.rowId, buyDate: lot.date, buyPrice: lot.price, sellRowId: ev.rowId, sellDate: ev.date, sellPrice: ev.sell, qty: take, realized: take * (ev.sell - lot.price) });
+        lot.remaining -= take;
+        left -= take;
+      }
+      if(left > PP_EPS){
+        out.issues.push(`Sale of ${ppFmtNum(ev.qty)} unit(s) on ${ev.date || "an unspecified date"} is ${ppFmtNum(left)} unit(s) more than were held at that point.`);
+      }
+    });
+    lots.forEach(lot => {
+      if(lot.remaining > PP_EPS) out.unmatched.push({ ticker, buyRowId: lot.rowId, buyDate: lot.date, buyPrice: lot.price, qty: lot.remaining });
+    });
+    breakdown[ticker] = out;
+  });
+  return breakdown;
+}
+
 function resolvePastPurchaseRowValues(row){
   const params = getPastPurchasesParams();
   const stored = row.values || {};
@@ -3875,6 +3992,77 @@ function renderPastPurchasesTable(){
   });
 
   if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
+  renderPastPurchasesLotMatchBreakdown(params, orderedRows);
+}
+
+// Renders the read-only "Lot Matching (FIFO)" section (see
+// computePastPurchasesFifoLotBreakdown's own comment) into #ppLotMatchContent.
+// Always over the FULL active list (orderedRows, same as the footer totals) —
+// independent of the "Current Holdings" filter and whatever sort the table body
+// is currently showing, since the point is to explain the underlying matching,
+// not to mirror whichever subset is currently visible. A ticker only appears here
+// once it has at least one sale-side event (a match or an unmatched-sale issue);
+// a plain, never-sold holding has nothing to reconcile, so it's left out to keep
+// this section focused. Recomputes on every call — cheap enough (same data the
+// table body just rendered) to not need its own memoization.
+function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
+  const container = document.getElementById("ppLotMatchContent");
+  if(!container) return;
+  const breakdown = computePastPurchasesFifoLotBreakdown(orderedRows, params);
+  const tickers = Object.keys(breakdown).filter(t => breakdown[t].matches.length > 0 || breakdown[t].issues.length > 0).sort();
+
+  if(tickers.length === 0){
+    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">Nothing to show yet — record a sale (Units Sold, Selling Price, and Date Sale) to see how it's matched against your purchases.</div>`;
+    return;
+  }
+
+  const fmtDate = d => d || "—";
+  const fmtQty = q => ppFmtNum(q);
+  const fmtPrice = p => "$" + Number(p || 0).toFixed(2);
+  let bodyHtml = "";
+  const allIssues = [];
+  tickers.forEach(ticker => {
+    const t = breakdown[ticker];
+    t.matches.forEach(m => {
+      const sign = m.realized >= 0 ? "+" : "-";
+      const color = m.realized >= 0 ? "var(--emerald)" : "#ef4444";
+      bodyHtml += `<tr>
+        <td style="font-weight:600;">${escHtml(ticker)}</td>
+        <td>${fmtDate(m.buyDate)}</td>
+        <td>${fmtQty(m.qty)}</td>
+        <td>${fmtPrice(m.buyPrice)}</td>
+        <td>${fmtDate(m.sellDate)}</td>
+        <td>${fmtQty(m.qty)}</td>
+        <td>${fmtPrice(m.sellPrice)}</td>
+        <td style="color:${color}; font-weight:600;">${sign}$${Math.abs(m.realized).toFixed(2)}</td>
+      </tr>`;
+    });
+    t.unmatched.forEach(u => {
+      bodyHtml += `<tr>
+        <td style="font-weight:600;">${escHtml(ticker)}</td>
+        <td>${fmtDate(u.buyDate)}</td>
+        <td>${fmtQty(u.qty)}</td>
+        <td>${fmtPrice(u.buyPrice)}</td>
+        <td colspan="3" style="color:var(--text-secondary);">still held — no sale yet</td>
+        <td style="color:#7dd3fc;">—</td>
+      </tr>`;
+    });
+    t.issues.forEach(msg => allIssues.push(`${ticker}: ${msg}`));
+  });
+
+  const issuesHtml = allIssues.length
+    ? `<div style="color:var(--amber); font-size:0.85rem; margin-top:0.6rem;">${allIssues.map(m => escHtml(m)).join("<br>")}</div>`
+    : "";
+
+  container.innerHTML = `<div class="table-container">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Purchased</th><th>Qty</th><th>Buy Price</th>
+        <th>Sold</th><th>Qty</th><th>Sell Price</th><th>Realized Gain</th>
+      </tr></thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+  </div>${issuesHtml}`;
 }
 
 // Builds the Past Purchases tfoot summary rows — Total Current Book Value, then
