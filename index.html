@@ -245,7 +245,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.51 (Cost basis selector, "Sell"/sale-row guidance, updated Import/Sample Excel tooltips and glossary) — app.js v5.59: Past Purchases records buys and sells on separate rows with per-sale Realized Gain (Average cost or FIFO), plus row-by-row Excel import with a conflict chooser
+      HTML build: v5.52 (New "Lot Matching (FIFO)" read-only section under the Past Purchases table) — app.js v5.60: shows exactly which purchase(s) each sale was matched against, oldest purchase first, splitting rows wherever a purchase fed more than one sale or a sale drew from more than one purchase
     </div>
   </header>
   <div class="disclaimer">
@@ -619,6 +619,14 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <tbody id="ppTableBody"></tbody>
       <tfoot id="ppTableFoot"></tfoot>
     </table>
+  </div>
+
+  <div style="margin-bottom:2rem;">
+    <h3 style="color:#facc15; font-size:1.05rem; margin-bottom:0.4rem;">Lot Matching (FIFO)</h3>
+    <div class="chart-note chart-note-info" style="margin-bottom:0.75rem;">
+      Read-only. Shows exactly which purchase(s) each sale on this list was matched against, oldest purchase first — splitting a purchase across several lines here if it fed more than one sale, or a sale across several lines if it drew from more than one purchase. Never changes the rows above. Always matches oldest-purchase-first (FIFO) here, even when "Cost basis" above is set to Average cost — Average cost blends prices across lots and has nothing clean to split into rows like this.
+    </div>
+    <div id="ppLotMatchContent"></div>
   </div>
 
   </div>
