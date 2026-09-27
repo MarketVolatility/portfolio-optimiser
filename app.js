@@ -1,4 +1,34 @@
-// APP.JS BUILD: v5.60 (Added a read-only "Lot Matching (FIFO)" section under the
+// APP.JS BUILD: v5.62 (Lot Matching (FIFO) table now has full column parity with
+// the main Past Purchases table: same header row (every current parameter,
+// including computed columns like Current Price and Missed Gain %), and the same
+// per-column sort/move-left/move-right/remove controls, sharing the main table's
+// column list and sort state (ppColumnSortState) — so acting on either table's
+// header keeps both in sync. Added a dedicated sort button to the Ticker/Asset
+// column on ALL THREE tables: the main Past Purchases table, the new Lot Matching
+// table, and the main Portfolio Lists table (previously only sortable via the
+// "Sort by" dropdown). Lot Matching now also shows EVERY purchase and sale on the
+// list, including a ticker that was never sold at all (shown as its own "(held)"
+// row) — earlier it only showed tickers with actual FIFO match activity. Fixed a
+// bug from this same round's WIP where the Lot Matching table's "Current Price"
+// column never actually applied the emerald "at buy target" highlight (it computed
+// the check but discarded the result, and passed it an empty column list instead
+// of the real one) — it now matches the main table's own highlight exactly. Also
+// fixed a related edge case where turning on "Current Holdings" until nothing
+// matched left the Lot Matching table stale instead of still reflecting the full list.
+//
+// v5.61 (Fixed a pre-existing bug, unrelated to the Lot Matching
+// work below: NEW_USER_STARTING_TICKERS was declared near the bottom of the file
+// but referenced by several "wire up ___" blocks (asset selector dropdowns, Quick
+// Paste, Detailed Update, Past Purchases list/table wiring) that run immediately
+// at page load, before that declaration executed — throwing "Cannot access
+// 'NEW_USER_STARTING_TICKERS' before initialization" on every single load. It was
+// always caught and re-rendered correctly once openDashboard() re-ran the same
+// functions after login (so it never broke anything a logged-in user could see),
+// but it was pure console noise on every load and could plausibly slow the very
+// first paint of those dropdowns. Moved the declaration to near the top of the
+// file, well before anything can reference it.)
+//
+// v5.60 (Added a read-only "Lot Matching (FIFO)" section under the
 // Past Purchases table: shows exactly which purchase(s) each sale was matched
 // against, oldest purchase first, splitting a purchase across several lines if it
 // fed more than one sale, or a sale across several lines if it drew from more
@@ -154,7 +184,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.60 (Past Purchases: read-only FIFO Lot Matching breakdown showing which purchase(s) fed each sale)");
+console.log("app.js loaded — build v5.62 (Lot Matching table: full column parity + shared sort/move/remove with the main table, shows every ticker including never-sold holdings, fixed buy-target highlight; ticker sort button added to all tables)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -205,6 +235,20 @@ const LOCAL_DATA_OWNER_KEY = "appDataOwnerUserId";
 // to a different account (which likely has its own, separate Alpha Vantage
 // key with its own fresh quota) would just show a false, borrowed number.
 const NON_SYNCED_LOCAL_KEYS = ["customAssets", "removedTickers", "collapsedSections", "ppShowCurrentHoldingsOnly", "uiViewMode", "alphaVantageCallLog"];
+
+// v5.60 fix: declared here (rather than down by "New-user starting defaults" below,
+// where it conceptually belongs and is explained) because several top-level
+// "wire up ___" blocks call getDefaultSampleListRemovedTickers() unconditionally
+// at script load — before login, so their result isn't yet visible — and those
+// blocks run, in file order, before that section. A `const` this early get
+// referenced still throws (temporal dead zone) until its own declaration line has
+// executed, so keeping the ONLY declaration down there meant every such call
+// before it threw "Cannot access before initialization" (caught by each block's
+// own try/catch and logged to console, then silently re-rendered correctly once
+// openDashboard() re-runs the same functions after login, when this line has long
+// since executed — so it was never visible to a logged-in user, only noise in the
+// console on every load). See "New-user starting defaults" below for what this is.
+const NEW_USER_STARTING_TICKERS = ["NVDA", "MU", "AMZN", "TSM", "GOOGL", "SNDK", "PLTR", "META", "AAPL"];
 
 function clearAllLocalAppData(){
   SYNC_KEYS.concat(NON_SYNCED_LOCAL_KEYS).forEach(k => {
@@ -3685,8 +3729,10 @@ function getPastPurchasesSortedRows(){
   if(ppColumnSortState){
     const { colId, direction } = ppColumnSortState;
     rows.sort((a, b) => {
-      const va = resolvePastPurchaseRowValues(a)[colId];
-      const vb = resolvePastPurchaseRowValues(b)[colId];
+      // v5.62: "asset" is the Ticker column's own sort id — it isn't a param, so
+      // it's read straight off the row rather than through resolvePastPurchaseRowValues.
+      const va = colId === "asset" ? String(a.asset || "") : resolvePastPurchaseRowValues(a)[colId];
+      const vb = colId === "asset" ? String(b.asset || "") : resolvePastPurchaseRowValues(b)[colId];
       let cmp;
       if(typeof va === 'string' || typeof vb === 'string') cmp = String(va).localeCompare(String(vb));
       else cmp = (va || 0) - (vb || 0);
@@ -3735,6 +3781,77 @@ function ppParseDateSale(val){
   return { year: parseInt(m[1], 10), month: parseInt(m[2], 10) };
 }
 
+// v5.62: shared by BOTH the main Past Purchases table's <thead> and the Lot
+// Matching (FIFO) table's <thead> below it — same columns (Ticker + every
+// current param, in the same order), same sort/move/remove controls, because
+// both tables show the exact same shared, global column set
+// (pastPurchasesParams). Sorting, reordering, or removing a column from EITHER
+// table's header acts on that one shared list/sort-state, so the two headers —
+// and their sort arrows — always stay in lockstep. The Ticker/Asset column gets
+// only a sort toggle (it's not reorderable or removable).
+function buildPastPurchasesHeaderRow(params){
+  const assetSorted = ppColumnSortState && ppColumnSortState.colId === "asset";
+  const assetSortIcon = assetSorted ? (ppColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+  let html = `<tr><th>
+    <div>Ticker</div>
+    <div class="col-header-controls">
+      <button class="pp-col-btn col-ctrl-btn ${assetSorted ? "col-ctrl-sort-active" : ""}" data-action="sort" data-id="asset" title="Sort by ticker">${assetSortIcon}</button>
+    </div>
+  </th>`;
+  params.forEach((p, idx) => {
+    const isSorted = ppColumnSortState && ppColumnSortState.colId === p.id;
+    const sortIcon = isSorted ? (ppColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+    html += `<th>
+      <div>${p.label}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.7rem;">(computed)</span>' : ''}</div>
+      <div class="col-header-controls">
+        <button class="pp-col-btn col-ctrl-btn ${isSorted ? "col-ctrl-sort-active" : ""}" data-action="sort" data-id="${p.id}" title="Sort by this column">${sortIcon}</button>
+        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="-1" ${idx === 0 ? "disabled" : ""} title="Move left">&lt;</button>
+        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="1" ${idx === params.length - 1 ? "disabled" : ""} title="Move right">&gt;</button>
+        <button class="pp-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${p.id}" title="Remove this parameter">&times;</button>
+      </div>
+    </th>`;
+  });
+  html += "</tr>";
+  return html;
+}
+
+// Wires the sort/move/remove buttons in a header row built by
+// buildPastPurchasesHeaderRow above. Used for both the main table's thead and the
+// Lot Matching table's thead — both act on the same shared params/sort state, and
+// every action finishes with a full renderPastPurchasesTable() re-render, which
+// refreshes both tables (and keeps their header arrows in sync) together.
+function wirePastPurchasesHeaderButtons(theadEl){
+  theadEl.querySelectorAll(".pp-col-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const action = btn.getAttribute("data-action");
+      if(action === "sort"){
+        if(!ppColumnSortState || ppColumnSortState.colId !== id){
+          ppColumnSortState = { colId: id, direction: "asc" };
+        } else if(ppColumnSortState.direction === "asc"){
+          ppColumnSortState = { colId: id, direction: "desc" };
+        } else {
+          ppColumnSortState = null; // third click clears back to the Sort-by dropdown
+        }
+        renderPastPurchasesTable();
+      } else if(action === "move"){
+        movePastPurchaseParam(id, parseInt(btn.getAttribute("data-dir"), 10));
+        renderPastPurchasesTable();
+        renderPastPurchasesColumnOrderList();
+      } else if(action === "remove"){
+        const def = getPastPurchasesParams().find(p => p.id === id);
+        if(def && confirm(`Remove the "${def.label}" column? This deletes its values for every row.`)){
+          removePastPurchaseParam(id);
+          renderPastPurchasesTable();
+          renderPastPurchasesParamList();
+          renderPastPurchasesColumnOrderList();
+        }
+      }
+    });
+  });
+}
+
 function renderPastPurchasesTable(){
   const thead = document.getElementById("ppTableHead");
   const tbody = document.getElementById("ppTableBody");
@@ -3757,52 +3874,8 @@ function renderPastPurchasesTable(){
   const costBasisSelect = document.getElementById("ppCostBasisSelect");
   if(costBasisSelect) costBasisSelect.value = getPpCostBasisMethod();
 
-  let headHtml = '<tr><th>Ticker</th>';
-  params.forEach((p, idx) => {
-    const isSorted = ppColumnSortState && ppColumnSortState.colId === p.id;
-    const sortIcon = isSorted ? (ppColumnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
-    headHtml += `<th>
-      <div>${p.label}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.7rem;">(computed)</span>' : ''}</div>
-      <div class="col-header-controls">
-        <button class="pp-col-btn col-ctrl-btn ${isSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="${p.id}" title="Sort by this column">${sortIcon}</button>
-        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left">&lt;</button>
-        <button class="pp-col-btn col-ctrl-btn" data-action="move" data-id="${p.id}" data-dir="1" ${idx === params.length - 1 ? 'disabled' : ''} title="Move right">&gt;</button>
-        <button class="pp-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-id="${p.id}" title="Remove this parameter">&times;</button>
-      </div>
-    </th>`;
-  });
-  headHtml += '</tr>';
-  thead.innerHTML = headHtml;
-
-  thead.querySelectorAll('.pp-col-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute('data-id');
-      const action = btn.getAttribute('data-action');
-      if(action === 'sort'){
-        if(!ppColumnSortState || ppColumnSortState.colId !== id){
-          ppColumnSortState = { colId: id, direction: 'asc' };
-        } else if(ppColumnSortState.direction === 'asc'){
-          ppColumnSortState = { colId: id, direction: 'desc' };
-        } else {
-          ppColumnSortState = null; // third click clears back to the Sort-by dropdown
-        }
-        renderPastPurchasesTable();
-      } else if(action === 'move'){
-        movePastPurchaseParam(id, parseInt(btn.getAttribute('data-dir'), 10));
-        renderPastPurchasesTable();
-        renderPastPurchasesColumnOrderList();
-      } else if(action === 'remove'){
-        const def = params.find(p => p.id === id);
-        if(confirm(`Remove the "${def.label}" column? This deletes its values for every row.`)){
-          removePastPurchaseParam(id);
-          renderPastPurchasesTable();
-          renderPastPurchasesParamList();
-          renderPastPurchasesColumnOrderList();
-        }
-      }
-    });
-  });
+  thead.innerHTML = buildPastPurchasesHeaderRow(params);
+  wirePastPurchasesHeaderButtons(thead);
 
   tbody.innerHTML = "";
   if(visibleRows.length === 0 || params.length === 0){
@@ -3823,6 +3896,10 @@ function renderPastPurchasesTable(){
     // when there's genuinely nothing on the list at all.
     if(tfoot && orderedRows.length === 0) tfoot.innerHTML = "";
     else if(tfoot) renderPastPurchasesFooter(tfoot, params, orderedRows);
+    // Lot Matching always reflects the FULL list (orderedRows), independent of the
+    // "Current Holdings" filter that emptied visibleRows here, so it still needs to
+    // run even though the body itself has nothing to show.
+    renderPastPurchasesLotMatchBreakdown(params, orderedRows);
     return;
   }
 
@@ -3995,59 +4072,194 @@ function renderPastPurchasesTable(){
   renderPastPurchasesLotMatchBreakdown(params, orderedRows);
 }
 
-// Renders the read-only "Lot Matching (FIFO)" section (see
-// computePastPurchasesFifoLotBreakdown's own comment) into #ppLotMatchContent.
-// Always over the FULL active list (orderedRows, same as the footer totals) —
-// independent of the "Current Holdings" filter and whatever sort the table body
-// is currently showing, since the point is to explain the underlying matching,
-// not to mirror whichever subset is currently visible. A ticker only appears here
-// once it has at least one sale-side event (a match or an unmatched-sale issue);
-// a plain, never-sold holding has nothing to reconcile, so it's left out to keep
-// this section focused. Recomputes on every call — cheap enough (same data the
-// table body just rendered) to not need its own memoization.
+// v5.62: works out what EVERY current Past Purchases column should show for one
+// FIFO lot-matching fragment (a "match" — a specific buy lot paired with a
+// specific sale — or an "unmatched" still-held remainder), so the Lot Matching
+// table can have the exact same columns as the main table above it, not just a
+// fixed Buy/Sell summary. Mirrors resolvePastPurchaseRowValues's shape (values by
+// param id, plus "_<id>_ready" flags) so the two can share a renderer.
+//   - The well-known buy/sale fields (Date Purchased, Units Purchased, Average
+//     Purchase Price, Selling Price, Date Sale, Units Sold, Current Price) come
+//     from the fragment itself (qty/prices/dates already resolved by the FIFO
+//     match), not from re-reading either original row — a fragment is often a
+//     PART of one, so its own row's stored Units Purchased, say, would be wrong.
+//   - The computed formulas (Realized/Unrealized Gain, Book Value, Missed Gain %)
+//     are recomputed for this fragment's own qty/prices, on the same "which side
+//     is this ready on" rules as the live formulas: a sold fragment has a
+//     Realized Gain (and no Book Value/Unrealized Gain, since those units aren't
+//     held anymore); a still-held remainder has Book Value/Unrealized Gain (and
+//     no Realized Gain/Missed Gain %, since nothing sold yet).
+//   - Any OTHER (custom) column isn't fragment-specific — it falls back to the
+//     buy row's own stored value, then the sell row's, so it still shows
+//     something rather than a blank.
+function resolveFifoFragmentValues(fragment, isMatch, params, rowsById, builtinCache){
+  const resolved = {};
+  const known = new Set();
+  const unitsP = ppFindParamByLabel(params, "units purchased");
+  const avgP = ppFindParamByLabel(params, ["average purchase price ($)", "average purchase price"]);
+  const sellP = ppFindParamByLabel(params, "selling price");
+  const soldP = ppFindParamByLabel(params, "units sold");
+  const dpP = ppFindParamByLabel(params, "date purchased");
+  const dsP = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  const curP = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "current price");
+
+  const qty = fragment.qty, buyPrice = fragment.buyPrice;
+  const sellPrice = isMatch ? fragment.sellPrice : 0;
+  if(!builtinCache[fragment.ticker]) builtinCache[fragment.ticker] = getResolvedBuiltinAssetValues(fragment.ticker);
+  const builtin = builtinCache[fragment.ticker];
+  const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
+
+  if(unitsP){ resolved[unitsP.id] = qty; known.add(unitsP.id); }
+  if(avgP){ resolved[avgP.id] = buyPrice; known.add(avgP.id); }
+  if(dpP){ resolved[dpP.id] = fragment.buyDate || ""; known.add(dpP.id); }
+  if(sellP){ resolved[sellP.id] = isMatch ? sellPrice : 0; known.add(sellP.id); }
+  if(dsP){ resolved[dsP.id] = isMatch ? (fragment.sellDate || "") : ""; known.add(dsP.id); }
+  if(soldP){ resolved[soldP.id] = isMatch ? qty : 0; known.add(soldP.id); }
+  if(curP){ resolved[curP.id] = current; known.add(curP.id); }
+
+  params.forEach(p => {
+    if(known.has(p.id) || !p.computed) return;
+    known.add(p.id);
+    if(p.formula === "salesProfitPP"){
+      resolved[p.id] = isMatch ? fragment.realized : 0;
+      resolved["_" + p.id + "_ready"] = isMatch;
+    } else if(p.formula === "unrealizedGainPP"){
+      const ready = !isMatch && buyPrice !== 0 && !!builtin;
+      resolved[p.id] = ready ? qty * (current - buyPrice) : 0;
+      resolved["_" + p.id + "_ready"] = ready;
+    } else if(p.formula === "bookValuePP"){
+      const ready = !isMatch && buyPrice !== 0;
+      resolved[p.id] = ready ? qty * buyPrice : 0;
+      resolved["_" + p.id + "_ready"] = ready;
+    } else if(p.formula === "missedGainPct"){
+      const ready = isMatch && sellPrice !== 0 && !!builtin;
+      resolved[p.id] = ready ? ((current - sellPrice) / sellPrice) * 100 : 0;
+      resolved["_" + p.id + "_ready"] = ready;
+    } else {
+      resolved[p.id] = 0;
+      resolved["_" + p.id + "_ready"] = false;
+    }
+  });
+
+  // Anything left (a custom manual column, or a preset like "ROA (%)"/"Stability"
+  // that mirrors the Portfolio Lists table) — fall back to whichever of this
+  // fragment's two source rows actually has a value for it.
+  const buyRow = rowsById[fragment.buyRowId];
+  const sellRow = isMatch ? rowsById[fragment.sellRowId] : null;
+  params.forEach(p => {
+    if(known.has(p.id)) return;
+    const fromBuy = buyRow && buyRow.values ? buyRow.values[p.id] : undefined;
+    const fromSell = sellRow && sellRow.values ? sellRow.values[p.id] : undefined;
+    resolved[p.id] = fromBuy !== undefined ? fromBuy : (fromSell !== undefined ? fromSell : p.defaultValue);
+  });
+
+  return resolved;
+}
+
+// Read-only cell for one Lot Matching row — mirrors the main Past Purchases
+// table's per-column color/format rules (renderPastPurchasesTable's own
+// params.forEach branch) exactly, just as plain text instead of an editable
+// input, since a fragment doesn't map 1:1 onto a single real row to write back to.
+function renderFifoFragmentCellHTML(p, resolved, params){
+  if(p.computed && p.formula === "salesProfitPP"){
+    const ready = resolved["_" + p.id + "_ready"];
+    if(!ready) return `<td style="color:var(--text-secondary);">—</td>`;
+    const val = resolved[p.id] || 0;
+    const sign = val >= 0 ? "+" : "-";
+    const color = val >= 0 ? "var(--emerald)" : "#ef4444";
+    return `<td style="color:${color}; font-weight:600;">${sign}$${Math.abs(val).toFixed(2)}</td>`;
+  }
+  if(p.computed && p.formula === "unrealizedGainPP"){
+    const ready = resolved["_" + p.id + "_ready"];
+    if(!ready) return `<td style="color:var(--text-secondary);">—</td>`;
+    const val = resolved[p.id] || 0;
+    const sign = val >= 0 ? "+" : "-";
+    const color = val >= 0 ? "var(--emerald)" : DUS_EXCLUDED_COLOR;
+    return `<td style="color:${color}; font-weight:600;">${sign}$${Math.abs(val).toFixed(2)}</td>`;
+  }
+  if(p.computed && p.formula === "bookValuePP"){
+    const ready = resolved["_" + p.id + "_ready"];
+    if(!ready) return `<td style="color:var(--text-secondary);">—</td>`;
+    const val = resolved[p.id] || 0;
+    return `<td style="font-weight:600; color:#7dd3fc;">$${Math.abs(val).toFixed(2)}</td>`;
+  }
+  if(p.computed && p.formula === "missedGainPct"){
+    const ready = resolved["_" + p.id + "_ready"];
+    const val = resolved[p.id] || 0;
+    if(!ready || val === 0) return `<td style="color:var(--text-secondary);">—</td>`;
+    const color = val > 0 ? "var(--emerald)" : "#ef4444";
+    return `<td style="color:${color}; font-weight:600;">${Number(val).toFixed(1)}%</td>`;
+  }
+  if(p.computed){
+    const ready = resolved["_" + p.id + "_ready"];
+    if(ready === false) return `<td style="color:var(--text-secondary);">—</td>`;
+    return `<td>${Number(resolved[p.id] || 0).toFixed(1)}%</td>`;
+  }
+  const val = resolved[p.id];
+  if(p.type === "date") return `<td>${val || "—"}</td>`;
+  if(p.type === "text") return `<td>${escHtml(String(val === undefined || val === null ? "" : val))}</td>`;
+  // Same "hit your buy target" emerald highlight as the main table's Current
+  // Price column (see the pp-cell-input branch in renderPastPurchasesTable).
+  const isCurrentPriceCol = String(p.label).trim().toLowerCase() === "current price";
+  const isAtTarget = isCurrentPriceCol && isAtOrBelowBuyPriceTarget(val, params || [], resolved);
+  const styleAttr = isAtTarget ? ' style="color:var(--emerald);"' : '';
+  return `<td${styleAttr}>${ppFmtNum(val)}</td>`;
+}
+
+// Renders the read-only "Lot Matching (FIFO)" section into #ppLotMatchContent —
+// same header (same columns, same sort/move/remove controls, via
+// buildPastPurchasesHeaderRow/wirePastPurchasesHeaderButtons) as the main table
+// above it, so the two stay visually and functionally identical apart from what
+// each row represents. Shows EVERY purchase and sale currently on the active
+// list, split into FIFO-matched fragments (computePastPurchasesFifoLotBreakdown)
+// — not only tickers that happen to have a sale — so a plain, never-sold holding
+// still appears here as its own "still held" row. Always over the FULL active
+// list (orderedRows, same as the footer totals), independent of the "Current
+// Holdings" filter or whatever sort the table body is currently showing.
+// ppColumnSortState (shared with the main table's header) sorts these fragment
+// rows too, by the same column, when set; otherwise grouped by ticker
+// (alphabetical), matches before that ticker's still-held remainder, in the
+// order the FIFO matching produced them.
 function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
   const container = document.getElementById("ppLotMatchContent");
   if(!container) return;
   const breakdown = computePastPurchasesFifoLotBreakdown(orderedRows, params);
-  const tickers = Object.keys(breakdown).filter(t => breakdown[t].matches.length > 0 || breakdown[t].issues.length > 0).sort();
+  const tickers = Object.keys(breakdown).sort();
 
   if(tickers.length === 0){
-    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">Nothing to show yet — record a sale (Units Sold, Selling Price, and Date Sale) to see how it's matched against your purchases.</div>`;
+    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">Nothing to show yet — add a purchase (Units Purchased + Average Purchase Price) to see it here.</div>`;
     return;
   }
 
-  const fmtDate = d => d || "—";
-  const fmtQty = q => ppFmtNum(q);
-  const fmtPrice = p => "$" + Number(p || 0).toFixed(2);
-  let bodyHtml = "";
+  const rowsById = {};
+  orderedRows.forEach(r => { rowsById[r.id] = r; });
+  const builtinCache = {};
   const allIssues = [];
+  const fragments = []; // { ticker, isMatch, data, resolved }
   tickers.forEach(ticker => {
     const t = breakdown[ticker];
-    t.matches.forEach(m => {
-      const sign = m.realized >= 0 ? "+" : "-";
-      const color = m.realized >= 0 ? "var(--emerald)" : "#ef4444";
-      bodyHtml += `<tr>
-        <td style="font-weight:600;">${escHtml(ticker)}</td>
-        <td>${fmtDate(m.buyDate)}</td>
-        <td>${fmtQty(m.qty)}</td>
-        <td>${fmtPrice(m.buyPrice)}</td>
-        <td>${fmtDate(m.sellDate)}</td>
-        <td>${fmtQty(m.qty)}</td>
-        <td>${fmtPrice(m.sellPrice)}</td>
-        <td style="color:${color}; font-weight:600;">${sign}$${Math.abs(m.realized).toFixed(2)}</td>
-      </tr>`;
-    });
-    t.unmatched.forEach(u => {
-      bodyHtml += `<tr>
-        <td style="font-weight:600;">${escHtml(ticker)}</td>
-        <td>${fmtDate(u.buyDate)}</td>
-        <td>${fmtQty(u.qty)}</td>
-        <td>${fmtPrice(u.buyPrice)}</td>
-        <td colspan="3" style="color:var(--text-secondary);">still held — no sale yet</td>
-        <td style="color:#7dd3fc;">—</td>
-      </tr>`;
-    });
+    t.matches.forEach(m => fragments.push({ ticker, isMatch: true, data: m, resolved: resolveFifoFragmentValues(m, true, params, rowsById, builtinCache) }));
+    t.unmatched.forEach(u => fragments.push({ ticker, isMatch: false, data: u, resolved: resolveFifoFragmentValues(u, false, params, rowsById, builtinCache) }));
     t.issues.forEach(msg => allIssues.push(`${ticker}: ${msg}`));
+  });
+
+  if(ppColumnSortState){
+    const { colId, direction } = ppColumnSortState;
+    fragments.sort((a, b) => {
+      const va = colId === "asset" ? a.ticker : a.resolved[colId];
+      const vb = colId === "asset" ? b.ticker : b.resolved[colId];
+      let cmp;
+      if(typeof va === "string" || typeof vb === "string") cmp = String(va || "").localeCompare(String(vb || ""));
+      else cmp = (va || 0) - (vb || 0);
+      return direction === "asc" ? cmp : -cmp;
+    });
+  }
+
+  let bodyHtml = "";
+  fragments.forEach(f => {
+    let rowHtml = `<td style="font-weight:600;">${escHtml(f.ticker)}${f.isMatch ? "" : ` <span style="color:var(--text-secondary); font-size:0.7rem;">(held)</span>`}</td>`;
+    params.forEach(p => { rowHtml += renderFifoFragmentCellHTML(p, f.resolved, params); });
+    bodyHtml += `<tr>${rowHtml}</tr>`;
   });
 
   const issuesHtml = allIssues.length
@@ -4056,13 +4268,14 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
 
   container.innerHTML = `<div class="table-container">
     <table>
-      <thead><tr>
-        <th>Ticker</th><th>Purchased</th><th>Qty</th><th>Buy Price</th>
-        <th>Sold</th><th>Qty</th><th>Sell Price</th><th>Realized Gain</th>
-      </tr></thead>
+      <thead id="ppLotMatchHead"></thead>
       <tbody>${bodyHtml}</tbody>
     </table>
   </div>${issuesHtml}`;
+
+  const lotHead = document.getElementById("ppLotMatchHead");
+  lotHead.innerHTML = buildPastPurchasesHeaderRow(params);
+  wirePastPurchasesHeaderButtons(lotHead);
 }
 
 // Builds the Past Purchases tfoot summary rows — Total Current Book Value, then
@@ -5548,7 +5761,17 @@ function renderTableHeader(){
   const allDefs = getAllColumnDefs();
   const defsById = Object.fromEntries(allDefs.map(d => [d.id, d]));
 
-  let html = '<tr><th>Ticker</th>';
+  // v5.62: Ticker gets a sort toggle too (no move/remove — it's the fixed anchor
+  // column). getSortValue's generic `item[colId]` fallback already handles
+  // colId === 'ticker', so no change was needed there.
+  const tickerSorted = columnSortState && columnSortState.colId === 'ticker';
+  const tickerSortIcon = tickerSorted ? (columnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
+  let html = `<tr><th>
+    <div>Ticker</div>
+    <div class="col-header-controls">
+      <button class="col-ctrl-btn ${tickerSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="ticker" title="Sort by ticker">${tickerSortIcon}</button>
+    </div>
+  </th>`;
   columnOrder.forEach((colId, idx) => {
     const def = defsById[colId];
     if(!def) return;
@@ -6697,7 +6920,9 @@ try{
 // point) — so a genuinely new account still starts from this smaller default,
 // while an existing account's cloud data (pulled right after sign-in) correctly
 // overwrites it, and nothing here ever touches an existing local user's data.
-const NEW_USER_STARTING_TICKERS = ["NVDA", "MU", "AMZN", "TSM", "GOOGL", "SNDK", "PLTR", "META", "AAPL"];
+// NEW_USER_STARTING_TICKERS itself is declared much earlier in this file (see the
+// v5.60 fix comment next to NON_SYNCED_LOCAL_KEYS) so it's available before the
+// top-level "wire up ___" blocks that need it run.
 
 // Shared by every spot that freshly creates a "Sample List": returns the
 // removedTickers array that leaves exactly NEW_USER_STARTING_TICKERS visible
