@@ -1,4 +1,34 @@
-// APP.JS BUILD: v5.57 (Follow-up on the "TSM missing from September's total"
+// APP.JS BUILD: v5.59 (Past Purchases can now record buys and sells on SEPARATE
+// rows, with Realized Gain computed per sale: e.g. buy 10 A @ $2, then sale rows
+// "sell 5 @ $3" and "sell 5 @ $5" -> +$5 and +$15, $20 total. See
+// computePastPurchasesLedger(). A sale row = Units Sold + Selling Price + Date Sale
+// with no Units Purchased; it's matched against that ticker's purchase rows on the
+// same list, dated on/before the sale. New "Cost basis" selector (Average cost —
+// default — or FIFO), synced per account. Rows that have both purchase and sale on
+// one line work exactly as before. New per-row "Sell" button adds a sale row right
+// below. Book Value / Unrealized Gain / Current Holdings now use the units still
+// held after sales; each purchase row shows "Held: x / y" under its ticker, sale
+// rows show a SALE tag, and hovering Realized Gain explains the calculation.
+// Import Excel rewritten: one table row per spreadsheet line (no more merging by
+// ticker), identical lines ignored, new lines added next to that ticker's rows,
+// and lines that match an existing row's ticker + dates but differ open a
+// "Keep existing / Replace / Add as new" chooser (or cancel the import). Sample
+// Excel now lists every row of the open list. Refresh-from-Portfolio no longer
+// overwrites a purchase row's own Units Purchased / Avg Price / Date Purchased,
+// and never puts them onto a sale row.)
+//
+// v5.58 (Added a "Units Sold" column to Past Purchases — a plain
+// manual number field (how many shares/units were sold in that sale), placed right
+// after "Date Sale" and before "Current Price", matching the Past Purchases data-
+// entry spreadsheet layout. Included in the brand-new-account default columns, in
+// the "+/- Parameter" preset dropdown, and added to existing accounts once via the
+// new insertUnitsSoldColumnIfNeeded() migration. Because the Sample Excel template
+// and Import Excel both match columns by label, "Units Sold" now round-trips through
+// them automatically. It's record-keeping only for now — Realized Gain is still
+// computed from Units Purchased. Also fixed the startup console.log, which still
+// said v5.55.)
+//
+// v5.57 (Follow-up on the "TSM missing from September's total"
 // report: re-verified the monthly grouping/summing logic line by line — given the
 // current code, a row that's visible in the Past Purchases table body is
 // mathematically guaranteed to be included in its own list's monthly totals below
@@ -107,7 +137,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.55 (independent Alpha Vantage \"Fetch live data\", Forward P/E column reorder, glossary/disclaimer cleanup, Past Purchases dates default blank)");
+console.log("app.js loaded — build v5.59 (Past Purchases: separate buy/sell rows with per-sale Realized Gain, cost-basis selector, row-level Excel import with conflict chooser)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -130,7 +160,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "ppCostBasisMethod"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -260,11 +290,16 @@ function setPpShowCurrentHoldingsOnly(on){
   try{ localStorage.setItem("ppShowCurrentHoldingsOnly", on ? "true" : "false"); }
   catch(e){ /* localStorage unavailable */ }
 }
+// v5.59: "still held" now comes from the lot-matching ledger (see
+// computePastPurchasesLedger) rather than just "Selling Price is 0" — a purchase
+// row counts as a current holding while any of its units are still unsold after
+// every sale row on the list has been matched against it; separate sale rows
+// never count. A row with nothing entered yet (no units, no sale) still shows.
 function isPastPurchaseRowCurrentHolding(row, params){
-  const sellParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
-  if(!sellParam) return true; // no Selling Price column at all -> nothing counts as sold
-  const sellVal = Number(row.values && row.values[sellParam.id]) || 0;
-  return sellVal === 0;
+  const info = getPastPurchaseRowLedgerInfo(row);
+  if(!info || info.kind === "none") return true;
+  if(info.kind === "sale") return false;
+  return info.heldUnits > PP_EPS;
 }
 
 let authClient;
@@ -429,6 +464,10 @@ async function openDashboard(user){
     pushSnapshotToCloud();
   }
   if(insertUnrealizedGainColumnIfNeeded()){
+    pushSnapshotToCloud();
+  }
+  // Adds the manual "Units Sold" column (right after Date Sale) to existing accounts.
+  if(insertUnitsSoldColumnIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -2436,6 +2475,7 @@ function renderImportListSelect(){
 const PP_ONLY_PARAM_PRESETS = [
   { label: "Date Sale", type: "date", defaultValue: "" },
   { label: "Selling Price", type: "number", defaultValue: 0 },
+  { label: "Units Sold", type: "number", defaultValue: 0 },
   { label: "Realized Gain", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
   { label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" },
   { label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
@@ -2825,10 +2865,62 @@ function insertUnrealizedGainColumnIfNeeded(){
   }catch(e){ return false; }
 }
 
+// One-time-per-account migration: inserts a plain manual "Units Sold" column
+// (number, default 0) into existing Past Purchases column lists, positioned right
+// after the (first) "Date Sale" column — matching the new-user default layout and
+// the user's own data-entry spreadsheet (… Selling Price, Date Sale, Units Sold,
+// Current Price). Falls back to right after "Selling Price", then to appending.
+// Purely a record-keeping field for now: it does NOT feed any computed formula
+// (Realized Gain still uses Units Purchased). Gated by the "unitsSoldColumnAdded"
+// flag (a SYNC_KEY); no-op if a "Units Sold" column already exists by label.
+function insertUnitsSoldColumnIfNeeded(){
+  try{
+    if(localStorage.getItem("unitsSoldColumnAdded") === "1") return false;
+    localStorage.setItem("unitsSoldColumnAdded", "1");
+    const raw = localStorage.getItem("pastPurchasesParams");
+    if(raw === null) return false; // never seeded yet — seedPastPurchasesDefaultParamsIfNeeded() will include it fresh
+    const params = JSON.parse(raw);
+    const norm = s => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    if(params.some(p => norm(p.label) === "units sold")) return false; // already present
+    const newParam = { id: "pp_units_sold_" + Date.now().toString(36), label: "Units Sold", type: "number", defaultValue: 0 };
+    let anchorIdx = params.findIndex(p => !p.computed && norm(p.label) === "date sale");
+    if(anchorIdx === -1) anchorIdx = params.findIndex(p => !p.computed && norm(p.label) === "selling price");
+    if(anchorIdx === -1) params.push(newParam);
+    else params.splice(anchorIdx + 1, 0, newParam);
+    savePastPurchasesParams(params);
+    return true;
+  }catch(e){ return false; }
+}
+
 function addPastPurchaseRow(asset){
   const rows = getPastPurchasesRows();
   const id = "pp_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
   rows.push({ id, asset, values: {}, dateAdded: Date.now() });
+  savePastPurchasesRows(rows);
+  return id;
+}
+
+// Inserts a new, empty SALE row for the same ticker directly below the given row
+// (the per-row "Sell" button). Deliberately does NOT pull any Portfolio Lists data
+// in — a sale row carries only Selling Price / Date Sale / Units Sold. Makes sure a
+// "Units Sold" column exists first, since a separate sale row needs it.
+function addPastPurchaseSaleRowAfter(rowId){
+  const params = getPastPurchasesParams();
+  if(!ppFindParamByLabel(params, "units sold")){
+    const dateSaleIdx = params.findIndex(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+    addPastPurchaseParam({ label: "Units Sold", type: "number", defaultValue: 0 });
+    if(dateSaleIdx !== -1){ // move it right after Date Sale, matching the default layout
+      const updated = getPastPurchasesParams();
+      const added = updated.pop();
+      updated.splice(dateSaleIdx + 1, 0, added);
+      savePastPurchasesParams(updated);
+    }
+  }
+  const rows = getPastPurchasesRows();
+  const i = rows.findIndex(r => r.id === rowId);
+  if(i === -1) return null;
+  const id = "pp_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+  rows.splice(i + 1, 0, { id, asset: rows[i].asset, values: {}, dateAdded: Date.now() });
   savePastPurchasesRows(rows);
   return id;
 }
@@ -2941,19 +3033,41 @@ function movePastPurchaseParam(id, direction){
 //    were never explicitly added there — that used to happen because ANY
 //    non-computed main-table custom param with a value got auto-added as a
 //    new column here, whether or not it had anything to do with a purchase.
-function pullMainTableDataIntoPastPurchases(rowId, assetSymbol){
+// v5.59: the whitelisted purchase-record fields (Units Purchased, Average Purchase
+// Price, Date Purchased) are now per-LOT data, since one ticker can have several
+// purchase rows and separate sale rows. So they are (a) never pulled onto a
+// sale-only row (no Units Purchased, but a Selling Price / Units Sold entered), and
+// (b) only filled in where that row's own value is still blank/0 — never
+// overwriting a lot's own recorded purchase. opts.skipParamIds lets Import Excel
+// protect the columns the file itself supplied.
+function pullMainTableDataIntoPastPurchases(rowId, assetSymbol, opts){
   const AUTO_CREATE_LABELS = ["units purchased", "average purchase price ($)", "average purchase price", "date purchased"];
+  const skipIds = new Set((opts && opts.skipParamIds) || []);
   const mainParams = getCustomParams().filter(p => !p.computed);
   const builtin = getResolvedBuiltinAssetValues(assetSymbol);
   const ov = getGlobalOverrides()[assetSymbol] || {};
   let pulledCount = 0;
+  const targetRow = getPastPurchasesRows().find(r => r.id === rowId);
+  const targetValues = (targetRow && targetRow.values) || {};
+  const isBlankValue = v => v === undefined || v === null || v === "" || v === 0;
+  const isSaleOnlyRow = (() => {
+    const ppParams = getPastPurchasesParams();
+    const n = pp => pp ? (Number(targetValues[pp.id]) || 0) : 0;
+    const unitsP = ppFindParamByLabel(ppParams, "units purchased");
+    const sellP = ppFindParamByLabel(ppParams, "selling price");
+    const soldP = ppFindParamByLabel(ppParams, "units sold");
+    return n(unitsP) <= 0 && (n(sellP) !== 0 || n(soldP) > 0);
+  })();
 
   mainParams.forEach(mp => {
     if(ov[mp.id] === undefined) return; // nothing actually entered for this asset on the main table
     const norm = normalizeParamLabel(mp.label);
     const isAutoCreate = AUTO_CREATE_LABELS.includes(mp.label.trim().toLowerCase());
+    if(isAutoCreate && isSaleOnlyRow) return; // a sale row has no purchase record of its own
     let ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === norm);
     if(!ppParam && !isAutoCreate) return; // not a whitelisted field, and no matching column already added here
+    if(ppParam && skipIds.has(ppParam.id)) return;
+    if(isAutoCreate && ppParam && !isBlankValue(targetValues[ppParam.id])) return; // never overwrite this lot's own purchase record
     const ppParamId = ppParam ? ppParam.id : addPastPurchaseParam({ label: mp.label, type: mp.type, defaultValue: mp.defaultValue });
     setPastPurchaseValue(rowId, ppParamId, ov[mp.id]);
     pulledCount++;
@@ -2966,6 +3080,7 @@ function pullMainTableDataIntoPastPurchases(rowId, assetSymbol){
       if(val === undefined) return;
       const ppParam = getPastPurchasesParams().find(p => normalizeParamLabel(p.label) === normalizeParamLabel(bc.label));
       if(!ppParam) return; // only fill a builtin-mirroring column the user already added themselves
+      if(skipIds.has(ppParam.id)) return;
       setPastPurchaseValue(rowId, ppParam.id, val);
       pulledCount++;
     });
@@ -3191,6 +3306,184 @@ function renderPastPurchasesRowOrderList(){
 // looked up by label among THIS table's own columns (Units Purchased, Average
 // Purchase Price, Selling Price) — same precedence pattern as the main table's
 // own computed presets, just scoped to Past Purchases' own data.
+// --- Past Purchases lot matching (v5.59) ---
+// Lets one ticker have several PURCHASE rows (Units Purchased + Average Purchase
+// Price [+ Date Purchased]) and several separate SALE rows (Units Sold + Selling
+// Price + Date Sale, no Units Purchased), with each sale row's Realized Gain
+// computed against that ticker's purchase rows on the SAME Past Purchases list:
+//   e.g. buy 10 @ $2 (20 Sep); sell 5 @ $3 (21 Sep) -> +$5; sell 5 @ $5 (22 Sep)
+//   -> +$15; total Realized Gain $20.
+// Row kinds:
+//   "buy"      — Units Purchased > 0, no sale data.
+//   "buy+sale" — Units Purchased > 0 AND a Selling Price / Units Sold on the same
+//                row (the original one-row-per-trade style). Matched against its
+//                OWN purchase price only (qty = Units Sold, or all Units Purchased
+//                if Units Sold is blank) — so every pre-v5.59 row computes exactly
+//                what it did before. Any unsold remainder joins the ticker's pool.
+//   "sale"     — no Units Purchased, but a Selling Price / Units Sold: consumes
+//                units from the ticker's pool of purchase rows.
+//   "none"     — nothing entered yet.
+// Pool events are processed in date order (Date Purchased for buys, Date Sale for
+// sales; a blank date sorts first; buys before sales on the same day; then row
+// order), so a sale is only matched against units bought on/before its date.
+// Cost basis is the per-account "ppCostBasisMethod" setting:
+//   "average" (default) — running average cost of units held at the time of the
+//                sale; sales reduce every held lot proportionally (so the average
+//                itself doesn't change on a sale, as brokers show it).
+//   "fifo"      — oldest purchase lots are sold first.
+// Each purchase row's "heldUnits" (units still unsold after all matching) drives
+// Book Value, Unrealized Gain and the Current Holdings filter.
+const PP_EPS = 1e-9;
+function getPpCostBasisMethod(){
+  try{ return localStorage.getItem("ppCostBasisMethod") === "fifo" ? "fifo" : "average"; }
+  catch(e){ return "average"; }
+}
+function setPpCostBasisMethod(method){
+  try{ localStorage.setItem("ppCostBasisMethod", method === "fifo" ? "fifo" : "average"); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function ppFindParamByLabel(params, labels){
+  const norm = x => String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const wanted = Array.isArray(labels) ? labels : [labels];
+  return params.find(p => !p.computed && wanted.includes(norm(p.label)));
+}
+function ppFmtNum(n){
+  const v = +Number(n || 0).toFixed(4);
+  return String(v);
+}
+function computePastPurchasesLedger(rows, params, method){
+  const unitsP = ppFindParamByLabel(params, "units purchased");
+  const avgP = ppFindParamByLabel(params, ["average purchase price ($)", "average purchase price"]);
+  const sellP = ppFindParamByLabel(params, "selling price");
+  const soldP = ppFindParamByLabel(params, "units sold");
+  const datePurchasedP = ppFindParamByLabel(params, "date purchased");
+  const dateSalePs = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  const valOf = (row, p) => { const v = row.values || {}; return v[p.id] !== undefined ? v[p.id] : p.defaultValue; };
+  const numOf = (row, p) => p ? (Number(valOf(row, p)) || 0) : 0;
+  const dateOf = (row, p) => { const d = p ? String(valOf(row, p) || "") : ""; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  const methodName = method === "fifo" ? "FIFO" : "average";
+  const out = {};
+  const eventsByTicker = {};
+
+  rows.forEach((row, idx) => {
+    const ticker = String(row.asset || "").trim().toUpperCase();
+    const units = numOf(row, unitsP), avg = numOf(row, avgP), sell = numOf(row, sellP), sold = numOf(row, soldP);
+    const datePurchased = dateOf(row, datePurchasedP);
+    let dateSale = "";
+    for(const dsp of dateSalePs){ dateSale = dateOf(row, dsp); if(dateSale) break; }
+    const info = { kind: "none", units, avg, sell, unitsSold: 0, realized: 0, realizedReady: false, note: "", heldUnits: 0, costBasis: null, method };
+    out[row.id] = info;
+    if(!eventsByTicker[ticker]) eventsByTicker[ticker] = [];
+    const events = eventsByTicker[ticker];
+    const hasSaleData = sell !== 0 || sold > PP_EPS;
+
+    if(units > PP_EPS){
+      let residual = units;
+      if(hasSaleData){
+        info.kind = "buy+sale";
+        const qty = sold > PP_EPS ? sold : units;
+        info.unitsSold = qty;
+        if(qty > units + PP_EPS){
+          info.note = `Units Sold (${ppFmtNum(qty)}) is more than this row's own Units Purchased (${ppFmtNum(units)}). Record a sale that spans several purchases as its own sale row (no Units Purchased) instead.`;
+        } else {
+          residual = units - qty;
+          if(!(unitsP && avgP && sellP)) info.note = "Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this.";
+          else if(sell === 0) info.note = "Enter a Selling Price to compute this.";
+          else {
+            info.realized = qty * (sell - avg);
+            info.realizedReady = true;
+            info.costBasis = avg;
+            info.note = `Sold ${ppFmtNum(qty)} unit(s) at $${sell.toFixed(2)} against this row's own purchase price of $${avg.toFixed(2)}.`;
+          }
+        }
+      } else {
+        info.kind = "buy";
+      }
+      if(residual > PP_EPS) events.push({ type: "buy", date: datePurchased, idx, rowId: row.id, units: residual, price: avg });
+    } else if(hasSaleData){
+      info.kind = "sale";
+      info.unitsSold = sold;
+      if(!soldP) info.note = "Add a \"Units Sold\" column and enter how many units this sale was, to compute this.";
+      else if(sold <= PP_EPS) info.note = "Enter Units Sold for this sale to compute this.";
+      else events.push({ type: "sale", date: dateSale, idx, rowId: row.id, qty: sold, sell });
+    }
+  });
+
+  Object.keys(eventsByTicker).forEach(ticker => {
+    const events = eventsByTicker[ticker];
+    events.sort((a, b) => {
+      if(a.date !== b.date) return a.date < b.date ? -1 : 1; // "" (no date) sorts first
+      if(a.type !== b.type) return a.type === "buy" ? -1 : 1;
+      return a.idx - b.idx;
+    });
+    const lots = [];
+    const label = ticker || "this asset";
+    events.forEach(ev => {
+      if(ev.type === "buy"){ lots.push({ rowId: ev.rowId, remaining: ev.units, price: ev.price }); return; }
+      const info = out[ev.rowId];
+      const held = lots.reduce((sum, l) => sum + l.remaining, 0);
+      if(held <= PP_EPS){
+        info.note = `No units of ${label} are held on this list before this sale — add a purchase row (Units Purchased + Average Purchase Price, with a Date Purchased on or before this Date Sale).`;
+        return;
+      }
+      if(ev.qty > held + PP_EPS){
+        info.note = `Units Sold (${ppFmtNum(ev.qty)}) is more than the ${ppFmtNum(held)} unit(s) of ${label} held on this list at that point — check the units and dates.`;
+        return;
+      }
+      let cost = 0, missingPrice = false;
+      if(method === "fifo"){
+        let left = ev.qty;
+        for(const lot of lots){
+          if(left <= PP_EPS) break;
+          if(lot.remaining <= PP_EPS) continue;
+          const take = Math.min(lot.remaining, left);
+          if(lot.price === 0) missingPrice = true;
+          cost += take * lot.price;
+          lot.remaining -= take;
+          left -= take;
+        }
+      } else {
+        const heldCost = lots.reduce((sum, l) => sum + l.remaining * l.price, 0);
+        if(lots.some(l => l.remaining > PP_EPS && l.price === 0)) missingPrice = true;
+        cost = ev.qty * (heldCost / held);
+        const frac = ev.qty / held;
+        lots.forEach(l => { l.remaining -= l.remaining * frac; });
+      }
+      lots.forEach(l => { if(l.remaining < PP_EPS) l.remaining = 0; });
+      const basis = cost / ev.qty;
+      info.costBasis = basis;
+      if(missingPrice){ info.note = "A purchase row this sale is matched against has no Average Purchase Price yet — fill it in to compute this."; return; }
+      if(ev.sell === 0){ info.note = "Enter a Selling Price to compute this."; return; }
+      info.realized = ev.qty * (ev.sell - basis);
+      info.realizedReady = true;
+      info.note = `Sold ${ppFmtNum(ev.qty)} unit(s) at $${ev.sell.toFixed(2)} against ${methodName} cost of $${ppFmtNum(basis)} per unit.`;
+    });
+    lots.forEach(l => { out[l.rowId].heldUnits = l.remaining; });
+  });
+  return out;
+}
+
+// Memoized ledger for the ACTIVE Past Purchases list — resolvePastPurchaseRowValues
+// is called per row, per render, and inside sort comparators, so the whole-list
+// matching is only recomputed when the stored lists/params/method actually change.
+let _ppLedgerCache = { key: null, ledger: null };
+function getPastPurchasesLedger(){
+  let key = null;
+  try{
+    key = (localStorage.getItem("pastPurchasesLists") || "") + "\u0001" + (localStorage.getItem("activePastPurchasesListId") || "") + "\u0001" + (localStorage.getItem("pastPurchasesParams") || "") + "\u0001" + getPpCostBasisMethod();
+  }catch(e){ key = null; }
+  if(key !== null && _ppLedgerCache.key === key) return _ppLedgerCache.ledger;
+  const ledger = computePastPurchasesLedger(getPastPurchasesRows(), getPastPurchasesParams(), getPpCostBasisMethod());
+  _ppLedgerCache = { key, ledger };
+  return ledger;
+}
+function getPastPurchaseRowLedgerInfo(row){
+  const ledger = getPastPurchasesLedger();
+  if(ledger[row.id]) return ledger[row.id];
+  // Row isn't on the active list (shouldn't normally happen) — evaluate it alone.
+  return computePastPurchasesLedger([row], getPastPurchasesParams(), getPpCostBasisMethod())[row.id];
+}
+
 function resolvePastPurchaseRowValues(row){
   const params = getPastPurchasesParams();
   const stored = row.values || {};
@@ -3198,24 +3491,18 @@ function resolvePastPurchaseRowValues(row){
   params.forEach(p => {
     if(!p.computed) resolved[p.id] = stored[p.id] !== undefined ? stored[p.id] : p.defaultValue;
   });
+  const ledgerInfo = getPastPurchaseRowLedgerInfo(row);
+  resolved._ledger = ledgerInfo;
+  const isPurchaseRow = ledgerInfo.kind === 'buy' || ledgerInfo.kind === 'buy+sale';
   params.forEach(p => {
     if(p.computed && p.formula === 'salesProfitPP'){
-      const norm = s => String(s).trim().toLowerCase();
-      const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
-      const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
-      const sellParam = params.find(pp => !pp.computed && norm(pp.label) === 'selling price');
-      const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
-      const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
-      const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
-      // A real, completed sale needs the three columns to exist AND a non-zero
-      // quantity and a non-zero selling price — Selling Price defaulting to 0
-      // means "not sold yet", not "sold for $0", so treat that case as exactly
-      // 0 rather than a misleading raw (units × -avg) "loss". This mirrors the
-      // main table's own computed presets, which zero out the same way when
-      // their required inputs aren't really filled in yet.
-      const ready = !!(unitsParam && avgParam && sellParam) && units !== 0 && sell !== 0;
-      resolved[p.id] = ready ? units * (sell - avg) : 0;
-      resolved['_' + p.id + '_ready'] = ready;
+      // v5.59: comes from the lot-matching ledger (computePastPurchasesLedger) — a
+      // single row with its own Units Purchased + Selling Price computes exactly as
+      // before; a separate sale row is matched against the ticker's purchase rows.
+      resolved[p.id] = ledgerInfo.realizedReady ? ledgerInfo.realized : 0;
+      resolved['_' + p.id + '_ready'] = ledgerInfo.realizedReady;
+      resolved['_' + p.id + '_note'] = ledgerInfo.note;
+      return;
     }
     if(p.computed && p.formula === 'missedGainPct'){
       // (Current Price − Selling Price) ÷ Selling Price × 100. Current Price is
@@ -3241,8 +3528,11 @@ function resolvePastPurchaseRowValues(row){
       const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
       const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
       const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
-      const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0;
-      resolved[p.id] = ready ? units * avg : 0;
+      // v5.59: cost of the units STILL HELD on this purchase row (after every sale
+      // row has been matched against it), so this column and the "Total Current Book
+      // Value" footer now agree. Sale rows have no book value of their own.
+      const ready = !!(unitsParam && avgParam) && isPurchaseRow && units !== 0 && avg !== 0;
+      resolved[p.id] = ready ? ledgerInfo.heldUnits * avg : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
     if(p.computed && p.formula === 'unrealizedGainPP'){
@@ -3262,8 +3552,10 @@ function resolvePastPurchaseRowValues(row){
       const sell = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
       const builtin = row.asset ? getResolvedBuiltinAssetValues(row.asset.trim().toUpperCase()) : null;
       const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
-      const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0 && !!builtin;
-      resolved[p.id] = ready ? units * (current - avg) : 0;
+      // v5.59: on the units still held after sale-row matching (see ledger).
+      void sell;
+      const ready = !!(unitsParam && avgParam) && isPurchaseRow && units !== 0 && avg !== 0 && ledgerInfo.heldUnits > PP_EPS && !!builtin;
+      resolved[p.id] = ready ? ledgerInfo.heldUnits * (current - avg) : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
   });
@@ -3345,6 +3637,8 @@ function renderPastPurchasesTable(){
   lastPastPurchasesVisibleRows = visibleRows;
   const holdingsBtn = document.getElementById("ppCurrentHoldingsToggle");
   if(holdingsBtn) holdingsBtn.classList.toggle("active-tab", showHoldingsOnly);
+  const costBasisSelect = document.getElementById("ppCostBasisSelect");
+  if(costBasisSelect) costBasisSelect.value = getPpCostBasisMethod();
 
   let headHtml = '<tr><th>Ticker</th>';
   params.forEach((p, idx) => {
@@ -3403,7 +3697,7 @@ function renderPastPurchasesTable(){
     td.textContent = params.length === 0
       ? "Add at least one parameter above to start tracking data for these assets."
       : (showHoldingsOnly
-        ? (orderedRows.length === 0 ? "No assets yet — add one above, or import a list." : "No current holdings — every asset on this list has a non-zero Selling Price, or turn off \"Current Holdings\" to see everything.")
+        ? (orderedRows.length === 0 ? "No assets yet — add one above, or import a list." : "No current holdings — every purchase on this list has been fully sold. Turn off \"Current Holdings\" to see everything.")
         : "No assets yet — add one above, or import a list.");
     tr.appendChild(td);
     tbody.appendChild(tr);
@@ -3420,11 +3714,19 @@ function renderPastPurchasesTable(){
     const resolved = resolvePastPurchaseRowValues(row);
     const upDisabled = rowIdx === 0 ? 'disabled' : '';
     const downDisabled = rowIdx === visibleRows.length - 1 ? 'disabled' : '';
+    const li = resolved._ledger || { kind: 'none' };
+    const kindTag = li.kind === 'sale'
+      ? `<div style="font-size:0.7rem; font-weight:700; letter-spacing:0.05em; color:#fbbf24; margin-top:0.25rem;" title="Sale row — matched against this ticker's purchase rows on this list">SALE</div>`
+      : ((li.kind === 'buy' || li.kind === 'buy+sale')
+        ? `<div style="font-size:0.7rem; color:var(--text-secondary); margin-top:0.25rem;" title="Units of this purchase still held after every sale row on this list is matched">Held: ${ppFmtNum(li.heldUnits)} / ${ppFmtNum(li.units)}</div>`
+        : '');
     let rowHtml = `<td>
       <input class="cell-input cell-input-ticker pp-asset-input" data-row-id="${row.id}" data-resolved-value="${escHtml(row.asset)}" type="text" value="${escHtml(row.asset)}">
+      ${kindTag}
       <div class="row-ctrl-controls">
         <button class="pp-row-btn row-ctrl-btn" data-action="up" data-row-id="${row.id}" ${upDisabled} title="Move row up">&uarr;</button>
         <button class="pp-row-btn row-ctrl-btn" data-action="down" data-row-id="${row.id}" ${downDisabled} title="Move row down">&darr;</button>
+        <button class="pp-row-btn row-ctrl-btn" data-action="sell" data-row-id="${row.id}" title="Record a sale of this ticker — adds a new sale row right below (enter Units Sold, Selling Price, Date Sale)" style="width:auto; padding:0 0.4rem; font-size:0.7rem; color:#fbbf24;">Sell</button>
         <button class="pp-row-btn row-ctrl-btn row-ctrl-remove" data-action="delete" data-row-id="${row.id}" title="Remove this row">&times;</button>
       </div>
     </td>`;
@@ -3434,7 +3736,10 @@ function renderPastPurchasesTable(){
         const ready = resolved['_' + p.id + '_ready'];
         const sign = val >= 0 ? '+' : '-';
         const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : '#ef4444');
-        const titleAttr = ready ? '' : ` title="Add Units Purchased, Average Purchase Price, and Selling Price columns to compute this."`;
+        let tip = resolved['_' + p.id + '_note'] || '';
+        if(!tip && li.kind === 'buy') tip = `Purchase row: ${ppFmtNum(li.heldUnits)} of ${ppFmtNum(li.units)} unit(s) still held. Realized Gain for any sales shows on their own sale rows.`;
+        if(!tip) tip = 'Add Units Purchased, Average Purchase Price, and Selling Price columns (plus Units Sold, for separate sale rows) to compute this.';
+        const titleAttr = ` title="${escAttr(tip)}"`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed && p.formula === 'unrealizedGainPP'){
         const val = resolved[p.id] || 0;
@@ -3444,7 +3749,12 @@ function renderPastPurchasesTable(){
         // token) when negative — matches the user's spec, kept distinct from
         // Realized Gain's brighter red so the two "gain" columns aren't confusable.
         const color = !ready ? 'var(--text-secondary)' : (val >= 0 ? 'var(--emerald)' : DUS_EXCLUDED_COLOR);
-        const titleAttr = ready ? '' : ` title="Add Units Purchased and Average Purchase Price columns (and make sure this asset has Current Price data), with no Selling Price entered yet, to compute this."`;
+        let ugTip = '';
+        if(ready) ugTip = `On ${ppFmtNum(li.heldUnits)} unit(s) still held.`;
+        else if(li.kind === 'sale') ugTip = 'Sale row — unrealized gain is tracked on the purchase row(s).';
+        else if((li.kind === 'buy' || li.kind === 'buy+sale') && li.heldUnits <= PP_EPS) ugTip = 'Fully sold — no units left to have an unrealized gain.';
+        else ugTip = 'Add Units Purchased and Average Purchase Price columns (and make sure this asset has Current Price data) to compute this.';
+        const titleAttr = ` title="${escAttr(ugTip)}"`;
         rowHtml += `<td style="color:${color}; font-weight:600;"${titleAttr}>${sign}$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed && p.formula === 'missedGainPct'){
         const val = resolved[p.id] || 0;
@@ -3457,13 +3767,14 @@ function renderPastPurchasesTable(){
       } else if(p.computed && p.formula === 'bookValuePP'){
         const val = resolved[p.id] || 0;
         const ready = resolved['_' + p.id + '_ready'];
-        const titleAttr = ready ? '' : ` title="Add Units Purchased and Average Purchase Price columns to compute this."`;
-        // Not yet sold (Selling Price is 0, or there's no Selling Price column at all)
-        // gets a light-blue number, matching the "Total Current Book Value" footer's
-        // own logic for what counts as still-held.
-        const sellParamForColor = params.find(pp => !pp.computed && String(pp.label).trim().toLowerCase() === 'selling price');
-        const sellValForColor = sellParamForColor ? (Number(resolved[sellParamForColor.id]) || 0) : 0;
-        const colorStyle = (ready && sellValForColor === 0) ? ' color:#7dd3fc;' : '';
+        let bvTip = '';
+        if(ready) bvTip = `${ppFmtNum(li.heldUnits)} unit(s) still held × $${Number(li.avg).toFixed(2)}.`;
+        else if(li.kind === 'sale') bvTip = 'Sale row — book value is tracked on the purchase row(s).';
+        else bvTip = 'Add Units Purchased and Average Purchase Price columns to compute this.';
+        const titleAttr = ` title="${escAttr(bvTip)}"`;
+        // Still holding some units -> light-blue number, matching what the "Total
+        // Current Book Value" footer sums.
+        const colorStyle = (ready && li.heldUnits > PP_EPS) ? ' color:#7dd3fc;' : '';
         rowHtml += `<td class="${ready ? '' : 'cell-input-unconfirmed'}" style="font-weight:600;${colorStyle}"${titleAttr}>$${Math.abs(val).toFixed(2)}</td>`;
       } else if(p.computed){
         const val = resolved[p.id] || 0;
@@ -3543,6 +3854,14 @@ function renderPastPurchasesTable(){
           renderPastPurchasesRowOrderList();
           if(typeof renderPPListSelector === "function") renderPPListSelector();
         }
+      } else if(action === 'sell'){
+        addPastPurchaseSaleRowAfter(rowId);
+        renderPastPurchasesTable();
+        renderPastPurchasesParamList();
+        renderPastPurchasesColumnOrderList();
+        renderPastPurchasesRowOrderList();
+        renderPastPurchasesTickerList();
+        if(typeof renderPPListSelector === "function") renderPPListSelector();
       } else if(action === 'up'){
         movePastPurchaseRow(rowId, -1);
         renderPastPurchasesTable();
@@ -3576,15 +3895,12 @@ function renderPastPurchasesFooter(tfoot, params, orderedRows){
   const sellParamForBookValue = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'selling price');
   let footHtml = '';
 
-  // "Not yet sold" = Selling Price is 0 (or there's no Selling Price column at all,
-  // in which case nothing on this list counts as sold).
+  // v5.59: Book Value is already "cost of units still held" per purchase row (after
+  // sale-row matching), so the current total is simply the column's sum.
+  void sellParamForBookValue;
   if(bookValueParam){
     const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-    const totalBookValue = orderedRows.reduce((sum, row) => {
-      const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
-      if(sellVal !== 0) return sum; // already sold — excluded from "current" book value
-      return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
-    }, 0);
+    const totalBookValue = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0), 0);
     footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
     params.forEach((p, idx) => {
       footHtml += idx === colIndex
@@ -3982,9 +4298,8 @@ function getPastPurchasesExportRowColors(resolved, params){
     if(p.computed && p.formula === "bookValuePP"){
       const ready = resolved["_" + p.id + "_ready"];
       if(!ready) return null;
-      const sellParam = params.find(pp => !pp.computed && String(pp.label).trim().toLowerCase() === "selling price");
-      const sellVal = sellParam ? (Number(resolved[sellParam.id]) || 0) : 0;
-      return sellVal === 0 ? EXPORT_COLORS.lightBlue : null;
+      const li = resolved._ledger;
+      return (li && li.heldUnits > PP_EPS) ? EXPORT_COLORS.lightBlue : null;
     }
     if(!p.computed && String(p.label).trim().toLowerCase() === "current price"){
       return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.emerald : null;
@@ -4048,11 +4363,8 @@ function buildPastPurchasesExportTable(){
 
   if(bookValueParam){
     const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-    const totalBookValue = orderedRows.reduce((sum, row) => {
-      const sellVal = sellParamForBookValue ? (Number(row.values && row.values[sellParamForBookValue.id]) || 0) : 0;
-      if(sellVal !== 0) return sum;
-      return sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0);
-    }, 0);
+    void sellParamForBookValue;
+    const totalBookValue = orderedRows.reduce((sum, row) => sum + (resolvePastPurchaseRowValues(row)[bookValueParam.id] || 0), 0);
     const row = new Array(headers.length).fill("");
     const rowColors = new Array(headers.length).fill(null);
     row[0] = "Total Current Book Value";
@@ -4264,29 +4576,13 @@ function buildSampleExcelForDataEntry_Portfolio(){
   return { headers, rows };
 }
 
-// Every unique asset symbol across every Past Purchases list (an asset can repeat
-// within/across lists for separate purchase rounds — this dedupes to one row per
-// symbol for data-entry purposes, using whichever row is encountered first for
-// its current values).
-function getAllPastPurchasesAssetRows(){
-  const seen = new Set();
-  const ordered = [];
-  Object.values(getAllPastPurchasesLists()).forEach(list => {
-    (list.rows || []).forEach(row => {
-      if(row.asset && !seen.has(row.asset)){
-        seen.add(row.asset);
-        ordered.push(row);
-      }
-    });
-  });
-  ordered.sort((a, b) => a.asset.localeCompare(b.asset));
-  return ordered;
-}
-
+// v5.59: one spreadsheet line per row of the CURRENTLY OPEN list (purchase rows
+// and sale rows alike, in the table's own order) — so re-importing an unchanged
+// template is recognized as "already there" row by row and ignored.
 function buildSampleExcelForDataEntry_PastPurchases(){
   const params = getEditablePastPurchasesParams();
   const headers = ["Asset", ...params.map(p => p.label)];
-  const rows = getAllPastPurchasesAssetRows().map(row => {
+  const rows = getPastPurchasesRows().filter(r => r.asset).map(row => {
     const values = row.values || {};
     return [row.asset, ...params.map(p => values[p.id] !== undefined ? values[p.id] : "")];
   });
@@ -4393,48 +4689,199 @@ function importExcelIntoActivePortfolioList(rowsAoA){
 // this list gets its FIRST matching row updated; one that isn't gets a brand new
 // row added (via addPastPurchaseRow, same as the "+/- Asset" panel — including
 // the same one-time pull of matching data from the Portfolio Lists table).
-function importExcelIntoActivePastPurchasesList(rowsAoA){
-  if(!rowsAoA || rowsAoA.length === 0) return { assetsAdded: 0, assetsUpdated: 0, valuesApplied: 0, unmatchedHeaders: [] };
+// --- Past Purchases Import Excel (v5.59) ---
+// Every spreadsheet line becomes its own table row (purchase rows and sale rows can
+// sit on separate lines for the same ticker — the lot-matching ledger pairs them
+// up). Against the OPEN list:
+//   1. Identical: same ticker, and every non-blank cell in the file equals that
+//      row's value -> ignored (a blank cell means "not specified", never "erase").
+//   2. Conflict: same ticker AND the same Date Purchased/Date Sale (whichever of
+//      those columns the file has) as an existing row, but other values differ ->
+//      the user chooses per row: keep existing / replace with imported / add as a
+//      new row (with "set all" shortcuts), or cancels the whole import.
+//   3. Anything else is new -> added, placed right after that ticker's existing
+//      rows so a ticker's purchases and sales stay together.
+// Each existing row can be matched by at most one file line.
+function planPastPurchasesImport(rowsAoA){
+  const plan = { records: [], identical: [], toAdd: [], conflicts: [], unmatchedHeaders: [] };
+  if(!rowsAoA || rowsAoA.length === 0) return plan;
   const [headerRow, ...dataRows] = rowsAoA;
   const editableParams = getEditablePastPurchasesParams();
   const colMap = [];
-  const unmatchedHeaders = [];
+  const unmatched = [];
   headerRow.forEach((h, idx) => {
     if(idx === 0){ colMap.push(null); return; } // "Asset" column
     const norm = normalizeParamLabel(String(h));
     const match = editableParams.find(p => normalizeParamLabel(p.label) === norm);
     colMap.push(match || null);
-    if(!match && String(h).trim() !== "") unmatchedHeaders.push(String(h));
+    if(!match && String(h).trim() !== "") unmatched.push(String(h));
   });
+  plan.unmatchedHeaders = [...new Set(unmatched)];
+  const mapped = [...new Set(colMap.filter(Boolean))];
+  const dateKeyParams = mapped.filter(p => ["date purchased", "date sale"].includes(String(p.label).trim().toLowerCase()));
 
-  const knownAssetRowIds = {}; // asset -> rowId, seeded from the open list and grown as new rows are added below
-  getPastPurchasesRows().forEach(r => { if(r.asset && knownAssetRowIds[r.asset] === undefined) knownAssetRowIds[r.asset] = r.id; });
-  let assetsAdded = 0, assetsUpdated = 0, valuesApplied = 0;
-
-  dataRows.forEach(rowArr => {
+  dataRows.forEach((rowArr, i) => {
     const asset = String(rowArr[0] || "").trim().toUpperCase();
     if(!asset) return;
-
-    let rowId = knownAssetRowIds[asset];
-    if(rowId !== undefined){
-      assetsUpdated++;
-    } else {
-      rowId = addPastPurchaseRow(asset);
-      pullMainTableDataIntoPastPurchases(rowId, asset);
-      knownAssetRowIds[asset] = rowId;
-      assetsAdded++;
-    }
-
+    const vals = {};
     colMap.forEach((param, idx) => {
       if(!param) return;
       const value = parseImportedCellValue(rowArr[idx], param.type);
       if(value === undefined) return;
-      setPastPurchaseValue(rowId, param.id, value);
-      valuesApplied++;
+      vals[param.id] = value;
     });
+    plan.records.push({ asset, vals, fileRow: i + 2 }); // +2: 1-based, after the header row
   });
 
-  return { assetsAdded, assetsUpdated, valuesApplied, unmatchedHeaders: [...new Set(unmatchedHeaders)] };
+  const params = getPastPurchasesParams();
+  const paramById = {};
+  params.forEach(p => { paramById[p.id] = p; });
+  const existing = getPastPurchasesRows();
+  const existingVal = (row, p) => { const v = (row.values || {})[p.id]; return v !== undefined ? v : p.defaultValue; };
+  const same = (p, a, b) => {
+    if(p.type === "number") return Math.abs((Number(a) || 0) - (Number(b) || 0)) < 1e-9;
+    return String(a === undefined || a === null ? "" : a).trim() === String(b === undefined || b === null ? "" : b).trim();
+  };
+  const assetOf = r => String(r.asset || "").trim().toUpperCase();
+  const used = new Set();
+  const pending = [];
+
+  plan.records.forEach(rec => {
+    const match = existing.find(r => !used.has(r.id) && assetOf(r) === rec.asset &&
+      Object.keys(rec.vals).every(pid => same(paramById[pid], existingVal(r, paramById[pid]), rec.vals[pid])));
+    if(match){ used.add(match.id); plan.identical.push(rec); }
+    else pending.push(rec);
+  });
+
+  pending.forEach(rec => {
+    let match = null;
+    if(dateKeyParams.length){
+      match = existing.find(r => !used.has(r.id) && assetOf(r) === rec.asset &&
+        dateKeyParams.every(p => String(existingVal(r, p) || "") === String(rec.vals[p.id] !== undefined ? rec.vals[p.id] : "")));
+    }
+    if(match){
+      used.add(match.id);
+      const diffs = Object.keys(rec.vals)
+        .filter(pid => !same(paramById[pid], existingVal(match, paramById[pid]), rec.vals[pid]))
+        .map(pid => ({ label: paramById[pid].label, existing: existingVal(match, paramById[pid]), imported: rec.vals[pid] }));
+      plan.conflicts.push({ rec, rowId: match.id, diffs });
+    } else {
+      plan.toAdd.push(rec);
+    }
+  });
+  return plan;
+}
+
+// actions[i] is "keep" | "replace" | "add" for plan.conflicts[i].
+function applyPastPurchasesImport(plan, actions){
+  const result = { added: 0, identical: plan.identical.length, replaced: 0, kept: 0, valuesApplied: 0 };
+  const rows = getPastPurchasesRows();
+  const newRecs = plan.toAdd.slice();
+  plan.conflicts.forEach((c, i) => {
+    const action = (actions && actions[i]) || "keep";
+    if(action === "replace"){
+      const row = rows.find(r => r.id === c.rowId);
+      if(!row) return;
+      if(!row.values) row.values = {};
+      Object.keys(c.rec.vals).forEach(pid => { row.values[pid] = c.rec.vals[pid]; result.valuesApplied++; });
+      result.replaced++;
+    } else if(action === "add"){
+      newRecs.push(c.rec);
+    } else {
+      result.kept++;
+    }
+  });
+
+  const addedRows = [];
+  newRecs.sort((a, b) => a.fileRow - b.fileRow).forEach(rec => {
+    const id = "pp_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+    const newRow = { id, asset: rec.asset, values: { ...rec.vals }, dateAdded: Date.now() };
+    let insertAt = -1;
+    for(let k = rows.length - 1; k >= 0; k--){
+      if(String(rows[k].asset || "").trim().toUpperCase() === rec.asset){ insertAt = k + 1; break; }
+    }
+    if(insertAt === -1) rows.push(newRow);
+    else rows.splice(insertAt, 0, newRow);
+    addedRows.push({ id, asset: rec.asset, skipParamIds: Object.keys(rec.vals) });
+    result.added++;
+    result.valuesApplied += Object.keys(rec.vals).length;
+  });
+  savePastPurchasesRows(rows);
+  // Fill any OTHER columns (e.g. Current Price) from Portfolio Lists, never touching
+  // what the file supplied, and never putting purchase data onto a sale row.
+  addedRows.forEach(a => pullMainTableDataIntoPastPurchases(a.id, a.asset, { skipParamIds: a.skipParamIds }));
+  return result;
+}
+
+// Modal asking what to do with each conflicting line. Resolves to an array of
+// actions (one per plan.conflicts entry), or null if the user cancels the import.
+function showPastPurchasesImportConflictDialog(plan){
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; padding:16px;";
+    const panel = document.createElement("div");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; width:100%; max-width:960px; max-height:85vh; overflow:auto; color:var(--text-primary);";
+    const show = v => (v === undefined || v === null || v === "") ? "(blank)" : String(v);
+    const cell = "padding:0.5rem 0.6rem; border-bottom:1px solid var(--border-color); position:static; background:transparent; vertical-align:top; line-height:1.4;";
+    const smallBtn = "padding:0.4rem 0.9rem; font-size:0.85rem;";
+    let html = `<h3 style="margin:0 0 0.5rem; color:#facc15; font-size:1.15rem;">Import: ${plan.conflicts.length} row(s) differ from what's already in "${escHtml(getActivePastPurchasesList().name)}"</h3>
+      <div style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:0.75rem; line-height:1.5;">
+        ${plan.toAdd.length} new row(s) will be added and ${plan.identical.length} identical row(s) will be ignored either way.
+        Each row below has the same ticker and dates as an existing row, but some values differ. Choose what to do with each one:
+      </div>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem;">
+        <span style="color:var(--text-secondary); font-size:0.85rem;">Set all to:</span>
+        <button type="button" class="tab-btn" data-bulk="keep" style="${smallBtn}">Keep existing</button>
+        <button type="button" class="tab-btn" data-bulk="replace" style="${smallBtn}">Replace with imported</button>
+        <button type="button" class="tab-btn" data-bulk="add" style="${smallBtn}">Add as new row</button>
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <thead><tr>
+          <th style="${cell} text-align:left;">Ticker</th>
+          <th style="${cell} text-align:left;">File row</th>
+          <th style="${cell} text-align:left;">Differences (existing → imported)</th>
+          <th style="${cell} text-align:left;">Action</th>
+        </tr></thead><tbody>`;
+    plan.conflicts.forEach((c, i) => {
+      const diffHtml = c.diffs.map(d => `<div><strong>${escHtml(d.label)}:</strong> ${escHtml(show(d.existing))} → <span style="color:#facc15;">${escHtml(show(d.imported))}</span></div>`).join("");
+      html += `<tr>
+        <td style="${cell} font-weight:600;">${escHtml(c.rec.asset)}</td>
+        <td style="${cell} color:var(--text-secondary);">#${c.rec.fileRow}</td>
+        <td style="${cell}">${diffHtml}</td>
+        <td style="${cell}"><select data-idx="${i}" style="padding:0.35rem 0.6rem; font-size:0.85rem;">
+          <option value="keep">Keep existing</option>
+          <option value="replace">Replace with imported</option>
+          <option value="add">Add as new row</option>
+        </select></td>
+      </tr>`;
+    });
+    html += `</tbody></table>
+      <div style="display:flex; gap:0.6rem; justify-content:flex-end; flex-wrap:wrap; margin-top:1rem;">
+        <button type="button" class="tab-btn" data-final="cancel">Cancel import</button>
+        <button type="button" data-final="apply" style="padding:0.6rem 1.4rem;">Apply import</button>
+      </div>`;
+    panel.innerHTML = html;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    const selects = Array.from(panel.querySelectorAll("select[data-idx]"));
+    panel.querySelectorAll("[data-bulk]").forEach(btn => {
+      btn.addEventListener("click", () => { selects.forEach(sel => { sel.value = btn.getAttribute("data-bulk"); }); });
+    });
+    const finish = (value) => {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (e) => { if(e.key === "Escape") finish(null); };
+    document.addEventListener("keydown", onKey);
+    panel.querySelector('[data-final="cancel"]').addEventListener("click", () => finish(null));
+    panel.querySelector('[data-final="apply"]').addEventListener("click", () => {
+      finish(plan.conflicts.map((c, i) => selects[i].value));
+    });
+  });
 }
 
 function wireUpSampleAndImportExcelButtons(){
@@ -4504,8 +4951,8 @@ function wireUpSampleAndImportExcelButtons(){
       exportTableAsExcel("Past_Purchases_Sample_Data_Entry.xlsx", "Data Entry", headers, rows);
       if(ppStatusEl){
         ppStatusEl.textContent = rows.length === 0
-          ? "No assets yet — add at least one asset to a Past Purchases list first."
-          : `Downloaded a template covering ${rows.length} asset(s) across every Past Purchases list.`;
+          ? "No rows yet on this list — add at least one asset first (or just add the header row's columns and fill in your own rows)."
+          : `Downloaded a template with all ${rows.length} row(s) of "${getActivePastPurchasesList().name}".`;
         ppStatusEl.style.color = rows.length === 0 ? "var(--amber)" : "var(--emerald)";
       }
     });
@@ -4520,7 +4967,21 @@ function wireUpSampleAndImportExcelButtons(){
       if(ppStatusEl){ ppStatusEl.textContent = "Reading file…"; ppStatusEl.style.color = "var(--text-secondary)"; }
       try{
         const rowsAoA = await readWorkbookFirstSheetRows(file);
-        const result = importExcelIntoActivePastPurchasesList(rowsAoA);
+        const plan = planPastPurchasesImport(rowsAoA);
+        if(plan.records.length === 0){
+          if(ppStatusEl){ ppStatusEl.textContent = "No rows with an Asset were found in that file."; ppStatusEl.style.color = "var(--amber)"; }
+          return;
+        }
+        let actions = [];
+        if(plan.conflicts.length){
+          if(ppStatusEl){ ppStatusEl.textContent = `Waiting for your choice on ${plan.conflicts.length} conflicting row(s)…`; ppStatusEl.style.color = "var(--text-secondary)"; }
+          actions = await showPastPurchasesImportConflictDialog(plan);
+          if(actions === null){
+            if(ppStatusEl){ ppStatusEl.textContent = "Import cancelled — nothing was changed."; ppStatusEl.style.color = "var(--amber)"; }
+            return;
+          }
+        }
+        const result = applyPastPurchasesImport(plan, actions);
         renderPastPurchasesTickerList();
         renderPastPurchasesParamList();
         renderPastPurchasesTable();
@@ -4528,16 +4989,14 @@ function wireUpSampleAndImportExcelButtons(){
         renderPastPurchasesRowOrderList();
         renderPPListSelector();
         if(ppStatusEl){
-          if(result.assetsAdded + result.assetsUpdated === 0){
-            ppStatusEl.textContent = "No rows with an Asset were found in that file.";
-            ppStatusEl.style.color = "var(--amber)";
-          } else {
-            const unmatchedNote = result.unmatchedHeaders.length
-              ? ` ${result.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${result.unmatchedHeaders.join(", ")}.`
-              : "";
-            ppStatusEl.textContent = `Imported into "${getActivePastPurchasesList().name}": ${result.assetsAdded} new asset(s), ${result.assetsUpdated} existing asset(s) touched, ${result.valuesApplied} value(s) applied.${unmatchedNote}`;
-            ppStatusEl.style.color = "var(--emerald)";
-          }
+          const unmatchedNote = plan.unmatchedHeaders.length
+            ? ` ${plan.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${plan.unmatchedHeaders.join(", ")}.`
+            : "";
+          const conflictNote = plan.conflicts.length ? `, ${result.replaced} replaced, ${result.kept} kept as-is` : "";
+          ppStatusEl.textContent = (result.added + result.replaced === 0)
+            ? `Nothing new — all ${result.identical + result.kept} row(s) in the file are already in "${getActivePastPurchasesList().name}".${unmatchedNote}`
+            : `Imported into "${getActivePastPurchasesList().name}": ${result.added} new row(s) added, ${result.identical} identical row(s) ignored${conflictNote}.${unmatchedNote}`;
+          ppStatusEl.style.color = "var(--emerald)";
         }
       }catch(err){
         console.error("Past Purchases Excel import failed:", err);
@@ -5836,6 +6295,15 @@ try{
     });
   }
 
+  const ppCostBasisSelect = document.getElementById("ppCostBasisSelect");
+  if(ppCostBasisSelect){
+    ppCostBasisSelect.value = getPpCostBasisMethod();
+    ppCostBasisSelect.addEventListener("change", () => {
+      setPpCostBasisMethod(ppCostBasisSelect.value);
+      renderPastPurchasesTable();
+    });
+  }
+
   const ppCurrentHoldingsToggle = document.getElementById("ppCurrentHoldingsToggle");
   if(ppCurrentHoldingsToggle){
     ppCurrentHoldingsToggle.addEventListener("click", () => {
@@ -6083,7 +6551,7 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
 // otherwise — see the comment above PP_ONLY_PARAM_PRESETS. Requested starting
 // layout, in order: Realized Gain, Unrealized Gain, Book Value, Date Purchased,
 // Units Purchased, Average Purchase Price ($), Selling Price, Date Sale,
-// Current Price, Missed Gain % (Ticker/Asset itself is a fixed identity
+// Units Sold, Current Price, Missed Gain % (Ticker/Asset itself is a fixed identity
 // column, not a param). Fixed ids (rather than addPastPurchaseParam()'s
 // timestamped ones), same reasoning as NEW_USER_DEFAULT_CUSTOM_PARAMS above.
 // Date Purchased and Date Sale both default to blank — a newly-added ticker
@@ -6100,6 +6568,7 @@ function getNewUserDefaultPastPurchasesParams(){
     { id: "pp_avg_purchase_price", label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
     { id: "pp_selling_price", label: "Selling Price", type: "number", defaultValue: 0 },
     { id: "pp_date_sale", label: "Date Sale", type: "date", defaultValue: "" },
+    { id: "pp_units_sold", label: "Units Sold", type: "number", defaultValue: 0 },
     { id: "pp_current_price", label: "Current Price", type: "number", defaultValue: 0 },
     { id: "pp_missed_gain_pct", label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
   ];
@@ -6152,6 +6621,8 @@ function initializeNewUserDefaults(){
     // either migration to fix here.
     localStorage.setItem("saleProfitRenamedToRealizedGain", "1");
     localStorage.setItem("unrealizedGainColumnAdded", "1");
+    // Fresh defaults already include "Units Sold" too.
+    localStorage.setItem("unitsSoldColumnAdded", "1");
     // Past Purchases' own starting columns are seeded separately, by
     // seedPastPurchasesDefaultParamsIfNeeded() (called from openDashboard) — see
     // its own comment for why that's a better gate than this function's
