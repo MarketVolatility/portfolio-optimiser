@@ -1,4 +1,15 @@
-// APP.JS BUILD: v5.64 (Merged the raw, individually-editable Past Purchases table
+// APP.JS BUILD: v5.66 (Moved the copyright note from directly under the top
+// "Not financial advice" disclaimer down to the very end of the page — after the
+// Methodology and Glossary section, but still inside the page's own container so
+// it stays visible at the bottom regardless of which accordion section is open.
+// Same .disclaimer box styling as before, unchanged.)
+//
+// v5.65 (Added a copyright note directly below the top "Not
+// financial advice" disclaimer, using the same .disclaimer box styling — same
+// background, border, font color, and size — so it reads as part of the same
+// notice area rather than a separately-styled afterthought.)
+//
+// v5.64 (Merged the raw, individually-editable Past Purchases table
 // into the Lot Matching (FIFO) table — deleted the old table and its "Lot Matching
 // (FIFO)" heading entirely, and restyled the disclaimer above the merged table to
 // match the app's other in-box explanations. The merged table now carries every
@@ -219,7 +230,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.64 (merged Past Purchases into one fully editable FIFO table; added an auto-synced Current Holding list and a single-open accordion)");
+console.log("app.js loaded — build v5.66 (moved the copyright note to the very end of the page)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
