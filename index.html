@@ -74,6 +74,10 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-input-ticker:hover, .cell-input-ticker:focus { border-color: var(--accent-blue); }
 .section-toggle-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); width: 32px; height: 32px; border-radius: 6px; font-size: 0.9rem; line-height: 1; cursor: pointer; flex-shrink: 0; }
 .section-toggle-btn:hover { border-color: var(--accent-blue); color: #fff; }
+.nav-btn-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.5rem; }
+.nav-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.6rem 1.1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+.nav-btn:hover { border-color: #facc15; color: #fde68a; }
+.nav-btn.nav-btn-active { color: #facc15; border-color: #facc15; background: rgba(250, 204, 21, 0.08); }
 .tab-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .tab-btn.active-tab { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
 .tab-btn-export-excel { color: #22c55e; }
@@ -245,100 +249,14 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      HTML build: v5.54 — app.js v5.63: "Total Current Book Value", "Total Realized Gain to date", and the monthly Realized Gain breakdown moved from the Past Purchases table's own footer onto the Lot Matching (FIFO) table below it, which totals the FIFO-matched rows — the accurate source once a purchase or sale has been split across multiple lots. Unrealized Gain now also shows a value for units you've already sold: a hypothetical "what this would be worth today, at its original buy price, had it never been sold" — on both the Past Purchases table and the Lot Matching table.
+      Version v5.64 — Merged Past Purchases into one fully editable FIFO table; added an auto-synced Current Holding list and a single-open accordion.
     </div>
   </header>
-  <div class="disclaimer">
-    <strong>Live data panel.</strong>
-    <ul>
-      <li>Finnhub's "Fetch live data" pulls live Current Price, P/E, and ROA from its free API.</li>
-      <li>Alpha Vantage has its own, separate "Fetch live data" button below — an independent source for the same fields, useful as a second opinion or if you don't have a Finnhub key. Neither button touches the other's key, data, or status.</li>
-      <li>Target prices and Stability ratings stay manually written editorial content — no free API provides analyst price targets or qualitative "moat" ratings.</li>
-      <li>Cash & Equivalents ($M) and Operating Expenses ($M) — Cash Runway (yr)'s two inputs — always come from free SEC EDGAR data first, then Alpha Vantage as a fallback if a key is saved below, regardless of which "Fetch live data" button you use.</li>
-    </ul>
+  <div class="nav-btn-row">
+    <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
+    <button id="navDetailedUpdateBtn" type="button" class="nav-btn" title="Jump to Detailed Update for Selected Assets">Detailed Update for Selected Assets</button>
+    <button id="navQuickPriceUpdateBtn" type="button" class="nav-btn" title="Jump to Update Current Price and Consensus Target Price">Update Current Price and Consensus Target Price</button>
   </div>
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="apiKey" style="flex:1; min-width:220px;">Finnhub API key <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
-    <input id="apiKey" type="text" placeholder="paste key here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
-    <button id="saveKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
-    <button id="fetchLiveBtn">Fetch live data</button>
-    <span id="fetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="alphaVantageApiKeyInput" style="flex:1; min-width:220px;">Alpha Vantage API key — also used as the Cash Runway (yr) data fallback above <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
-    <input id="alphaVantageApiKeyInput" type="text" placeholder="paste key here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
-    <button id="saveAlphaVantageKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
-    <span id="alphaVantageKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    <button id="fetchAlphaVantageLiveBtn" title="Independent from Finnhub's 'Fetch live data' above — uses only this Alpha Vantage key, and its own status message here.">Fetch live data</button>
-    <span id="alphaVantageFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-
-  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
-    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">🎯 Detailed Update for Selected Assets — copy and paste this to your AI</h2>
-    <div class="disclaimer" style="margin-bottom:1rem;">
-      Pick ticker(s) for a <strong>full, detailed</strong> refresh:
-      <ul>
-        <li>Requests every editable numeric parameter on your Portfolio table (not the fixed 2-field set below), except "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" (manual/Import-Excel only, never requested from an AI).</li>
-        <li>Click <strong style="color:#eab308;">✓</strong> to include a ticker, <strong style="color:#c98a9e;">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all for current Portfolio list" / "Reset request list" for one-click bulk actions, or add a brand-new ticker below.</li>
-        <li>Marking a ticker ✓ adds it to your currently open Portfolio List right away.</li>
-        <li>Click "Generate request", copy the prompt to an AI assistant, then paste its numbered reply back and click "Parse & Update".</li>
-      </ul>
-    </div>
-    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
-      <input id="dusTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" style="width:140px;">
-      <input id="dusName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
-      <button id="dusAddBtn" type="button">Add to Request</button>
-    </div>
-    <div id="dusAddStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
-    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="dusSelectAllCurrentListBtn" type="button" title="Mark every asset already on your currently open Portfolio List as ✓ included, in one click." style="background:transparent; border:1px solid #eab308; color:#eab308;">Request all for current Portfolio list: <strong id="dusCurrentListNameLabel"></strong></button>
-      <button id="dusResetSelectionsBtn" type="button" title="Reset every asset below back to grey/undecided, in one click, instead of clicking ✕ on each one individually." style="background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary);">↺ Reset request list</button>
-    </div>
-    <div class="chart-note" style="margin-top:0.75rem;">All assets across your Portfolio Lists — click ✓ to include, ✕ to exclude from the request:</div>
-    <div id="dusRequestList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;"></div>
-    <div style="margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="dusGenerateBtn" type="button">Generate request</button>
-      <button id="dusRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh asset list</button>
-    </div>
-    <label for="dusPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
-    <textarea id="dusPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
-    <div style="margin-top:0.5rem; margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="dusCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
-      <span id="dusPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
-    </div>
-    <label for="dusPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
-    <textarea id="dusPasteInput" rows="4" placeholder="e.g. 245.00, 1.85, 320.5, 0.72, 850.4, 227.50, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
-    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="dusParseBtn" type="button">Parse & Update</button>
-      <span id="dusParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    </div>
-  </div>
-
-  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
-    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">⚡ Update Current Price and Consensus Target Price for all assets — copy and paste this to your AI</h2>
-    <div class="disclaimer" style="margin-bottom:1rem;">
-      No API key needed:
-      <ul>
-        <li>Lists every ticker across <strong>all</strong> your Portfolio Lists with a fixed field order (Current Price, Consensus Target Price).</li>
-        <li>Copy the prompt to any AI assistant (Claude, ChatGPT, Gemini, etc.), paste its numeric reply into the second box, then click "Parse & Update".</li>
-        <li>Updates apply everywhere that ticker appears, across every Portfolio List — the same way "Fetch live data" does.</li>
-      </ul>
-    </div>
-    <label for="qpuPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
-    <textarea id="qpuPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
-    <div style="margin-top:0.5rem; margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="qpuCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
-      <button id="qpuRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh ticker list</button>
-      <span id="qpuPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
-    </div>
-    <label for="qpuPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
-    <textarea id="qpuPasteInput" rows="4" placeholder="e.g. 245.00, 260.00, 320.50, 345.00, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
-    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-      <button id="qpuParseBtn" type="button">Parse & Update</button>
-      <span id="qpuParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    </div>
-  </div>
-
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
     <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▼</button>
@@ -613,23 +531,135 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="ppExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
     <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
   </div>
-  <div class="table-container" style="margin-bottom:2rem;">
-    <table id="ppTable">
-      <thead id="ppTableHead"></thead>
-      <tbody id="ppTableBody"></tbody>
-      <tfoot id="ppTableFoot"></tfoot>
-    </table>
-  </div>
-
   <div style="margin-bottom:2rem;">
-    <h3 style="color:#facc15; font-size:1.05rem; margin-bottom:0.4rem;">Lot Matching (FIFO)</h3>
-    <div class="chart-note chart-note-info" style="margin-bottom:0.75rem;">
-      Read-only. Shows exactly which purchase(s) each sale on this list was matched against, oldest purchase first — splitting a purchase across several lines here if it fed more than one sale, or a sale across several lines if it drew from more than one purchase. Never changes the rows above. Always matches oldest-purchase-first (FIFO) here, even when "Cost basis" above is set to Average cost — Average cost blends prices across lots and has nothing clean to split into rows like this. The "Total Current Book Value", "Total Realized Gain to date", and monthly Realized Gain totals shown below this table are computed from these FIFO-matched rows, not from the table above — they're the accurate totals once a purchase or sale has been split across multiple lots.
+    <div class="disclaimer">
+      This table lays purchases and sales out as FIFO-matched lots: a purchase splits across several rows here if it fed more than one sale, and a sale splits across several rows if it drew from more than one purchase — always oldest-purchase-first (FIFO), even when "Cost basis" above is set to Average cost, since Average cost blends prices across lots and has nothing clean to split into rows like this. Every cell here is editable and writes back to the real purchase or sale it belongs to. In the ticker cell: <strong>↑ ↓</strong> reorders that ticker's whole block of rows, <strong>Sell</strong> records a new sale, and <strong>×</strong> deletes; "Held: x/y" shows how many units of that purchase are still unsold. The "Total Current Book Value", "Total Realized Gain to date", and monthly Realized Gain totals below are computed from these FIFO-matched rows.
     </div>
     <div id="ppLotMatchContent"></div>
   </div>
 
   </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
+    <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" onclick="toggleCollapsibleSection('fetchLiveDataSectionBody','fetchLiveDataToggleBtn')">▼</button>
+  </div>
+  <div id="fetchLiveDataSectionBody">
+
+  <div class="disclaimer">
+    <strong>Live data panel.</strong>
+    <ul>
+      <li>Finnhub's "Fetch live data" pulls live Current Price, P/E, and ROA from its free API.</li>
+      <li>Alpha Vantage has its own, separate "Fetch live data" button below — an independent source for the same fields, useful as a second opinion or if you don't have a Finnhub key. Neither button touches the other's key, data, or status.</li>
+      <li>Target prices and Stability ratings stay manually written editorial content — no free API provides analyst price targets or qualitative "moat" ratings.</li>
+      <li>Cash & Equivalents ($M) and Operating Expenses ($M) — Cash Runway (yr)'s two inputs — always come from free SEC EDGAR data first, then Alpha Vantage as a fallback if a key is saved below, regardless of which "Fetch live data" button you use.</li>
+    </ul>
+  </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="apiKey" style="flex:1; min-width:220px;">Finnhub API key <a href="https://finnhub.io/register" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
+    <input id="apiKey" type="text" placeholder="paste key here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
+    <button id="saveKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
+    <button id="fetchLiveBtn">Fetch live data</button>
+    <span id="fetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="alphaVantageApiKeyInput" style="flex:1; min-width:220px;">Alpha Vantage API key — also used as the Cash Runway (yr) data fallback above <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
+    <input id="alphaVantageApiKeyInput" type="text" placeholder="paste key here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
+    <button id="saveAlphaVantageKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
+    <span id="alphaVantageKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    <button id="fetchAlphaVantageLiveBtn" title="Independent from Finnhub's 'Fetch live data' above — uses only this Alpha Vantage key, and its own status message here.">Fetch live data</button>
+    <span id="alphaVantageFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Detailed Update for Selected Assets</h2>
+    <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" onclick="toggleCollapsibleSection('detailedUpdateSectionBody','detailedUpdateToggleBtn')">▼</button>
+  </div>
+  <div id="detailedUpdateSectionBody">
+
+  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
+    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">🎯 Detailed Update for Selected Assets — copy and paste this to your AI</h2>
+    <div class="disclaimer" style="margin-bottom:1rem;">
+      Pick ticker(s) for a <strong>full, detailed</strong> refresh:
+      <ul>
+        <li>Requests every editable numeric parameter on your Portfolio table (not the fixed 2-field set below), except "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" (manual/Import-Excel only, never requested from an AI).</li>
+        <li>Click <strong style="color:#eab308;">✓</strong> to include a ticker, <strong style="color:#c98a9e;">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all for current Portfolio list" / "Reset request list" for one-click bulk actions, or add a brand-new ticker below.</li>
+        <li>Marking a ticker ✓ adds it to your currently open Portfolio List right away.</li>
+        <li>Click "Generate request", copy the prompt to an AI assistant, then paste its numbered reply back and click "Parse & Update".</li>
+      </ul>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+      <input id="dusTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" style="width:140px;">
+      <input id="dusName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
+      <button id="dusAddBtn" type="button">Add to Request</button>
+    </div>
+    <div id="dusAddStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusSelectAllCurrentListBtn" type="button" title="Mark every asset already on your currently open Portfolio List as ✓ included, in one click." style="background:transparent; border:1px solid #eab308; color:#eab308;">Request all for current Portfolio list: <strong id="dusCurrentListNameLabel"></strong></button>
+      <button id="dusResetSelectionsBtn" type="button" title="Reset every asset below back to grey/undecided, in one click, instead of clicking ✕ on each one individually." style="background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary);">↺ Reset request list</button>
+    </div>
+    <div class="chart-note" style="margin-top:0.75rem;">All assets across your Portfolio Lists — click ✓ to include, ✕ to exclude from the request:</div>
+    <div id="dusRequestList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;"></div>
+    <div style="margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusGenerateBtn" type="button">Generate request</button>
+      <button id="dusRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh asset list</button>
+    </div>
+    <label for="dusPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
+    <textarea id="dusPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.5rem; margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
+      <span id="dusPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+    </div>
+    <label for="dusPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
+    <textarea id="dusPasteInput" rows="4" placeholder="e.g. 245.00, 1.85, 320.5, 0.72, 850.4, 227.50, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="dusParseBtn" type="button">Parse & Update</button>
+      <span id="dusParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+  </div>
+
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Update Current Price and Consensus Target Price</h2>
+    <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" onclick="toggleCollapsibleSection('quickPriceUpdateSectionBody','quickPriceUpdateToggleBtn')">▼</button>
+  </div>
+  <div id="quickPriceUpdateSectionBody">
+
+  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
+    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">⚡ Update Current Price and Consensus Target Price for all assets — copy and paste this to your AI</h2>
+    <div class="disclaimer" style="margin-bottom:1rem;">
+      No API key needed:
+      <ul>
+        <li>Lists every ticker across <strong>all</strong> your Portfolio Lists with a fixed field order (Current Price, Consensus Target Price).</li>
+        <li>Copy the prompt to any AI assistant (Claude, ChatGPT, Gemini, etc.), paste its numeric reply into the second box, then click "Parse & Update".</li>
+        <li>Updates apply everywhere that ticker appears, across every Portfolio List — the same way "Fetch live data" does.</li>
+      </ul>
+    </div>
+    <label for="qpuPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI:</label>
+    <textarea id="qpuPromptBox" readonly rows="6" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.5rem; margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="qpuCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
+      <button id="qpuRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh ticker list</button>
+      <span id="qpuPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+    </div>
+    <label for="qpuPasteInput" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 2 — paste your AI's reply (numbers only, comma-separated) here:</label>
+    <textarea id="qpuPasteInput" rows="4" placeholder="e.g. 245.00, 260.00, 320.50, 345.00, ..." style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="qpuParseBtn" type="button">Parse & Update</button>
+      <span id="qpuParseStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+  </div>
+
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Methodology and Glossary</h2>
+    <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" onclick="toggleCollapsibleSection('methodologyGlossarySectionBody','methodologyGlossaryToggleBtn')">▼</button>
+  </div>
+  <div id="methodologyGlossarySectionBody">
 
   <div class="table-container" style="margin-top:2rem; padding:1.5rem;">
     <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">How each mandate calculates Optimized Weight</h2>
@@ -683,7 +713,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the average price per share you actually paid, for your own cost-basis tracking. Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Volume (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of shares (in millions) traded per day over a recent period.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Beta</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A measure of the stock’s price volatility relative to the overall market — 1.0 moves with the market, above 1.0 is more volatile, below 1.0 is less.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Book Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × Average Purchase Price — the cost of what you still own from that purchase row, after any sale rows on the list have been matched against it (fully sold = $0.00; sale rows have no book value). Requires "Units Purchased" and "Average Purchase Price ($)" columns. Shown in light blue while units are still held. The "Total Current Book Value" summary row lives on the Lot Matching (FIFO) table below, not here — this table's own per-row totals aren't reliably accurate once a purchase has been split across multiple sales.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Book Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × Average Purchase Price — the cost of what you still own from that FIFO-matched lot (fully sold = no Book Value; a sold lot's own value is tracked as Realized Gain instead). Requires "Units Purchased" and "Average Purchase Price ($)" columns. Shown in light blue while units are still held. The "Total Current Book Value" summary row below the Past Purchases table sums this across every held lot.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Cash & Equivalents ($M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Cash and cash-equivalent balance-sheet holdings, in millions of dollars — one of Cash Runway (yr)'s two inputs. Live-fetchable via "Fetch live data" (SEC EDGAR first, Alpha Vantage as a fallback).</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Cash Runway (yr)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Cash & Equivalents ($M) ÷ Operating Expenses ($M) — a "zero revenue" runway, i.e. how many years current cash would cover total annual operating expenses alone, regardless of revenue. Shows "N/A" until both inputs are on file.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Company Name</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The company's full name.</td></tr>
@@ -729,7 +759,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Price to Sales (P/S)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Market cap divided by revenue; a valuation multiple often used for early-stage or low-margin companies.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Quick Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">(Current assets minus inventory) ÷ current liabilities; a stricter liquidity measure than the Current Ratio.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">R&D Spend (% of Revenue)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Research and development expenditure as a percentage of total revenue.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Realized Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only). On a row with its own Units Purchased and a Selling Price: Units Sold (or all Units Purchased if Units Sold is blank) × (Selling Price − that row's Average Purchase Price). On a separate sale row (Units Sold + Selling Price + Date Sale, no Units Purchased): Units Sold × (Selling Price − cost per unit), where the cost comes from that ticker's purchase rows on the same list dated on or before the sale, using the "Cost basis" setting — Average cost (average price of the units held at that time) or FIFO (oldest purchases sold first). Example: buy 10 @ $2, sell 5 @ $3 (+$5), sell 5 @ $5 (+$15) = $20. Hover a cell to see how it was worked out. The monthly "Realized Gain for month of X of Y" subtotals and the "Total Realized Gain to date" summary row live on the Lot Matching (FIFO) table below, not here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Realized Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only) per FIFO-matched lot: qty sold × (Selling Price − that lot's Average Purchase Price), always oldest-purchase-first (independent of the "Cost basis" setting, which only affects sorting/exports, not this table). Example: buy 10 @ $2, sell 5 @ $3 (+$5), sell 5 @ $5 (+$15) = $20. The monthly "Realized Gain for month of X of Y" subtotals and the "Total Realized Gain to date" summary row below the table total this across every matched lot.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Equity (ROE %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net income divided by shareholder equity; profitability relative to shareholders' investment.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Invested Capital (ROIC %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net operating profit after tax divided by invested capital; efficiency of returns on deployed capital.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Rev Growth (YoY%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Year-over-year percentage change in revenue.</td></tr>
@@ -746,6 +776,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Unrealized Gain</td><td style="padding:0.6rem 1rem;">Computed automatically (read-only): the row's full Units Purchased × (Current Price − Average Purchase Price). Requires "Units Purchased" and "Average Purchase Price ($)" columns, a non-zero Average Purchase Price, and Current Price data for the asset. For units still held, this is the real current gain/loss. For units that have already been sold (in whole or in part), it becomes hypothetical — "what would this be worth today, at its original buy price, had it never been sold" — shown alongside, not instead of, Realized Gain, so you can compare what you actually made against what holding on would have been worth.</td></tr>
       </tbody>
     </table>
+  </div>
+
   </div>
 </div>
 </div>
