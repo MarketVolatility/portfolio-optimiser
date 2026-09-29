@@ -1,4 +1,16 @@
-// APP.JS BUILD: v5.67 (Added a new computed "Current Market Value" column —
+// APP.JS BUILD: v5.68 (Renamed the Lot Matching table's "Total Current Book
+// Value" footer row to "Total current market and book value", and it now carries
+// TWO totals side by side instead of one — the existing Book Value total, plus a
+// new Current Market Value total — each sitting under its own column, so neither
+// overwrites the other. Each total is colored a shade darker than that column's
+// own live cell color above it: Book Value's total keeps its existing
+// var(--accent-blue), and the new Current Market Value total uses #7c3aed (a
+// darker companion to the live cells' #a78bfa). The row still renders even if
+// only one of the two columns is present. Updated the matching glossary/
+// disclaimer text in the Lot Matching table's own explanation box and in the
+// Book Value / Current Market Value glossary entries.)
+//
+// v5.67 (Added a new computed "Current Market Value" column —
 // units still held × live Current Price — to Past Purchases, positioned between
 // Unrealized Gain and Book Value (Book Value + Unrealized Gain = Current Market
 // Value): e.g. buy 5 @ $5 -> Book Value $25; price now $7 -> Unrealized Gain
@@ -245,7 +257,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.67 (added a Current Market Value column to Past Purchases, between Unrealized Gain and Book Value)");
+console.log("app.js loaded — build v5.68 (Lot Matching footer: renamed to \"Total current market and book value\", now shows Book Value + Current Market Value totals)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -431,9 +443,10 @@ function openAccordionSectionFromNav(sectionId){
 // uiViewMode/collapsedSections above). When on, only rows that haven't been sold
 // yet (Selling Price = 0, or there's no Selling Price column at all, in which case
 // nothing counts as sold) are shown in the table body and included in exports —
-// this is purely a display filter, so the footer totals (Total Current Book Value,
-// Total Realized Gain to date, monthly breakdowns) keep summarizing the WHOLE list
-// regardless, the same way they already don't change based on sort order.
+// this is purely a display filter, so the footer totals (Total current market
+// and book value, Total Realized Gain to date, monthly breakdowns) keep
+// summarizing the WHOLE list regardless, the same way they already don't change
+// based on sort order.
 function getPpShowCurrentHoldingsOnly(){
   try{ return localStorage.getItem("ppShowCurrentHoldingsOnly") === "true"; }
   catch(e){ return false; }
@@ -4576,31 +4589,51 @@ function wireFifoFragmentEditing(tbody){
 }
 
 // v5.63: the summary totals that used to live on the main Past Purchases table's
-// own tfoot (Total Current Book Value, Total Realized Gain to date, per-month
-// Realized Gain breakdown) now live HERE instead — totaling the FIFO fragments
-// (this table's own rows) rather than the raw editable rows, since a per-row total
-// on the table above isn't reliably accurate once a purchase or sale has been split
-// across multiple lots/rows; the FIFO-matched fragments are the accurate source.
-// Mirrors renderPastPurchasesFooter's old row-building exactly, one column per
-// current param (same column count/order as buildPastPurchasesHeaderRow), just
-// summing over `fragments` (each with its own pre-resolved values from
-// resolveFifoFragmentValues) instead of `orderedRows`.
+// own tfoot (Total current market and book value, Total Realized Gain to date,
+// per-month Realized Gain breakdown) now live HERE instead — totaling the FIFO
+// fragments (this table's own rows) rather than the raw editable rows, since a
+// per-row total on the table above isn't reliably accurate once a purchase or
+// sale has been split across multiple lots/rows; the FIFO-matched fragments are
+// the accurate source. Mirrors renderPastPurchasesFooter's old row-building
+// exactly, one column per current param (same column count/order as
+// buildPastPurchasesHeaderRow), just summing over `fragments` (each with its own
+// pre-resolved values from resolveFifoFragmentValues) instead of `orderedRows`.
+//
+// v5.68: "Total current market and book value" is a single row carrying TWO
+// totals side by side, each sitting under its own column — Book Value's total
+// under the Book Value column, Current Market Value's total under the Current
+// Market Value column — so the row still renders (with whichever total(s) it
+// has data for) even if one of those two columns has been removed. Each total
+// is colored a shade darker than that column's own live cell color above it:
+// Book Value's live cells are var(--accent-cyan) (#7dd3fc), so its total keeps
+// the pre-existing darker var(--accent-blue) (#2563eb); Current Market Value's
+// live cells are #a78bfa, so its total uses the darker #7c3aed (also
+// EXPORT_COLORS.violet).
 function renderFifoLotMatchFooter(params, fragments){
   const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
+  const cmvParam = params.find(p => p.computed && p.formula === 'currentMarketValuePP');
   const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
   const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
   let footHtml = '';
 
-  if(bookValueParam){
-    const colIndex = params.findIndex(p => p.id === bookValueParam.id);
-    const totalBookValue = fragments.reduce((sum, f) => {
+  if(bookValueParam || cmvParam){
+    const bookColIndex = bookValueParam ? params.findIndex(p => p.id === bookValueParam.id) : -1;
+    const cmvColIndex = cmvParam ? params.findIndex(p => p.id === cmvParam.id) : -1;
+    const totalBookValue = bookValueParam ? fragments.reduce((sum, f) => {
       return sum + (f.resolved['_' + bookValueParam.id + '_ready'] ? (f.resolved[bookValueParam.id] || 0) : 0);
-    }, 0);
-    footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total Current Book Value</td>`;
+    }, 0) : 0;
+    const totalCmv = cmvParam ? fragments.reduce((sum, f) => {
+      return sum + (f.resolved['_' + cmvParam.id + '_ready'] ? (f.resolved[cmvParam.id] || 0) : 0);
+    }, 0) : 0;
+    footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total current market and book value</td>`;
     params.forEach((p, idx) => {
-      footHtml += idx === colIndex
-        ? `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`
-        : `<td></td>`;
+      if(idx === bookColIndex){
+        footHtml += `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`;
+      } else if(idx === cmvColIndex){
+        footHtml += `<td style="font-weight:600; color:#7c3aed;">$${totalCmv.toFixed(2)}</td>`;
+      } else {
+        footHtml += `<td></td>`;
+      }
     });
     footHtml += `</tr>`;
   }
@@ -5067,8 +5100,8 @@ function withBuyTargetColumnMainTable(headers, rows){
 }
 
 // Same idea for Past Purchases, but its export rows include summary/footer rows
-// AFTER the per-asset ones (Total Current Book Value, Total Realized Gain to date,
-// monthly breakdowns — see buildPastPurchasesExportTable above) — only the first
+// AFTER the per-asset ones (Total current market and book value, Total Realized
+// Gain to date, monthly breakdowns — see buildPastPurchasesExportTable above) — only the first
 // visibleRows.length rows are real assets, so only those get a Yes/No; footer
 // rows get a blank cell, matching how every other non-participating column in
 // those rows is already left blank.
