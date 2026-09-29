@@ -1,4 +1,19 @@
-// APP.JS BUILD: v5.66 (Moved the copyright note from directly under the top
+// APP.JS BUILD: v5.67 (Added a new computed "Current Market Value" column —
+// units still held × live Current Price — to Past Purchases, positioned between
+// Unrealized Gain and Book Value (Book Value + Unrealized Gain = Current Market
+// Value): e.g. buy 5 @ $5 -> Book Value $25; price now $7 -> Unrealized Gain
+// +$10, Current Market Value $35. Only shows a value for still-held lots — a
+// fully sold lot shows "—", same as Book Value, since its value has converted
+// into Realized Gain instead. Wired into the merged FIFO table (the live
+// editable UI), the row-level resolver used for sorting/export, and — since the
+// same formula presets are shared by both tables' "Add parameter" dropdowns —
+// the main Portfolio Lists table's custom-column path too, so selecting it
+// there computes and renders correctly instead of falling through to the
+// generic percentage renderer. Added as a one-time migration for existing
+// accounts (inserted right before Book Value) and as part of the default
+// starting columns for brand-new ones.)
+//
+// v5.66 (Moved the copyright note from directly under the top
 // "Not financial advice" disclaimer down to the very end of the page — after the
 // Methodology and Glossary section, but still inside the page's own container so
 // it stays visible at the bottom regardless of which accordion section is open.
@@ -230,7 +245,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.66 (moved the copyright note to the very end of the page)");
+console.log("app.js loaded — build v5.67 (added a Current Market Value column to Past Purchases, between Unrealized Gain and Book Value)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -253,7 +268,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "ppCostBasisMethod"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -605,6 +620,11 @@ async function openDashboard(user){
   }
   // Adds the manual "Units Sold" column (right after Date Sale) to existing accounts.
   if(insertUnitsSoldColumnIfNeeded()){
+    pushSnapshotToCloud();
+  }
+  // Adds the computed "Current Market Value" column (right before Book Value) to
+  // existing accounts.
+  if(insertCurrentMarketValueColumnIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -2674,6 +2694,7 @@ const PP_ONLY_PARAM_PRESETS = [
   { label: "Units Sold", type: "number", defaultValue: 0 },
   { label: "Realized Gain", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
   { label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" },
+  { label: "Current Market Value", type: "number", defaultValue: 0, computed: true, formula: "currentMarketValuePP" },
   { label: "Missed Gain %", type: "number", defaultValue: 0, computed: true, formula: "missedGainPct" },
   { label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
   { label: "ROA (%)", type: "number", defaultValue: 0 },
@@ -3055,6 +3076,37 @@ function insertUnrealizedGainColumnIfNeeded(){
       params.push(newParam); // no Realized Gain column on this list — just append it
     } else {
       params.splice(saleProfitIdx + 1, 0, newParam);
+    }
+    savePastPurchasesParams(params);
+    return true;
+  }catch(e){ return false; }
+}
+
+// One-time-per-account migration: inserts a new computed "Current Market Value"
+// column — units still held × live Current Price, i.e. what a still-held FIFO lot
+// is worth right now (Book Value + Unrealized Gain = Current Market Value) — into
+// every existing Past Purchases column list, positioned right before "Book Value"
+// (falling back to right after "Unrealized Gain", then to appending) to match
+// where getNewUserDefaultPastPurchasesParams() now places it for a brand-new
+// account. Gated by the "currentMarketValueColumnAdded" flag (a SYNC_KEY); no-op
+// if a "currentMarketValuePP" column is somehow already there.
+function insertCurrentMarketValueColumnIfNeeded(){
+  try{
+    if(localStorage.getItem("currentMarketValueColumnAdded") === "1") return false;
+    localStorage.setItem("currentMarketValueColumnAdded", "1");
+    const raw = localStorage.getItem("pastPurchasesParams");
+    if(raw === null) return false; // never seeded yet — seedPastPurchasesDefaultParamsIfNeeded() will include it fresh
+    const params = JSON.parse(raw);
+    if(params.some(p => p.computed && p.formula === "currentMarketValuePP")) return false; // already present
+    const newParam = { id: "pp_current_market_value_" + Date.now().toString(36), label: "Current Market Value", type: "number", defaultValue: 0, computed: true, formula: "currentMarketValuePP" };
+    const bookValueIdx = params.findIndex(p => p.computed && p.formula === "bookValuePP");
+    const unrealizedIdx = params.findIndex(p => p.computed && p.formula === "unrealizedGainPP");
+    if(bookValueIdx !== -1){
+      params.splice(bookValueIdx, 0, newParam); // right before Book Value
+    } else if(unrealizedIdx !== -1){
+      params.splice(unrealizedIdx + 1, 0, newParam); // right after Unrealized Gain
+    } else {
+      params.push(newParam);
     }
     savePastPurchasesParams(params);
     return true;
@@ -3954,6 +4006,22 @@ function resolvePastPurchaseRowValues(row){
       resolved[p.id] = ready ? units * (current - avg) : 0;
       resolved['_' + p.id + '_ready'] = ready;
     }
+    if(p.computed && p.formula === 'currentMarketValuePP'){
+      // Units still held (after every sale row has been matched, respecting the
+      // "Cost basis" setting via the same ledger Book Value uses) × live Current
+      // Price — what the remaining position is worth right now. Book Value +
+      // Unrealized Gain === Current Market Value whenever both are ready.
+      const norm = s => String(s).trim().toLowerCase();
+      const unitsParam = params.find(pp => !pp.computed && norm(pp.label) === 'units purchased');
+      const avgParam = params.find(pp => !pp.computed && (norm(pp.label) === 'average purchase price ($)' || norm(pp.label) === 'average purchase price'));
+      const units = unitsParam ? (Number(resolved[unitsParam.id]) || 0) : 0;
+      const avg = avgParam ? (Number(resolved[avgParam.id]) || 0) : 0;
+      const builtin = row.asset ? getResolvedBuiltinAssetValues(row.asset.trim().toUpperCase()) : null;
+      const current = builtin ? (Number(builtin.currentPrice) || 0) : 0;
+      const ready = !!(unitsParam && avgParam) && isPurchaseRow && units !== 0 && avg !== 0 && !!builtin;
+      resolved[p.id] = ready ? ledgerInfo.heldUnits * current : 0;
+      resolved['_' + p.id + '_ready'] = ready;
+    }
   });
   return resolved;
 }
@@ -4183,6 +4251,17 @@ function resolveFifoFragmentValues(fragment, isMatch, params, rowsById, builtinC
       const ready = !isMatch && buyPrice !== 0;
       resolved[p.id] = ready ? qty * buyPrice : 0;
       resolved["_" + p.id + "_ready"] = ready;
+    } else if(p.formula === "currentMarketValuePP"){
+      // Units still held × live Current Price — what this lot is worth right now.
+      // Only meaningful for a still-held (unmatched) fragment, same as Book Value
+      // (a sold lot's value converts into Realized Gain instead); also needs a
+      // live price, same gate as Unrealized Gain. When both this and Unrealized
+      // Gain are ready, Book Value + Unrealized Gain === Current Market Value
+      // (e.g. buy 5 @ $5 -> Book Value $25; price now $7 -> Unrealized Gain $10,
+      // Current Market Value $35).
+      const ready = !isMatch && buyPrice !== 0 && !!builtin;
+      resolved[p.id] = ready ? qty * current : 0;
+      resolved["_" + p.id + "_ready"] = ready;
     } else if(p.formula === "missedGainPct"){
       const ready = isMatch && sellPrice !== 0 && !!builtin;
       resolved[p.id] = ready ? ((current - sellPrice) / sellPrice) * 100 : 0;
@@ -4233,6 +4312,12 @@ function renderFifoFragmentCellHTML(p, f, params){
     const sign = val >= 0 ? "+" : "-";
     const color = val >= 0 ? "var(--emerald)" : DUS_EXCLUDED_COLOR;
     return `<td style="color:${color}; font-weight:600;">${sign}$${Math.abs(val).toFixed(2)}</td>`;
+  }
+  if(p.computed && p.formula === "currentMarketValuePP"){
+    const ready = resolved["_" + p.id + "_ready"];
+    if(!ready) return `<td style="color:var(--text-secondary);">—</td>`;
+    const val = resolved[p.id] || 0;
+    return `<td style="font-weight:600; color:#a78bfa;">$${Math.abs(val).toFixed(2)}</td>`;
   }
   if(p.computed && p.formula === "bookValuePP"){
     const ready = resolved["_" + p.id + "_ready"];
@@ -4605,6 +4690,7 @@ const EXPORT_COLORS = {
   blue: "#2563eb",
   lightBlue: "#0ea5e9",
   dustyPink: "#c98a9e",
+  violet: "#7c3aed",
 };
 
 // --- On-demand CDN loading with retry + multi-host fallback, for the Excel export
@@ -4806,7 +4892,7 @@ function getMainTableExportValue(item, colDef){
       const num = Number(val) || 0;
       return (num >= 0 ? "+" : "-") + "$" + Math.abs(num).toFixed(2);
     }
-    if(colDef.computed && colDef.formula === "bookValuePP"){
+    if(colDef.computed && (colDef.formula === "bookValuePP" || colDef.formula === "currentMarketValuePP")){
       if(isDefault) return "—";
       return "$" + Math.abs(Number(val) || 0).toFixed(2);
     }
@@ -4851,6 +4937,9 @@ function getMainTableExportColor(item, colDef){
       const sellParamForColor = allParamsForColor.find(p => !p.computed && String(p.label).trim().toLowerCase() === "selling price");
       const sellValForColor = sellParamForColor ? (Number(item.customValues[sellParamForColor.id]) || 0) : 0;
       return sellValForColor === 0 ? EXPORT_COLORS.lightBlue : null;
+    }
+    if(colDef.computed && colDef.formula === "currentMarketValuePP"){
+      return isDefault ? null : EXPORT_COLORS.violet;
     }
   }
   return null;
@@ -4900,6 +4989,10 @@ function getPastPurchasesExportRowColors(resolved, params){
       const li = resolved._ledger;
       return (li && li.heldUnits > PP_EPS) ? EXPORT_COLORS.lightBlue : null;
     }
+    if(p.computed && p.formula === "currentMarketValuePP"){
+      const ready = resolved["_" + p.id + "_ready"];
+      return ready ? EXPORT_COLORS.violet : null;
+    }
     if(!p.computed && String(p.label).trim().toLowerCase() === "current price"){
       return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.emerald : null;
     }
@@ -4935,7 +5028,7 @@ function buildPastPurchasesExportTable(){
         const val = resolved[p.id] || 0;
         return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
       }
-      if(p.computed && p.formula === "bookValuePP"){
+      if(p.computed && (p.formula === "bookValuePP" || p.formula === "currentMarketValuePP")){
         const ready = resolved["_" + p.id + "_ready"];
         if(!ready) return "—";
         return "$" + Math.abs(resolved[p.id] || 0).toFixed(2);
@@ -5857,6 +5950,12 @@ function renderCellHTML(colDef, item, badge){
       const colorStyle = (!isDefault && sellValForColor === 0) ? ' color:#7dd3fc;' : '';
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}" style="font-weight:600;${colorStyle}"${titleAttr}>$${Math.abs(num).toFixed(2)}</td>`;
     }
+    if(colDef.computed && colDef.formula === 'currentMarketValuePP'){
+      const num = Number(val) || 0;
+      const titleAttr = isDefault ? ` title="Add Units Purchased and Average Purchase Price columns, with no Selling Price entered yet, to compute this."` : '';
+      const colorStyle = isDefault ? '' : ' color:#a78bfa;';
+      return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}" style="font-weight:600;${colorStyle}"${titleAttr}>$${Math.abs(num).toFixed(2)}</td>`;
+    }
     if(colDef.computed){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
     }
@@ -6052,7 +6151,7 @@ function runMatrixOptimization() {
       if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
-      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "unrealizedGainPP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
+      } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "unrealizedGainPP" || p.formula === "currentMarketValuePP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
         // resolved in pass 2, once their sibling custom params (if present) are available
       } else {
         customValues[p.id] = ov[p.id] !== undefined ? ov[p.id] : p.defaultValue;
@@ -6097,6 +6196,20 @@ function runMatrixOptimization() {
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0;
         customValues[p.id] = ready ? units * (currentPrice - avg) : 0;
+        customIsDefault[p.id] = !ready;
+      } else if(p.computed && p.formula === "currentMarketValuePP"){
+        // Same idea as Unrealized Gain above, just Units Purchased × Current Price
+        // instead of × the price change — what the position is worth right now,
+        // only while Selling Price is still 0 (not yet sold).
+        const norm = s => String(s).trim().toLowerCase();
+        const unitsParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "units purchased");
+        const avgParam = allCustomParams.find(cp => !cp.computed && (norm(cp.label) === "average purchase price ($)" || norm(cp.label) === "average purchase price"));
+        const sellParam = allCustomParams.find(cp => !cp.computed && norm(cp.label) === "selling price");
+        const units = unitsParam ? (Number(customValues[unitsParam.id]) || 0) : 0;
+        const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
+        const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
+        const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0;
+        customValues[p.id] = ready ? units * currentPrice : 0;
         customIsDefault[p.id] = !ready;
       } else if(p.computed && p.formula === "missedGainPct"){
         // (Current Price − Selling Price) ÷ Selling Price × 100, using the already-
@@ -7109,11 +7222,12 @@ const NEW_USER_DEFAULT_COLUMN_ORDER = [
 
 // Past Purchases (the "List 1" default list) starts with no columns at all
 // otherwise — see the comment above PP_ONLY_PARAM_PRESETS. Requested starting
-// layout, in order: Realized Gain, Unrealized Gain, Book Value, Date Purchased,
-// Units Purchased, Average Purchase Price ($), Selling Price, Date Sale,
-// Units Sold, Current Price, Missed Gain % (Ticker/Asset itself is a fixed identity
-// column, not a param). Fixed ids (rather than addPastPurchaseParam()'s
-// timestamped ones), same reasoning as NEW_USER_DEFAULT_CUSTOM_PARAMS above.
+// layout, in order: Realized Gain, Unrealized Gain, Current Market Value, Book
+// Value, Date Purchased, Units Purchased, Average Purchase Price ($), Selling
+// Price, Date Sale, Units Sold, Current Price, Missed Gain % (Ticker/Asset
+// itself is a fixed identity column, not a param). Fixed ids (rather than
+// addPastPurchaseParam()'s timestamped ones), same reasoning as
+// NEW_USER_DEFAULT_CUSTOM_PARAMS above.
 // Date Purchased and Date Sale both default to blank — a newly-added ticker
 // shouldn't silently claim today's date for either one; the user fills each
 // in deliberately via the calendar picker when they actually know the date,
@@ -7122,6 +7236,7 @@ function getNewUserDefaultPastPurchasesParams(){
   return [
     { id: "pp_sale_profit", label: "Realized Gain", type: "number", defaultValue: 0, computed: true, formula: "salesProfitPP" },
     { id: "pp_unrealized_gain", label: "Unrealized Gain", type: "number", defaultValue: 0, computed: true, formula: "unrealizedGainPP" },
+    { id: "pp_current_market_value", label: "Current Market Value", type: "number", defaultValue: 0, computed: true, formula: "currentMarketValuePP" },
     { id: "pp_book_value", label: "Book Value", type: "number", defaultValue: 0, computed: true, formula: "bookValuePP" },
     { id: "pp_date_purchased", label: "Date Purchased", type: "date", defaultValue: "" },
     { id: "pp_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
@@ -7183,6 +7298,8 @@ function initializeNewUserDefaults(){
     localStorage.setItem("unrealizedGainColumnAdded", "1");
     // Fresh defaults already include "Units Sold" too.
     localStorage.setItem("unitsSoldColumnAdded", "1");
+    // ...and "Current Market Value", already placed right before Book Value.
+    localStorage.setItem("currentMarketValueColumnAdded", "1");
     // Past Purchases' own starting columns are seeded separately, by
     // seedPastPurchasesDefaultParamsIfNeeded() (called from openDashboard) — see
     // its own comment for why that's a better gate than this function's
