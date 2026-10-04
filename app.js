@@ -1,3 +1,20 @@
+// APP.JS BUILD: v5.76 (Bug fix: clicking Sales Strategy's "Refresh" button
+// failed to bring back a draft row for a ticker the user had removed, even
+// though it was still held with real pending units (reported: AVGO, removed,
+// 18 units still pending in Past Purchases, "Refresh" clicked 2 hours later,
+// row never reappeared, status said "already up to date"). Root cause: v5.74
+// added a "last-seen holding" snapshot gate to syncSalesStrategyFromHoldings
+// so the AUTOMATIC sync (after every ordinary Past Purchases edit) would
+// never undo a deliberate row removal just because some unrelated edit
+// re-triggered it — correct for that automatic path, but the Refresh button
+// called the exact same gated function, so an explicit "resync this right
+// now" click was silently blocked by the same protection. Fix: the function
+// now takes an optional `force` flag; the Refresh button's click handler
+// passes it, which skips the snapshot gate entirely and adds a row for every
+// currently-held ticker that has none, whatever the reason. The automatic
+// per-edit sync still omits it, so day-to-day editing still never resurrects
+// a row you've removed on its own.)
+//
 // APP.JS BUILD: v5.75 (Added a "Refresh" button next to Sales Strategy's
 // "Display" control — a manual, on-demand trigger for the exact same Past
 // Purchases -> Sales Strategy sync that already runs automatically after
@@ -396,7 +413,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.75 (Sales Strategy: added a \"Refresh\" button next to \"Display\" — manually re-pulls/re-syncs this table from Past Purchases on demand, same sync that already runs automatically on every Past Purchases edit)");
+console.log("app.js loaded — build v5.76 (bug fix: Sales Strategy's \"Refresh\" button now force-resyncs — it brings back a draft row for any currently-held ticker with none, even one you'd removed, instead of silently deferring to the same resurrection guard the automatic per-edit sync uses)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3402,21 +3419,38 @@ function saveSalesStrategyLastSeenHeld(map){
 // render that just applied a user's own row removal, so a naive "no row +
 // still held -> add one" check would resurrect a deliberately-removed row
 // immediately, breaking the v5.70 guarantee that a removed row never comes
-// back on its own. So this tracks each ticker's holding "as of the last time
-// this ran" (salesStrategyLastSeenHeld, same self-healing-on-read/per-list
-// storage convention as salesStrategySeededTickers) and only adds a row when
-// CURRENT holding is actually HIGHER than that last-seen snapshot -- i.e. a
-// genuine new purchase happened, not just "a row is currently missing."
-// Removing a row while holding stays unchanged never trips this (same
-// snapshot, no increase detected); buying more after that removal does
-// (snapshot was taken at the lower pre-buy amount). A ticker never seen
-// before (no snapshot yet, e.g. an account upgrading from a pre-v5.74
-// version) gets its baseline set to its CURRENT holding with no row added
-// this round, rather than assuming the whole thing is "new" -- it only
-// starts getting flagged from the next genuine increase onward. The
-// snapshot is updated for every held ticker every run, whether or not a row
-// was added. Returns true iff either pass added anything.
-function syncSalesStrategyFromHoldings(){
+// back on its own DURING ORDINARY USE. So the automatic call (force left
+// false/omitted — every Past Purchases re-render) tracks each ticker's
+// holding "as of the last time this ran" (salesStrategyLastSeenHeld, same
+// self-healing-on-read/per-list storage convention as
+// salesStrategySeededTickers) and only adds a row when CURRENT holding is
+// actually HIGHER than that last-seen snapshot -- i.e. a genuine new
+// purchase happened, not just "a row is currently missing." Removing a row
+// while holding stays unchanged never trips this (same snapshot, no increase
+// detected); buying more after that removal does (snapshot was taken at the
+// lower pre-buy amount). A ticker never seen before (no snapshot yet, e.g.
+// an account upgrading from a pre-v5.74 version) gets its baseline set to
+// its CURRENT holding with no row added this round, rather than assuming the
+// whole thing is "new" -- it only starts getting flagged from the next
+// genuine increase onward.
+//
+// v5.76: `force` (true only from the Sales Strategy "Refresh" button's own
+// explicit click handler) bypasses that snapshot gate entirely and adds a
+// row for EVERY currently-held ticker that has none, however long ago (or
+// for whatever reason) its row went missing -- a reported bug showed that a
+// ticker whose row was deliberately removed, with its holding unchanged ever
+// since, never came back even after clicking "Refresh," because the snapshot
+// gate (correctly) saw no increase. That gate exists to protect ORDINARY
+// Past Purchases edits from undoing a deliberate removal behind the user's
+// back; an explicit, user-initiated "Refresh" click is a direct request to
+// fully resync this table from Past Purchases right now, so it should win
+// over that protection, not be silently blocked by it. The snapshot is still
+// updated afterward either way, so the very next ordinary (non-forced) edit
+// correctly sees "no change" relative to whatever Refresh just settled on.
+//
+// The snapshot is updated for every held ticker every run, whether or not a
+// row was added. Returns true iff either pass added anything.
+function syncSalesStrategyFromHoldings(force){
   const breakdown = computePastPurchasesFifoLotBreakdown(getPastPurchasesRows(), getPastPurchasesParams());
   const heldTickers = Object.keys(breakdown).filter(t => breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS));
 
@@ -3432,9 +3466,10 @@ function syncSalesStrategyFromHoldings(){
 
   if(seeded.size !== seededSizeBefore) saveSalesStrategySeededTickers(Array.from(seeded));
 
-  // v5.74: re-check coverage for every held ticker NOT already freshly seeded
-  // above -- does it still have a non-realized draft row to show its pending
-  // units? If not, only add one when holding has genuinely risen since the
+  // v5.74/v5.76: re-check coverage for every held ticker NOT already freshly
+  // seeded above -- does it still have a non-realized draft row to show its
+  // pending units? If not: a forced call (Refresh) adds one unconditionally;
+  // an ordinary call only adds one when holding has genuinely risen since the
   // last time this ran (see the long comment above for why).
   let addedForCoverage = false;
   const lastSeenHeld = getSalesStrategyLastSeenHeld();
@@ -3445,7 +3480,8 @@ function syncSalesStrategyFromHoldings(){
       const hasDraftRow = getSalesStrategyRows().some(r => r.ticker === t && !r.saleRealizedDate);
       const previouslySeen = Object.prototype.hasOwnProperty.call(lastSeenHeld, t);
       const priorHeld = previouslySeen ? lastSeenHeld[t] : stats.totalHeld; // unseen ticker: baseline to "no change" rather than flagging it
-      if(!hasDraftRow && stats.totalHeld > priorHeld + PP_EPS){ addSalesStrategyRow(t); addedForCoverage = true; }
+      const genuineIncrease = stats.totalHeld > priorHeld + PP_EPS;
+      if(!hasDraftRow && (force || genuineIncrease)){ addSalesStrategyRow(t); addedForCoverage = true; }
     }
     lastSeenChanged[t] = stats.totalHeld;
   });
@@ -8208,16 +8244,25 @@ try{
   const ssRefreshStatusEl = document.getElementById("ssRefreshStatus");
   if(ssRefreshBtn){
     ssRefreshBtn.addEventListener("click", () => {
-      // Call the sync check once here, BEFORE the full re-render below, purely
-      // to learn whether it actually changed anything worth reporting -- the
-      // full renderPastPurchasesTable() call right after calls it again too,
-      // which is a safe no-op by then (same idempotent check), and is what
-      // actually re-draws every table from the just-synced data.
-      const addedRows = typeof syncSalesStrategyFromHoldings === "function" ? syncSalesStrategyFromHoldings() : false;
+      // v5.76: force=true -- unlike the automatic sync that runs after every
+      // ordinary Past Purchases edit (which deliberately never resurrects a
+      // row the user removed, unless holding has since gone UP — see
+      // syncSalesStrategyFromHoldings's own comment), an explicit click of
+      // THIS button is a direct request to fully resync from Past Purchases
+      // right now, so it adds a row back for ANY currently-held ticker that
+      // has none, whatever the reason it's missing (including "the user
+      // removed it earlier and nothing about the holding has changed since").
+      // Called once here, BEFORE the full re-render below, purely to learn
+      // whether it actually changed anything worth reporting -- the full
+      // renderPastPurchasesTable() call right after calls the ordinary
+      // (unforced) version again too, which is a safe no-op by then (the row
+      // already exists), and is what actually re-draws every table from the
+      // just-synced data.
+      const addedRows = typeof syncSalesStrategyFromHoldings === "function" ? syncSalesStrategyFromHoldings(true) : false;
       renderPastPurchasesTable();
       if(ssRefreshStatusEl){
         ssRefreshStatusEl.textContent = addedRows
-          ? `Refreshed from Past Purchases at ${new Date().toLocaleTimeString()} — added/updated draft row(s) for newly-pending units.`
+          ? `Refreshed from Past Purchases at ${new Date().toLocaleTimeString()} — added/updated draft row(s) for units not currently shown.`
           : `Refreshed from Past Purchases at ${new Date().toLocaleTimeString()} — already up to date.`;
         ssRefreshStatusEl.style.color = "var(--emerald)";
       }
