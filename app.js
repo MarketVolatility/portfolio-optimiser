@@ -1,3 +1,30 @@
+// APP.JS BUILD: v5.74 (Three Sales Strategy refinements. 1) Relabeled
+// "Total Units Purchase (Current)" to "Total Units Holding" and "Units Left"
+// to "Units Pending Plan" (SALES_STRATEGY_COLUMNS); Units Pending Plan's
+// formula changed from the old symmetric "minus every OTHER pending row" to a
+// RUNNING total — Total Units Holding minus Units to Sell summed across THIS
+// row and every row BEFORE it for the same ticker, in the table's own
+// storage/custom order (buildSalesStrategyRowsResolved's cumulativeByTicker).
+// The Save button's own "anything left over to split into a new row" check
+// (saveSalesStrategyRowAndSplit) deliberately keeps summing ALL non-realized
+// rows for the ticker regardless of position — a separate "is the whole
+// ticker fully planned yet" question from the new per-row running display,
+// and the two can legitimately show different numbers. 2) Past Purchases
+// changes now propagate into Sales Strategy automatically, beyond the
+// existing per-row recompute-on-render: syncSalesStrategyFromHoldings (runs
+// on every Past Purchases re-render, same as before) now also adds a fresh
+// draft row for a held ticker with newly-pending units but NO current draft
+// row to show them (e.g. a ticker bought again after being fully planned,
+// sold, or its row removed) — a ticker that still has a draft row just has
+// that row's own Units Pending Plan recompute upward for free, no new row
+// needed. 3) Added a "Display" range control above the Sales Strategy header
+// row (Default/1 week/1 month/3 months/6 months/1 year/2 years/3 years/All)
+// that replaces the old fixed 28-day cutoff for how long a completed sale
+// stays visible after its sale date — "Default" keeps the original 28-day
+// behavior, "All" never hides one. Synced across devices like ssColumnOrder
+// (getSsDisplayRangeId/saveSsDisplayRangeId, new "ssDisplayRange" SYNC_KEYS
+// entry).)
+//
 // APP.JS BUILD: v5.73 (Five Sales Strategy refinements. 1) A completed
 // (realized) sale now drops off the table — and its exports — 28 days after
 // its sale date (SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS/
@@ -360,7 +387,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.73 (Sales Strategy: completed sales auto-hide after 28 days, \"Total Units Purchase (Current)\" tracks real current holding, completed rows get ↑↓×, column headers get move/hide buttons, and the manual Add Row UI is gone)");
+console.log("app.js loaded — build v5.74 (Sales Strategy: \"Total Units Purchase (Current)\"→\"Total Units Holding\", \"Units Left\"→\"Units Pending Plan\" now a running total; a new purchase auto-adds a draft row when none exists to show it; new \"Display\" range control replaces the fixed 28-day completed-sale cutoff)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -383,7 +410,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -2898,6 +2925,10 @@ function getAllPastPurchasesLists(){
     // Strategy, so the table starts populated on first use but a row the user
     // deliberately removes is never silently re-added on the next render.
     if(!Array.isArray(l.salesStrategySeededTickers)){ l.salesStrategySeededTickers = []; changed = true; }
+    // v5.74: per-ticker "holding as of the last sync" snapshot (ticker -> qty)
+    // syncSalesStrategyFromHoldings uses to tell "holding genuinely went up"
+    // apart from "a row is just currently missing" -- see its own comment.
+    if(!l.salesStrategyLastSeenHeld || typeof l.salesStrategyLastSeenHeld !== "object" || Array.isArray(l.salesStrategyLastSeenHeld)){ l.salesStrategyLastSeenHeld = {}; changed = true; }
   });
   if(changed) saveAllPastPurchasesLists(lists);
 
@@ -2996,8 +3027,9 @@ function savePastPurchasesRows(rows){
 // existing pastPurchasesLists cloud sync (no new SYNC_KEYS entry needed). A
 // draft row touches nothing in the real purchase/sale data until its "Confirm
 // Sale" button is used (see realizeSalesStrategyRow below) — until then it's
-// pure what-if planning, re-pulling Current Price/Total Purchased/Total Sold/
-// Units Left/Average Purchase Price of Units Left fresh on every render.
+// pure what-if planning, re-pulling Current Price/Total Units Holding/Total
+// Sold/Units Pending Plan/Average Purchase Price of Units Left fresh on every
+// render.
 function getSalesStrategyRows(){
   return getActivePastPurchasesList().salesStrategy || [];
 }
@@ -3017,8 +3049,8 @@ function addSalesStrategyRow(ticker){
 // one, same ticker — the quick way to plan selling the same holding in several
 // batches (different Units to sell / Selling Price per row) without re-picking
 // the ticker from the dropdown each time. The pulled-in columns (Current Price,
-// Total Units Purchased, Total Units Sold, Units Left, Average Purchase Price
-// of Units Left) are always computed fresh on render regardless; only
+// Total Units Holding, Total Units Sold, Units Pending Plan, Average Purchase
+// Price of Units Left) are always computed fresh on render regardless; only
 // Units to sell / Selling Price are copyable "seed" values, and per the spec
 // they start blank (0) on the duplicate — it's a new batch, not a repeat of
 // the same one.
@@ -3101,39 +3133,88 @@ function getSalesStrategyTickerStats(ticker){
 // Sales Strategy table (and its exports) entirely — its real, permanent
 // record already lives on Past Purchases/Lot Matching, so a planning table
 // doesn't need to keep displaying it forever. A draft (not yet realized) row
-// is never affected, however old.
+// is never affected, however old. Kept as the "Default" option's day count
+// (v5.74) — see SALES_STRATEGY_DISPLAY_RANGE_OPTIONS just below, which made
+// this window user-selectable via the new "Display" control above the table.
 const SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS = 28;
+
+// v5.74: the "Display" dropdown above the Sales Strategy table's header row
+// — how long a completed (realized) sale stays visible after its sale date
+// before dropping off (the real record is never affected; this is purely a
+// display window, same as the old fixed 28-day cutoff it replaces).
+// "Default" reproduces that original behavior exactly; "all" (days: null)
+// never hides a completed sale regardless of age.
+const SALES_STRATEGY_DISPLAY_RANGE_OPTIONS = [
+  { id: "default", label: "Default", days: SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS },
+  { id: "1w", label: "1 week", days: 7 },
+  { id: "1m", label: "1 month", days: 30 },
+  { id: "3m", label: "3 months", days: 91 },
+  { id: "6m", label: "6 months", days: 182 },
+  { id: "1y", label: "1 year", days: 365 },
+  { id: "2y", label: "2 years", days: 730 },
+  { id: "3y", label: "3 years", days: 1095 },
+  { id: "all", label: "All", days: null },
+];
+// Self-healing, same convention as getPpCostBasisMethod/getSsColumnOrder: a
+// garbage/missing/no-longer-valid stored id quietly falls back to "default"
+// rather than throwing or showing blank.
+function getSsDisplayRangeId(){
+  let id;
+  try{ id = localStorage.getItem("ssDisplayRange"); }
+  catch(e){ id = null; }
+  return SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+}
+function saveSsDisplayRangeId(id){
+  const valid = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+  try{ localStorage.setItem("ssDisplayRange", valid); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function getSsDisplayRangeDays(){
+  const opt = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.find(o => o.id === getSsDisplayRangeId());
+  return opt ? opt.days : SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS;
+}
+
 function isSalesStrategyRowExpired(row){
   if(!row || !row.saleRealizedDate) return false;
+  const windowDays = getSsDisplayRangeDays();
+  if(windowDays === null) return false; // "All" -- never expire
   const realizedMs = new Date(row.saleRealizedDate).getTime();
   if(isNaN(realizedMs)) return false;
   const ageDays = (Date.now() - realizedMs) / 86400000;
-  return ageDays > SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS;
+  return ageDays > windowDays;
 }
 
 // Fully resolves every Sales Strategy row into exactly what the table should
-// show — Current Price, Total Units Purchase (Current)/Sold, Units Left, and
-// Average Purchase Price of Units Left — WITHOUT touching the DOM, so this is
-// also what the tests exercise directly. "Units Left" and the average price it
-// implies both account for every OTHER still-pending (not yet realized) draft
-// row for the same ticker, per the spec's own formula; a row's OWN Units to
-// sell is deliberately NOT subtracted (Units Left is the ceiling for what
-// THIS row can still plan against, not what remains after it). A completed
-// sale older than SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS is filtered out
-// of the returned list at the very end (see isSalesStrategyRowExpired) —
-// safe to do here since a realized row of any age already never contributes
-// to any OTHER row's otherPendingUnits/overCommitted math below.
+// show — Current Price, Total Units Holding/Sold, Units Pending Plan, and the
+// Average Purchase Price behind it — WITHOUT touching the DOM, so this is also
+// what the tests exercise directly. A completed sale older than
+// SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS is filtered out of the returned
+// list at the very end (see isSalesStrategyRowExpired).
+//
+// v5.74: "Units Pending Plan" (field name kept as unitsLeft, to avoid rippling
+// into every sort/export/test key that already reads it) is a RUNNING total,
+// not the old symmetric "every OTHER pending row" subtraction: for a given
+// row, it's Total Units Holding minus Units to Sell summed across THIS row
+// AND every row BEFORE it (same ticker), in the table's own custom/storage
+// order — the same order ↑/↓ and Save-and-split already treat as the real
+// sequence of planned batches. A realized row contributes nothing to that
+// running total itself (its effect already lives in Total Units Holding via
+// the real sale it created), but a still-draft row that comes after it still
+// has that realized row's units correctly excluded from its own subtraction.
+// Sorting the table is still just a VIEW on top of this (applied below,
+// after this running total is computed in real storage order), so changing
+// the sort never changes these numbers, only their on-screen order.
 function buildSalesStrategyRowsResolved(){
   const rows = getSalesStrategyRows();
   const statsByTicker = {};
   rows.forEach(r => { if(!statsByTicker[r.ticker]) statsByTicker[r.ticker] = getSalesStrategyTickerStats(r.ticker); });
+  const cumulativeByTicker = {};
   const resolved = rows.map(row => {
     const stats = statsByTicker[row.ticker] || { totalPurchased: 0, totalSold: 0, totalHeld: 0, heldLots: [] };
-    const otherPendingUnits = rows.reduce((sum, r) => {
-      if(r.id === row.id || r.ticker !== row.ticker || r.saleRealizedDate) return sum;
-      return sum + (Number(r.unitsToSell) || 0);
-    }, 0);
-    const { remainingQty, avgPrice } = fifoConsumeFromFront(stats.heldLots, otherPendingUnits);
+    if(cumulativeByTicker[row.ticker] === undefined) cumulativeByTicker[row.ticker] = 0;
+    if(!row.saleRealizedDate) cumulativeByTicker[row.ticker] += (Number(row.unitsToSell) || 0);
+    const cumulativeUnitsToSell = cumulativeByTicker[row.ticker]; // this row + every non-realized row before it
+    const { remainingQty, avgPrice } = fifoConsumeFromFront(stats.heldLots, cumulativeUnitsToSell);
     const builtin = getResolvedBuiltinAssetValues(row.ticker);
     const currentPrice = builtin ? (Number(builtin.currentPrice) || 0) : null;
     return {
@@ -3145,14 +3226,14 @@ function buildSalesStrategyRowsResolved(){
       // v5.73: this column now tracks the CURRENT real holding (totalHeld),
       // not the lifetime-ever-purchased count (stats.totalPurchased) — per
       // the spec's own example, confirming a sale updates this down to
-      // whatever's still actually held. Relabeled "Total Units Purchase
-      // (Current)" below; the field name stays totalPurchased to avoid
-      // rippling into every sort/export/test key that already reads it.
+      // whatever's still actually held. Relabeled "Total Units Holding"
+      // below; the field name stays totalPurchased to avoid rippling into
+      // every sort/export/test key that already reads it.
       totalPurchased: stats.totalHeld,
       totalSold: stats.totalSold,
-      unitsLeft: remainingQty, // = stats.totalHeld - otherPendingUnits, floored at 0 by fifoConsumeFromFront
+      unitsLeft: remainingQty, // "Units Pending Plan" = totalHeld - cumulativeUnitsToSell, floored at 0 by fifoConsumeFromFront
       avgPurchasePriceOfUnitsLeft: avgPrice,
-      overCommitted: otherPendingUnits > stats.totalHeld + PP_EPS,
+      overCommitted: cumulativeUnitsToSell > stats.totalHeld + PP_EPS,
       saleRealizedDate: row.saleRealizedDate,
       realizedSaleRowId: row.realizedSaleRowId,
     };
@@ -3186,15 +3267,24 @@ function buildSalesStrategyRowsResolved(){
 // hasn't fired) and, if any of this ticker's held units are still left over
 // once every non-realized row for it (including this one) is added up, adds a
 // fresh blank draft row directly below — same insert duplicateSalesStrategyRow
-// already does — pre-positioned to plan that remainder. This is how "Units
-// Left" (10 - this row's 5 = 5) becomes visible as its own row's ceiling
-// without the user having to remember to click "Dup" or "+ Add Row" — the
-// point being nothing held ever gets silently left unaccounted-for. Skips
-// adding a new row when: nothing's left over (this row's units already cover
-// everything held), or a ready-to-use blank continuation row for this same
-// ticker is already sitting directly below (so repeated Save clicks, or
-// Save after an earlier Dup, don't pile up redundant empty rows). Returns the
-// new row's id, or null if none was added.
+// already does — pre-positioned to plan that remainder, so nothing held ever
+// gets silently left unaccounted-for, without the user having to remember to
+// click "Dup" or "+ Add Row".
+//
+// v5.74: this "is anything left over" check deliberately stays a GLOBAL sum
+// across every non-realized row for the ticker (order-independent) — a
+// different question from "Units Pending Plan"'s new per-row RUNNING total
+// (buildSalesStrategyRowsResolved), which only counts this row and the ones
+// before it. The two can legitimately disagree (e.g. this row's own Units
+// Pending Plan can read 0 while a LATER row still has unplanned units, or
+// vice-versa) — this check only cares whether the ticker as a WHOLE is fully
+// covered yet, so a new row is added whenever it isn't, regardless of which
+// row's Save button triggered the check.
+// Skips adding a new row when: nothing's left over (every row for this
+// ticker, combined, already covers everything held), or a ready-to-use blank
+// continuation row for this same ticker is already sitting directly below
+// (so repeated Save clicks, or Save after an earlier Dup, don't pile up
+// redundant empty rows). Returns the new row's id, or null if none was added.
 function saveSalesStrategyRowAndSplit(id, unitsToSell, sellingPrice){
   setSalesStrategyValue(id, "unitsToSell", Number(unitsToSell) || 0);
   setSalesStrategyValue(id, "sellingPrice", Number(sellingPrice) || 0);
@@ -3260,6 +3350,16 @@ function getSalesStrategySeededTickers(){
 function saveSalesStrategySeededTickers(tickers){
   updateActivePastPurchasesList(list => { list.salesStrategySeededTickers = tickers; });
 }
+// v5.74: see syncSalesStrategyFromHoldings's own comment -- a per-ticker
+// snapshot of holding "as of the last sync", used only to detect a genuine
+// INCREASE (not merely "a row is currently missing").
+function getSalesStrategyLastSeenHeld(){
+  const v = getActivePastPurchasesList().salesStrategyLastSeenHeld;
+  return (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+}
+function saveSalesStrategyLastSeenHeld(map){
+  updateActivePastPurchasesList(list => { list.salesStrategyLastSeenHeld = map; });
+}
 
 // v5.70: makes sure the Sales Strategy table is never left empty to start --
 // auto-adds one draft row for every ticker currently held on this Past
@@ -3276,7 +3376,37 @@ function saveSalesStrategySeededTickers(tickers){
 //    still gets auto-seeded on the very next Past Purchases re-render, since it
 //    was never in the seeded set before.
 // Only currently-held tickers are seeded -- planning a sale for a ticker with
-// zero units left wouldn't make sense. Returns true iff it added anything.
+// zero units left wouldn't make sense.
+//
+// v5.74: a SECOND pass (below the original first-ever-seeding one) keeps a
+// held ticker's PENDING units from ever going unrepresented later in the
+// table's life, not just at first seeding -- e.g. a ticker that was fully
+// planned/sold off (its draft row removed or realized-and-expired) and then
+// bought again. A ticker that still has at least one non-realized draft row
+// needs nothing here: that row's own "Units Pending Plan" already recomputes
+// upward for free on this same render (buildSalesStrategyRowsResolved reads
+// the ticker's live current holding every time), so adding a second row would
+// just be a redundant duplicate.
+//
+// Critically, "no current draft row" alone is NOT enough to add one back --
+// this function runs on EVERY Past Purchases re-render, including the very
+// render that just applied a user's own row removal, so a naive "no row +
+// still held -> add one" check would resurrect a deliberately-removed row
+// immediately, breaking the v5.70 guarantee that a removed row never comes
+// back on its own. So this tracks each ticker's holding "as of the last time
+// this ran" (salesStrategyLastSeenHeld, same self-healing-on-read/per-list
+// storage convention as salesStrategySeededTickers) and only adds a row when
+// CURRENT holding is actually HIGHER than that last-seen snapshot -- i.e. a
+// genuine new purchase happened, not just "a row is currently missing."
+// Removing a row while holding stays unchanged never trips this (same
+// snapshot, no increase detected); buying more after that removal does
+// (snapshot was taken at the lower pre-buy amount). A ticker never seen
+// before (no snapshot yet, e.g. an account upgrading from a pre-v5.74
+// version) gets its baseline set to its CURRENT holding with no row added
+// this round, rather than assuming the whole thing is "new" -- it only
+// starts getting flagged from the next genuine increase onward. The
+// snapshot is updated for every held ticker every run, whether or not a row
+// was added. Returns true iff either pass added anything.
 function syncSalesStrategyFromHoldings(){
   const breakdown = computePastPurchasesFifoLotBreakdown(getPastPurchasesRows(), getPastPurchasesParams());
   const heldTickers = Object.keys(breakdown).filter(t => breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS));
@@ -3292,7 +3422,27 @@ function syncSalesStrategyFromHoldings(){
   toSeed.forEach(t => { addSalesStrategyRow(t); seeded.add(t); });
 
   if(seeded.size !== seededSizeBefore) saveSalesStrategySeededTickers(Array.from(seeded));
-  return toSeed.length > 0;
+
+  // v5.74: re-check coverage for every held ticker NOT already freshly seeded
+  // above -- does it still have a non-realized draft row to show its pending
+  // units? If not, only add one when holding has genuinely risen since the
+  // last time this ran (see the long comment above for why).
+  let addedForCoverage = false;
+  const lastSeenHeld = getSalesStrategyLastSeenHeld();
+  const lastSeenChanged = {};
+  heldTickers.forEach(t => {
+    const stats = getSalesStrategyTickerStats(t);
+    if(!toSeed.includes(t)){ // a brand-new row above already covers this round
+      const hasDraftRow = getSalesStrategyRows().some(r => r.ticker === t && !r.saleRealizedDate);
+      const previouslySeen = Object.prototype.hasOwnProperty.call(lastSeenHeld, t);
+      const priorHeld = previouslySeen ? lastSeenHeld[t] : stats.totalHeld; // unseen ticker: baseline to "no change" rather than flagging it
+      if(!hasDraftRow && stats.totalHeld > priorHeld + PP_EPS){ addSalesStrategyRow(t); addedForCoverage = true; }
+    }
+    lastSeenChanged[t] = stats.totalHeld;
+  });
+  saveSalesStrategyLastSeenHeld({ ...lastSeenHeld, ...lastSeenChanged });
+
+  return toSeed.length > 0 || addedForCoverage;
 }
 
 function getPastPurchasesParams(){
@@ -4626,9 +4776,12 @@ function renderPastPurchasesTable(){
   // currently-held ticker it hasn't already seeded (or that the user removed) --
   // see syncSalesStrategyFromHoldings for why it's safe to call on every render.
   if(typeof syncSalesStrategyFromHoldings === "function") syncSalesStrategyFromHoldings();
-  // v5.69: Sales Strategy re-pulls Total Units Purchased/Sold, Units Left, and
-  // Average Purchase Price of Units Left from this SAME data on every Past
-  // Purchases re-render, so it never goes stale behind an edit made here.
+  // v5.69: Sales Strategy re-pulls Total Units Holding/Sold, Units Pending
+  // Plan, and Average Purchase Price of Units Left from this SAME data on
+  // every Past Purchases re-render, so it never goes stale behind an edit
+  // made here (v5.74: this is also where a held ticker gets a fresh draft
+  // row if newly-pending units have nothing currently showing them — see
+  // syncSalesStrategyFromHoldings, called just above).
   if(typeof renderSalesStrategyTable === "function") renderSalesStrategyTable();
 }
 
@@ -5148,9 +5301,9 @@ const SALES_STRATEGY_COLUMNS = [
   { id: "currentPrice", label: "Current Price" },
   { id: "unitsToSell", label: "Units to Sell" },
   { id: "sellingPrice", label: "Selling Price" },
-  { id: "totalPurchased", label: "Total Units Purchase (Current)" },
+  { id: "totalPurchased", label: "Total Units Holding" },
   { id: "totalSold", label: "Total Units Sold" },
-  { id: "unitsLeft", label: "Units Left" },
+  { id: "unitsLeft", label: "Units Pending Plan" },
   { id: "avgPurchasePriceOfUnitsLeft", label: "Average Purchase Price of Units Left" },
   { id: "saleRealizedDate", label: "Sale Realized Date" },
 ];
@@ -5329,7 +5482,7 @@ function renderSalesStrategyCellHTML(colId, r){
       return `<td>${ppFmtNum(r.totalSold)}</td>`;
     case "unitsLeft": {
       const overCommittedTitle = r.overCommitted
-        ? ` title="Other pending draft rows for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
+        ? ` title="This row and every row before it for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
         : "";
       const unitsLeftColor = r.overCommitted ? "#ef4444" : "var(--text-primary)";
       return `<td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>`;
@@ -5385,6 +5538,13 @@ function renderSalesStrategyRowHTML(r, idx, total){
 function renderSalesStrategyTable(){
   const container = document.getElementById("ssTableContent");
   if(!container) return; // section not present in this build/test harness
+
+  // v5.74: keep the "Display" range <select> (outside this re-rendered
+  // container, so it survives every render untouched) showing whatever's
+  // actually stored — same convention as ppCostBasisSelect in
+  // renderPastPurchasesTable. Its own change handler is wired once, elsewhere.
+  const displayRangeSelect = document.getElementById("ssDisplayRangeSelect");
+  if(displayRangeSelect) displayRangeSelect.value = getSsDisplayRangeId();
 
   const resolvedRows = buildSalesStrategyRowsResolved();
   lastSalesStrategyResolvedRows = resolvedRows;
@@ -6004,9 +6164,10 @@ function buildSalesStrategyExportTable(){
 // Sales Strategy's own "Sample Excel for Data Entry" / "Import Excel" (v5.71) —
 // same round-trippable companion idea as buildSampleExcelForDataEntry_PastPurchases
 // below, scoped to Sales Strategy's only two typed-in fields (Units to Sell,
-// Selling Price): Current Price/Total Purchased/Total Sold/Units Left/Average
-// Purchase Price of Units Left are all derived fresh on every render, nothing to
-// fill in for those. Only not-yet-realized (still-draft, still-editable) rows are
+// Selling Price): Current Price/Total Units Holding/Total Sold/Units Pending
+// Plan/Average Purchase Price of Units Left are all derived fresh on every
+// render, nothing to fill in for those. Only not-yet-realized (still-draft,
+// still-editable) rows are
 // included — a realized row is locked and done, there's nothing left to edit.
 function buildSampleExcelForDataEntry_SalesStrategy(){
   const headers = ["Ticker", "Units to Sell", "Selling Price"];
@@ -8005,6 +8166,26 @@ try{
     ppCostBasisSelect.addEventListener("change", () => {
       setPpCostBasisMethod(ppCostBasisSelect.value);
       renderPastPurchasesTable();
+    });
+  }
+
+  // v5.74: the "Display" range control above the Sales Strategy table —
+  // how long a completed sale stays visible before dropping off (see
+  // getSsDisplayRangeDays/isSalesStrategyRowExpired).
+  const ssDisplayRangeSelect = document.getElementById("ssDisplayRangeSelect");
+  if(ssDisplayRangeSelect){
+    if(ssDisplayRangeSelect.options.length === 0){
+      SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.forEach(opt => {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt.id;
+        optionEl.textContent = opt.label;
+        ssDisplayRangeSelect.appendChild(optionEl);
+      });
+    }
+    ssDisplayRangeSelect.value = getSsDisplayRangeId();
+    ssDisplayRangeSelect.addEventListener("change", () => {
+      saveSsDisplayRangeId(ssDisplayRangeSelect.value);
+      renderSalesStrategyTable();
     });
   }
 
