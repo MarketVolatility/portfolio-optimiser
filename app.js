@@ -1,4 +1,35 @@
-// APP.JS BUILD: v5.68 (Renamed the Lot Matching table's "Total Current Book
+// APP.JS BUILD: v5.69 (Added a new "Sales Strategy" section below Past
+// Purchases: plan a future sale of a ticker already on the active Past
+// Purchases list without touching real purchase/sale history yet. Pick a
+// ticker and "+ Add Row", enter Units to Sell and a Selling Price; the ticker
+// cell's "Dup" button adds another draft row for the same ticker directly
+// below it (same ticker, Units to Sell/Selling Price start blank) so one
+// holding can be planned as several batches at different prices. Every row
+// pulls Current Price, Total Units Purchased, and Total Units Sold fresh from
+// the real Past Purchases data on every render (computePastPurchasesFifoLot
+// Breakdown — the same FIFO engine the Lot Matching table uses), and computes:
+//   - Units Left = Total Units Purchased - Total Units Sold - Units to Sell
+//     already planned in every OTHER still-pending draft row for that ticker
+//     (a row's OWN Units to Sell is deliberately not subtracted — Units Left
+//     is the ceiling for what THIS row can still plan against). A realized
+//     sibling row is excluded from that subtraction (its effect already
+//     landed in Total Units Sold via the real sale it created), and an
+//     over-committed ticker (other rows alone already exceed what's held)
+//     floors Units Left at 0 and is flagged in red.
+//   - Average Purchase Price of Units Left = the FIFO-blended cost of
+//     whichever lots would remain after those other rows' units are consumed
+//     oldest-first — "—" when nothing would be left.
+// "Confirm Sale" opens a popup (date defaults to today) — confirming adds a
+// REAL sale row to the Lot Matching table above (via the same per-ticker
+// "Sell" helper its own Sell button uses) with this row's Units to
+// Sell/Selling Price/the confirmed date, then re-renders Past Purchases/Lot
+// Matching/Current Holding so every total updates. The draft row then locks
+// (green checkmark + date, inputs disabled, Dup/remove hidden) and can't be
+// realized again. New draft rows live alongside each Past Purchases list's
+// own rows (own array, same object) so they ride along on its existing cloud
+// sync for free.)
+//
+// v5.68 (Renamed the Lot Matching table's "Total Current Book
 // Value" footer row to "Total current market and book value", and it now carries
 // TWO totals side by side instead of one — the existing Book Value total, plus a
 // new Current Market Value total — each sitting under its own column, so neither
@@ -257,7 +288,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.68 (Lot Matching footer: renamed to \"Total current market and book value\", now shows Book Value + Current Market Value totals)");
+console.log("app.js loaded — build v5.69 (added a Sales Strategy section below Past Purchases — plan, batch, and confirm future sales)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -809,6 +840,10 @@ let lastPastPurchasesOrderedRows = [];
 // exports use for their row data, while lastPastPurchasesOrderedRows above (the
 // FULL list) is what footer totals are always computed from.
 let lastPastPurchasesVisibleRows = [];
+// Same idea for Sales Strategy — the last fully-resolved (Current Price/Units
+// Left/etc. already computed) set of draft rows, kept up to date by
+// renderSalesStrategyTable() for anything that wants to read what's on screen.
+let lastSalesStrategyResolvedRows = [];
 
 function getSavedApiKey(){
   try{ return localStorage.getItem("finnhubApiKey") || ""; }
@@ -2778,6 +2813,10 @@ function getAllPastPurchasesLists(){
   Object.values(lists).forEach(l => {
     if(!Array.isArray(l.rows)){ l.rows = []; changed = true; }
     if(typeof l.name !== "string" || !l.name){ l.name = "List 1"; changed = true; }
+    // v5.69: "Sales Strategy" draft rows live alongside a list's real purchase/
+    // sale rows (same list, own array) — defaults to [] for every pre-existing
+    // list/account, same self-healing convention as `rows` above.
+    if(!Array.isArray(l.salesStrategy)){ l.salesStrategy = []; changed = true; }
   });
   if(changed) saveAllPastPurchasesLists(lists);
 
@@ -2810,7 +2849,7 @@ function getActivePastPurchasesList(){
   const lists = getAllPastPurchasesLists();
   const id = getActivePastPurchasesListId();
   if(!lists[id]){
-    lists[id] = { name: "List 1", rows: [] };
+    lists[id] = { name: "List 1", rows: [], salesStrategy: [] };
     saveAllPastPurchasesLists(lists);
   }
   return lists[id];
@@ -2819,7 +2858,7 @@ function getActivePastPurchasesList(){
 function updateActivePastPurchasesList(mutatorFn){
   const lists = getAllPastPurchasesLists();
   const id = getActivePastPurchasesListId();
-  if(!lists[id]) lists[id] = { name: "List 1", rows: [] };
+  if(!lists[id]) lists[id] = { name: "List 1", rows: [], salesStrategy: [] };
   mutatorFn(lists[id]);
   saveAllPastPurchasesLists(lists);
 }
@@ -2831,7 +2870,7 @@ function createPastPurchasesList(name){
   // the new PP-to-PP "Import list" feature makes slightly more likely to matter
   // (creating a source and a target list back-to-back).
   const id = "pp-list-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
-  lists[id] = { name: name || "New List", rows: [] };
+  lists[id] = { name: name || "New List", rows: [], salesStrategy: [] };
   saveAllPastPurchasesLists(lists);
   setActivePastPurchasesListId(id);
   return id;
@@ -2853,7 +2892,7 @@ function deleteActivePastPurchasesList(){
   delete lists[id];
   const remainingIds = Object.keys(lists);
   if(remainingIds.length === 0){
-    lists[DEFAULT_PP_LIST_ID] = { name: "List 1", rows: [] };
+    lists[DEFAULT_PP_LIST_ID] = { name: "List 1", rows: [], salesStrategy: [] };
     saveAllPastPurchasesLists(lists);
     setActivePastPurchasesListId(DEFAULT_PP_LIST_ID);
   } else {
@@ -2867,6 +2906,168 @@ function getPastPurchasesRows(){
 }
 function savePastPurchasesRows(rows){
   updateActivePastPurchasesList(list => { list.rows = rows; });
+}
+
+// --- Sales Strategy (v5.69): draft, not-yet-real planned sales for tickers
+// already on this Past Purchases list. Lives alongside `rows` on the SAME
+// active list (own array, same object), so switching Past Purchases list also
+// switches which draft sale plan is shown, and it rides along for free on the
+// existing pastPurchasesLists cloud sync (no new SYNC_KEYS entry needed). A
+// draft row touches nothing in the real purchase/sale data until its "Confirm
+// Sale" button is used (see realizeSalesStrategyRow below) — until then it's
+// pure what-if planning, re-pulling Current Price/Total Purchased/Total Sold/
+// Units Left/Average Purchase Price of Units Left fresh on every render.
+function getSalesStrategyRows(){
+  return getActivePastPurchasesList().salesStrategy || [];
+}
+function saveSalesStrategyRows(rows){
+  updateActivePastPurchasesList(list => { list.salesStrategy = rows; });
+}
+function addSalesStrategyRow(ticker){
+  const t = String(ticker || "").trim().toUpperCase();
+  if(!t) return null;
+  const rows = getSalesStrategyRows();
+  const id = "ss_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+  rows.push({ id, ticker: t, unitsToSell: 0, sellingPrice: 0, dateAdded: Date.now(), saleRealizedDate: null, realizedSaleRowId: null });
+  saveSalesStrategyRows(rows);
+  return id;
+}
+// The Ticker cell's "Dup" button: inserts a new draft row directly below this
+// one, same ticker — the quick way to plan selling the same holding in several
+// batches (different Units to sell / Selling Price per row) without re-picking
+// the ticker from the dropdown each time. The pulled-in columns (Current Price,
+// Total Units Purchased, Total Units Sold, Units Left, Average Purchase Price
+// of Units Left) are always computed fresh on render regardless; only
+// Units to sell / Selling Price are copyable "seed" values, and per the spec
+// they start blank (0) on the duplicate — it's a new batch, not a repeat of
+// the same one.
+function duplicateSalesStrategyRow(id){
+  const rows = getSalesStrategyRows();
+  const idx = rows.findIndex(r => r.id === id);
+  if(idx === -1) return null;
+  const newId = "ss_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+  const dup = { id: newId, ticker: rows[idx].ticker, unitsToSell: 0, sellingPrice: 0, dateAdded: Date.now(), saleRealizedDate: null, realizedSaleRowId: null };
+  rows.splice(idx + 1, 0, dup);
+  saveSalesStrategyRows(rows);
+  return newId;
+}
+function removeSalesStrategyRow(id){
+  saveSalesStrategyRows(getSalesStrategyRows().filter(r => r.id !== id));
+}
+function setSalesStrategyValue(id, field, value){
+  const rows = getSalesStrategyRows();
+  const row = rows.find(r => r.id === id);
+  if(!row || row.saleRealizedDate) return; // locked once realized
+  row[field] = value;
+  saveSalesStrategyRows(rows);
+}
+
+// FIFO-consumes `consumeQty` off the FRONT (oldest-first) of `lots`
+// ([{price, qty}, ...], already oldest-first) and returns the weighted-average
+// price of whatever's left, plus that remaining quantity — same oldest-first
+// convention as every other FIFO computation in this app (computePastPurchases
+// FifoLotBreakdown above). Used to work out, for one Sales Strategy row, what
+// the blended cost of its ticker's remaining holding would be AFTER every
+// OTHER still-pending draft row for that ticker takes its planned units first.
+function fifoConsumeFromFront(lots, consumeQty){
+  let left = Math.max(0, consumeQty);
+  let remainingQty = 0, remainingCost = 0;
+  lots.forEach(lot => {
+    let qty = lot.qty;
+    if(left > PP_EPS){
+      const take = Math.min(qty, left);
+      qty -= take;
+      left -= take;
+    }
+    if(qty > PP_EPS){ remainingQty += qty; remainingCost += qty * lot.price; }
+  });
+  return { remainingQty, avgPrice: remainingQty > PP_EPS ? remainingCost / remainingQty : 0 };
+}
+
+// Per-ticker Total Units Purchased / Total Units Sold / still-held FIFO lots
+// (oldest-first), derived from the SAME FIFO engine as the Lot Matching table
+// (computePastPurchasesFifoLotBreakdown) so Sales Strategy can never disagree
+// with it: every match row is sold units, every unmatched row is still-held
+// units, and purchased = sold + held.
+function getSalesStrategyTickerStats(ticker){
+  const t = String(ticker || "").trim().toUpperCase();
+  const breakdown = computePastPurchasesFifoLotBreakdown(getPastPurchasesRows(), getPastPurchasesParams());
+  const b = breakdown[t] || { matches: [], unmatched: [] };
+  const totalSold = b.matches.reduce((sum, m) => sum + m.qty, 0);
+  const heldLots = b.unmatched.map(u => ({ price: u.buyPrice, qty: u.qty })); // already oldest-first
+  const totalHeld = heldLots.reduce((sum, l) => sum + l.qty, 0);
+  return { totalPurchased: totalSold + totalHeld, totalSold, totalHeld, heldLots };
+}
+
+// Fully resolves every Sales Strategy row into exactly what the table should
+// show — Current Price, Total Units Purchased/Sold, Units Left, and Average
+// Purchase Price of Units Left — WITHOUT touching the DOM, so this is also what
+// the tests exercise directly. "Units Left" and the average price it implies
+// both account for every OTHER still-pending (not yet realized) draft row for
+// the same ticker, per the spec's own formula; a row's OWN Units to sell is
+// deliberately NOT subtracted (Units Left is the ceiling for what THIS row can
+// still plan against, not what remains after it).
+function buildSalesStrategyRowsResolved(){
+  const rows = getSalesStrategyRows();
+  const statsByTicker = {};
+  rows.forEach(r => { if(!statsByTicker[r.ticker]) statsByTicker[r.ticker] = getSalesStrategyTickerStats(r.ticker); });
+  return rows.map(row => {
+    const stats = statsByTicker[row.ticker] || { totalPurchased: 0, totalSold: 0, totalHeld: 0, heldLots: [] };
+    const otherPendingUnits = rows.reduce((sum, r) => {
+      if(r.id === row.id || r.ticker !== row.ticker || r.saleRealizedDate) return sum;
+      return sum + (Number(r.unitsToSell) || 0);
+    }, 0);
+    const { remainingQty, avgPrice } = fifoConsumeFromFront(stats.heldLots, otherPendingUnits);
+    const builtin = getResolvedBuiltinAssetValues(row.ticker);
+    const currentPrice = builtin ? (Number(builtin.currentPrice) || 0) : null;
+    return {
+      id: row.id,
+      ticker: row.ticker,
+      unitsToSell: Number(row.unitsToSell) || 0,
+      sellingPrice: Number(row.sellingPrice) || 0,
+      currentPrice,
+      totalPurchased: stats.totalPurchased,
+      totalSold: stats.totalSold,
+      unitsLeft: remainingQty, // = stats.totalHeld - otherPendingUnits, floored at 0 by fifoConsumeFromFront
+      avgPurchasePriceOfUnitsLeft: avgPrice,
+      overCommitted: otherPendingUnits > stats.totalHeld + PP_EPS,
+      saleRealizedDate: row.saleRealizedDate,
+      realizedSaleRowId: row.realizedSaleRowId,
+    };
+  });
+}
+
+// The "Confirm Sale" button's action: turns a draft row into a REAL sale on the
+// active Past Purchases list — adds a new sale row for the ticker (same helper
+// the Lot Matching table's own per-ticker "Sell" button uses, so it also seeds
+// a "Units Sold" column if this list doesn't have one yet), fills it with this
+// row's Units to sell / Selling Price / the confirmed date, then locks the
+// draft row (green, read-only) and points it at the real row it created.
+// Returns false (no-op) if there's nothing sensible to realize (no units) or
+// the row is already realized.
+function realizeSalesStrategyRow(id, dateStr){
+  const rows = getSalesStrategyRows();
+  const row = rows.find(r => r.id === id);
+  if(!row || row.saleRealizedDate) return false;
+  const units = Number(row.unitsToSell) || 0;
+  if(units <= 0) return false;
+  const price = Number(row.sellingPrice) || 0;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateStr || "") ? dateStr : new Date().toISOString().slice(0, 10);
+
+  const newRowId = addPastPurchaseSaleRowForTicker(row.ticker);
+  if(!newRowId) return false;
+  const params = getPastPurchasesParams(); // re-fetch: addPastPurchaseSaleRowForTicker may have just added "Units Sold"
+  const soldP = ppFindParamByLabel(params, "units sold");
+  const sellP = ppFindParamByLabel(params, "selling price");
+  const dateSaleP = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
+  if(soldP) setPastPurchaseValue(newRowId, soldP.id, units);
+  if(sellP) setPastPurchaseValue(newRowId, sellP.id, price);
+  if(dateSaleP) setPastPurchaseValue(newRowId, dateSaleP.id, date);
+
+  row.saleRealizedDate = date;
+  row.realizedSaleRowId = newRowId;
+  saveSalesStrategyRows(rows);
+  return true;
 }
 
 function getPastPurchasesParams(){
@@ -4195,6 +4396,11 @@ function renderPastPurchasesTable(){
   syncCurrentHoldingsList();
 
   renderPastPurchasesLotMatchBreakdown(params, orderedRows);
+
+  // v5.69: Sales Strategy re-pulls Total Units Purchased/Sold, Units Left, and
+  // Average Purchase Price of Units Left from this SAME data on every Past
+  // Purchases re-render, so it never goes stale behind an edit made here.
+  if(typeof renderSalesStrategyTable === "function") renderSalesStrategyTable();
 }
 
 // v5.64: works out what EVERY current Past Purchases column should show for one
@@ -4687,6 +4893,195 @@ function renderFifoLotMatchFooter(params, fragments){
   }
 
   return footHtml;
+}
+
+// --- Sales Strategy (v5.69) ---
+// Draft, what-if sale planning for tickers already on the active Past
+// Purchases list — see the big comment above getSalesStrategyRows for the data
+// model. Rendered into #ssTableContent, same table/th/td/.cell-input styling
+// as the Lot Matching table above it (no separate CSS needed — it's the same
+// global `table`/`.table-container` rules), below the Past Purchases section.
+const SALES_STRATEGY_HEADER_HTML = `
+  <th>Ticker</th>
+  <th>Current Price</th>
+  <th>Units to Sell</th>
+  <th>Selling Price</th>
+  <th>Total Units Purchased</th>
+  <th>Total Units Sold</th>
+  <th>Units Left</th>
+  <th>Average Purchase Price of Units Left</th>
+  <th>Sale Realized Date</th>
+`;
+const SALES_STRATEGY_COLUMN_COUNT = 9;
+
+function renderSalesStrategyRowHTML(r){
+  const disabled = r.saleRealizedDate ? "disabled" : "";
+  const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
+  const overCommittedTitle = r.overCommitted
+    ? ` title="Other pending draft rows for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
+    : "";
+  const unitsLeftColor = r.overCommitted ? "#ef4444" : "var(--text-primary)";
+  const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
+  const overOwnInput = (!r.saleRealizedDate && r.unitsToSell > r.unitsLeft + PP_EPS) ? ' style="border-color:#ef4444;"' : "";
+
+  const tickerCell = r.saleRealizedDate
+    ? `<td style="font-weight:600;">${escHtml(r.ticker)}</td>`
+    : `<td>
+        <div style="font-weight:600;">${escHtml(r.ticker)}</div>
+        <div class="row-ctrl-controls">
+          <button type="button" class="ss-dup-btn row-ctrl-btn" data-row-id="${r.id}" title="Duplicate this row below, same ticker — plan selling another batch at a different price" style="width:auto; padding:0 0.5rem; font-size:0.7rem;">Dup</button>
+          <button type="button" class="ss-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.ticker)}" title="Remove this draft row — it was never a real sale">&times;</button>
+        </div>
+      </td>`;
+  const saleCell = r.saleRealizedDate
+    ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real sale row on the Lot Matching table above.">&#10003; ${escHtml(r.saleRealizedDate)}</span></td>`
+    : `<td><button type="button" class="ss-confirm-btn tab-btn" data-row-id="${r.id}" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Confirm Sale</button></td>`;
+
+  return `<tr>
+    ${tickerCell}
+    <td>${priceText}</td>
+    <td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="unitsToSell" type="number" step="1" value="${r.unitsToSell}" ${disabled}${overOwnInput}></td>
+    <td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="sellingPrice" type="number" step="0.01" value="${r.sellingPrice}" ${disabled}></td>
+    <td>${ppFmtNum(r.totalPurchased)}</td>
+    <td>${ppFmtNum(r.totalSold)}</td>
+    <td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>
+    <td>${avgPriceText}</td>
+    ${saleCell}
+  </tr>`;
+}
+
+function renderSalesStrategyTable(){
+  const container = document.getElementById("ssTableContent");
+  if(!container) return; // section not present in this build/test harness
+
+  // Keep the "add a new draft row" ticker dropdown in step with whichever
+  // tickers are actually on the active Past Purchases list right now.
+  const tickerSelect = document.getElementById("ssNewTicker");
+  if(tickerSelect){
+    const tickers = getPastPurchaseTickerOrder();
+    const prevValue = tickerSelect.value;
+    tickerSelect.innerHTML = tickers.length
+      ? tickers.map(t => `<option value="${escAttr(t)}">${escHtml(t)}</option>`).join("")
+      : `<option value="">No tickers on this list yet</option>`;
+    if(tickers.includes(prevValue)) tickerSelect.value = prevValue;
+  }
+
+  const resolvedRows = buildSalesStrategyRowsResolved();
+  lastSalesStrategyResolvedRows = resolvedRows;
+
+  const bodyHtml = resolvedRows.length === 0
+    ? `<tr><td colspan="${SALES_STRATEGY_COLUMN_COUNT}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No draft sales yet — pick a ticker above and click "+ Add Row" to plan one.</td></tr>`
+    : resolvedRows.map(renderSalesStrategyRowHTML).join("");
+
+  container.innerHTML = `<div class="table-container"><table><thead><tr>${SALES_STRATEGY_HEADER_HTML}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+  wireSalesStrategyEditing(container);
+}
+
+// Small modal (same self-built overlay pattern as
+// showPastPurchasesImportConflictDialog) asking which date the sale actually
+// happened on, defaulting to today. Resolves the chosen "YYYY-MM-DD" string, or
+// null if cancelled (Escape or the Cancel button) — the caller treats null as
+// "don't realize anything."
+function showSaleRealizedConfirmDialog(resolvedRow){
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; padding:16px;";
+    const panel = document.createElement("div");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; width:100%; max-width:420px; color:var(--text-primary);";
+    const today = new Date().toISOString().slice(0, 10);
+    panel.innerHTML = `
+      <h3 style="margin:0 0 0.5rem; color:#facc15; font-size:1.1rem;">Confirm sale of ${escHtml(resolvedRow.ticker)}</h3>
+      <div style="color:var(--text-secondary); font-size:0.9rem; line-height:1.5; margin-bottom:0.9rem;">
+        This adds a real sale row to the Lot Matching table above: <strong>${ppFmtNum(resolvedRow.unitsToSell)}</strong> unit(s) of <strong>${escHtml(resolvedRow.ticker)}</strong> at <strong>$${Number(resolvedRow.sellingPrice).toFixed(2)}</strong>. Pick the date this sale actually happened.
+      </div>
+      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:1rem;">Sale date
+        <input type="date" id="ssConfirmDateInput" class="form-input" value="${today}">
+      </label>
+      <div style="display:flex; gap:0.6rem; justify-content:flex-end;">
+        <button type="button" class="tab-btn" data-final="cancel">Cancel</button>
+        <button type="button" data-final="confirm" style="padding:0.6rem 1.4rem;">Confirm Sale</button>
+      </div>`;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const dateInput = panel.querySelector("#ssConfirmDateInput");
+    const finish = (value) => { document.removeEventListener("keydown", onKey); overlay.remove(); resolve(value); };
+    const onKey = (e) => { if(e.key === "Escape") finish(null); };
+    document.addEventListener("keydown", onKey);
+    panel.querySelector('[data-final="cancel"]').addEventListener("click", () => finish(null));
+    panel.querySelector('[data-final="confirm"]').addEventListener("click", () => finish(dateInput.value || today));
+  });
+}
+
+function wireSalesStrategyEditing(container){
+  if(!container) return;
+
+  container.querySelectorAll(".ss-input").forEach(el => {
+    el.addEventListener("change", (e) => {
+      const id = e.target.getAttribute("data-row-id");
+      const field = e.target.getAttribute("data-field");
+      let value = parseFloat(e.target.value);
+      if(isNaN(value)) value = 0;
+      setSalesStrategyValue(id, field, value);
+      renderSalesStrategyTable();
+    });
+    el.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); el.blur(); } });
+  });
+
+  container.querySelectorAll(".ss-dup-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      duplicateSalesStrategyRow(btn.getAttribute("data-row-id"));
+      renderSalesStrategyTable();
+    });
+  });
+
+  container.querySelectorAll(".ss-remove-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ticker = btn.getAttribute("data-ticker");
+      if(confirm(`Remove this draft "${ticker}" sale plan row? This only removes the plan — it was never a real sale.`)){
+        removeSalesStrategyRow(btn.getAttribute("data-row-id"));
+        renderSalesStrategyTable();
+      }
+    });
+  });
+
+  container.querySelectorAll(".ss-confirm-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-row-id");
+      const resolvedRow = buildSalesStrategyRowsResolved().find(r => r.id === id);
+      if(!resolvedRow) return;
+      if(resolvedRow.unitsToSell <= 0){
+        alert("Enter how many units to sell (greater than 0) before confirming the sale.");
+        return;
+      }
+      const dateStr = await showSaleRealizedConfirmDialog(resolvedRow);
+      if(!dateStr) return; // cancelled
+      realizeSalesStrategyRow(id, dateStr);
+      // Realizing a draft touches the REAL Past Purchases data (a new sale row),
+      // so re-render from there — it cascades into Lot Matching, the footer
+      // totals, Current Holding, and this table too (see the hook at the end of
+      // renderPastPurchasesTable above).
+      renderPastPurchasesTable();
+    });
+  });
+}
+
+function wireUpSalesStrategyAddRow(){
+  const addBtn = document.getElementById("ssAddRowBtn");
+  const statusEl = document.getElementById("ssAddRowStatus");
+  if(!addBtn) return;
+  addBtn.addEventListener("click", () => {
+    const sel = document.getElementById("ssNewTicker");
+    const ticker = sel ? sel.value : "";
+    if(!ticker){
+      if(statusEl){ statusEl.textContent = "Add a ticker to Past Purchases first."; statusEl.style.color = "var(--amber)"; }
+      return;
+    }
+    addSalesStrategyRow(ticker);
+    renderSalesStrategyTable();
+    if(statusEl){ statusEl.textContent = `Added a draft sale row for ${ticker}.`; statusEl.style.color = "var(--emerald)"; }
+  });
 }
 
 // --- Export: Excel / Text / PDF, for both tables ---
@@ -7156,6 +7551,13 @@ try{
   wireUpSampleAndImportExcelButtons();
 }catch(err){
   console.error("Failed to wire up Sample Excel / Import Excel buttons:", err);
+}
+
+try{
+  wireUpSalesStrategyAddRow();
+  renderSalesStrategyTable();
+}catch(err){
+  console.error("Failed to wire up the Sales Strategy table:", err);
 }
 
 try{
