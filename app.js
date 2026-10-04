@@ -1,4 +1,20 @@
-// APP.JS BUILD: v5.69 (Added a new "Sales Strategy" section below Past
+// APP.JS BUILD: v5.70 (The "Sales Strategy" table no longer starts
+// empty — it now auto-populates with one draft row for every ticker
+// currently held on the active Past Purchases list (at least one still-unsold
+// unit), so there's always something to look at without first clicking
+// "+ Add Row". Runs automatically on every Past Purchases re-render (so a
+// fresh page load, not just a later edit, already shows it) via a new
+// syncSalesStrategyFromHoldings(), which tracks which tickers have already
+// been auto-seeded (a new salesStrategySeededTickers array stored alongside
+// a list's own rows/salesStrategy, same self-healing-on-read convention) so
+// that: a row the user deliberately removes is never silently re-added later;
+// a pre-existing install's manually-added rows are folded into the seeded set
+// the first time this runs rather than duplicated; and a ticker bought for
+// the first time gets its own draft row on the very next render. A ticker
+// that's been fully sold off is never auto-seeded — only currently-held
+// tickers are. Updated the Sales Strategy disclaimer box to mention this.)
+//
+// v5.69 (Added a new "Sales Strategy" section below Past
 // Purchases: plan a future sale of a ticker already on the active Past
 // Purchases list without touching real purchase/sale history yet. Pick a
 // ticker and "+ Add Row", enter Units to Sell and a Selling Price; the ticker
@@ -288,7 +304,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.69 (added a Sales Strategy section below Past Purchases — plan, batch, and confirm future sales)");
+console.log("app.js loaded — build v5.70 (Sales Strategy now auto-populates a draft row for every currently-held ticker instead of starting empty)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2817,6 +2833,10 @@ function getAllPastPurchasesLists(){
     // sale rows (same list, own array) — defaults to [] for every pre-existing
     // list/account, same self-healing convention as `rows` above.
     if(!Array.isArray(l.salesStrategy)){ l.salesStrategy = []; changed = true; }
+    // v5.70: tracks which held tickers have already been auto-seeded into Sales
+    // Strategy, so the table starts populated on first use but a row the user
+    // deliberately removes is never silently re-added on the next render.
+    if(!Array.isArray(l.salesStrategySeededTickers)){ l.salesStrategySeededTickers = []; changed = true; }
   });
   if(changed) saveAllPastPurchasesLists(lists);
 
@@ -2849,7 +2869,7 @@ function getActivePastPurchasesList(){
   const lists = getAllPastPurchasesLists();
   const id = getActivePastPurchasesListId();
   if(!lists[id]){
-    lists[id] = { name: "List 1", rows: [], salesStrategy: [] };
+    lists[id] = { name: "List 1", rows: [], salesStrategy: [], salesStrategySeededTickers: [] };
     saveAllPastPurchasesLists(lists);
   }
   return lists[id];
@@ -2858,7 +2878,7 @@ function getActivePastPurchasesList(){
 function updateActivePastPurchasesList(mutatorFn){
   const lists = getAllPastPurchasesLists();
   const id = getActivePastPurchasesListId();
-  if(!lists[id]) lists[id] = { name: "List 1", rows: [], salesStrategy: [] };
+  if(!lists[id]) lists[id] = { name: "List 1", rows: [], salesStrategy: [], salesStrategySeededTickers: [] };
   mutatorFn(lists[id]);
   saveAllPastPurchasesLists(lists);
 }
@@ -2870,7 +2890,7 @@ function createPastPurchasesList(name){
   // the new PP-to-PP "Import list" feature makes slightly more likely to matter
   // (creating a source and a target list back-to-back).
   const id = "pp-list-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
-  lists[id] = { name: name || "New List", rows: [], salesStrategy: [] };
+  lists[id] = { name: name || "New List", rows: [], salesStrategy: [], salesStrategySeededTickers: [] };
   saveAllPastPurchasesLists(lists);
   setActivePastPurchasesListId(id);
   return id;
@@ -2892,7 +2912,7 @@ function deleteActivePastPurchasesList(){
   delete lists[id];
   const remainingIds = Object.keys(lists);
   if(remainingIds.length === 0){
-    lists[DEFAULT_PP_LIST_ID] = { name: "List 1", rows: [], salesStrategy: [] };
+    lists[DEFAULT_PP_LIST_ID] = { name: "List 1", rows: [], salesStrategy: [], salesStrategySeededTickers: [] };
     saveAllPastPurchasesLists(lists);
     setActivePastPurchasesListId(DEFAULT_PP_LIST_ID);
   } else {
@@ -3068,6 +3088,47 @@ function realizeSalesStrategyRow(id, dateStr){
   row.realizedSaleRowId = newRowId;
   saveSalesStrategyRows(rows);
   return true;
+}
+
+function getSalesStrategySeededTickers(){
+  return getActivePastPurchasesList().salesStrategySeededTickers || [];
+}
+function saveSalesStrategySeededTickers(tickers){
+  updateActivePastPurchasesList(list => { list.salesStrategySeededTickers = tickers; });
+}
+
+// v5.70: makes sure the Sales Strategy table is never left empty to start --
+// auto-adds one draft row for every ticker currently held on this Past
+// Purchases list (at least one still-unsold/unmatched FIFO unit) that has never
+// had a Sales Strategy row before. Tracks "already seeded" tickers, rather than
+// just looking at which tickers currently have a row, so that:
+//  - removing an auto-seeded row never brings it back on the next render/reload
+//    (once seeded, a ticker stays considered seeded whether or not a row for it
+//    still exists);
+//  - a pre-existing (e.g. v5.69) install's manual rows are never duplicated --
+//    every ticker that already has ANY row, seeded by this or added by hand, is
+//    folded into the seeded set before any new rows get added;
+//  - a ticker bought for the first time after this list already has draft rows
+//    still gets auto-seeded on the very next Past Purchases re-render, since it
+//    was never in the seeded set before.
+// Only currently-held tickers are seeded -- planning a sale for a ticker with
+// zero units left wouldn't make sense. Returns true iff it added anything.
+function syncSalesStrategyFromHoldings(){
+  const breakdown = computePastPurchasesFifoLotBreakdown(getPastPurchasesRows(), getPastPurchasesParams());
+  const heldTickers = Object.keys(breakdown).filter(t => breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS));
+
+  const existingRows = getSalesStrategyRows();
+  const seeded = new Set(getSalesStrategySeededTickers());
+  const seededSizeBefore = seeded.size;
+  // Fold in every ticker that already has a row (manually added or previously
+  // seeded) so it's never mistaken for "new" and never duplicated.
+  existingRows.forEach(r => seeded.add(r.ticker));
+
+  const toSeed = heldTickers.filter(t => !seeded.has(t));
+  toSeed.forEach(t => { addSalesStrategyRow(t); seeded.add(t); });
+
+  if(seeded.size !== seededSizeBefore) saveSalesStrategySeededTickers(Array.from(seeded));
+  return toSeed.length > 0;
 }
 
 function getPastPurchasesParams(){
@@ -4397,6 +4458,10 @@ function renderPastPurchasesTable(){
 
   renderPastPurchasesLotMatchBreakdown(params, orderedRows);
 
+  // v5.70: before drawing it, make sure Sales Strategy has a draft row for every
+  // currently-held ticker it hasn't already seeded (or that the user removed) --
+  // see syncSalesStrategyFromHoldings for why it's safe to call on every render.
+  if(typeof syncSalesStrategyFromHoldings === "function") syncSalesStrategyFromHoldings();
   // v5.69: Sales Strategy re-pulls Total Units Purchased/Sold, Units Left, and
   // Average Purchase Price of Units Left from this SAME data on every Past
   // Purchases re-render, so it never goes stale behind an edit made here.
