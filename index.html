@@ -249,7 +249,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.70 — The "Sales Strategy" table now auto-populates a draft row for every currently-held ticker instead of starting empty.
+      Version v5.71 — Sales Strategy now has the same Sample/Import/Export Excel/Text/Word/PDF buttons as Past Purchases, plus per-column sort buttons and ↑ ↓ row-reorder in its ticker cell.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -541,8 +541,20 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Sales Strategy</h2>
   </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
+    <button id="ssSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft (not yet realized) Sales Strategy row, with Ticker/Units to Sell/Selling Price as columns, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="ssImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Sales Strategy table. Each line becomes its own new draft row (two lines for the same ticker are separate batches, not a conflict); a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
+    <input id="ssImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="ssExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <button id="ssExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="ssExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="ssExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="ssExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+  </div>
   <div class="disclaimer">
-    This table starts already populated — every currently-held ticker on this Past Purchases list gets its own draft row automatically, with no "+ Add Row" click needed. Plan a sale of a ticker already on this Past Purchases list without touching your real holdings yet. Pick a ticker below and <strong>+ Add Row</strong>, then enter <strong>Units to Sell</strong> and a <strong>Selling Price</strong> — use the ticker cell's <strong>Dup</strong> button to add another row for the same ticker if you want to sell it off in separate batches at different prices. <strong>Units Left</strong> = Total Units Purchased − Total Units Sold − Units to Sell already planned in every OTHER still-pending row for that ticker; <strong>Average Purchase Price of Units Left</strong> is the FIFO cost of whichever lots would remain after those other rows. Nothing here is real until you click <strong>Confirm Sale</strong> and pick the date — that adds a real sale row to the Lot Matching table above and updates every table and total that depends on it. A confirmed row is locked and shown in green. Removing an auto-added row is remembered too — it won't reappear on its own, only a newly-bought ticker gets freshly auto-seeded.
+    This table starts already populated — every currently-held ticker on this Past Purchases list gets its own draft row automatically, with no "+ Add Row" click needed. Plan a sale of a ticker already on this Past Purchases list without touching your real holdings yet. Pick a ticker below and <strong>+ Add Row</strong>, then enter <strong>Units to Sell</strong> and a <strong>Selling Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder a row, <strong>Dup</strong> to add another row for the same ticker if you want to sell it off in separate batches at different prices, and <strong>×</strong> to remove a draft. Click a column header's <strong>⇅</strong> to sort the table by that column (click again to reverse, a third time to clear back to its normal order). <strong>Units Left</strong> = Total Units Purchased − Total Units Sold − Units to Sell already planned in every OTHER still-pending row for that ticker; <strong>Average Purchase Price of Units Left</strong> is the FIFO cost of whichever lots would remain after those other rows. Nothing here is real until you click <strong>Confirm Sale</strong> and pick the date — that adds a real sale row to the Lot Matching table above and updates every table and total that depends on it. A confirmed row is locked and shown in green. Removing an auto-added row is remembered too — it won't reappear on its own, only a newly-bought ticker gets freshly auto-seeded.
   </div>
   <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1rem;">
     <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Ticker
