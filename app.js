@@ -1,4 +1,22 @@
-// APP.JS BUILD: v5.70 (The "Sales Strategy" table no longer starts
+// APP.JS BUILD: v5.71 (Sales Strategy now carries the same set of
+// functions as Past Purchases. Added "Sample Excel for Data Entry" / "Import
+// Excel" (scoped to its two typed-in fields, Ticker/Units to Sell/Selling
+// Price — a line that exactly matches an already-planned draft row is skipped,
+// so re-importing is a safe no-op, while two lines for the same ticker become
+// two separate batches rather than a conflict) and "Export to Excel/Text/
+// Word/PDF" (mirrors exactly what's on screen, including any active column
+// sort, with the over-committed Units Left flagged red and a confirmed Sale
+// Realized Date in green on the Word/PDF exports). The header row's columns
+// each got their own per-column sort button (⇅, same asc -> desc -> clear
+// 3-click cycle as Past Purchases' header), and the ticker cell got ↑/↓
+// buttons to reorder a row (alongside the existing Dup/×) — same row-ctrl-btn
+// look as Past Purchases' own ticker-cell buttons, hidden once a row is
+// realized just like Dup/× already were. A manual ↑/↓ move always clears any
+// active column sort first (same convention as Past Purchases' per-ticker
+// ↑/↓), since reordering only makes visible sense back in the table's own
+// custom order.)
+//
+// v5.70 (The "Sales Strategy" table no longer starts
 // empty — it now auto-populates with one draft row for every ticker
 // currently held on the active Past Purchases list (at least one still-unsold
 // unit), so there's always something to look at without first clicking
@@ -304,7 +322,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.70 (Sales Strategy now auto-populates a draft row for every currently-held ticker instead of starting empty)");
+console.log("app.js loaded — build v5.71 (Sales Strategy now has the same Excel Sample/Import/Export buttons as Past Purchases, plus per-column header sort and ticker-cell row reorder)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -860,6 +878,11 @@ let lastPastPurchasesVisibleRows = [];
 // Left/etc. already computed) set of draft rows, kept up to date by
 // renderSalesStrategyTable() for anything that wants to read what's on screen.
 let lastSalesStrategyResolvedRows = [];
+// v5.71: Sales Strategy's own per-column header-click sort state, same
+// { colId, direction } shape and 3-click (asc -> desc -> clear) cycle as Past
+// Purchases' ppColumnSortState, just a separate variable since the two tables
+// sort independently.
+let ssColumnSortState = null;
 
 function getSavedApiKey(){
   try{ return localStorage.getItem("finnhubApiKey") || ""; }
@@ -2974,6 +2997,23 @@ function duplicateSalesStrategyRow(id){
 function removeSalesStrategyRow(id){
   saveSalesStrategyRows(getSalesStrategyRows().filter(r => r.id !== id));
 }
+// The ticker cell's ↑/↓ buttons (v5.71): moves this one draft row earlier/later
+// in the table — Sales Strategy's equivalent of Past Purchases' per-ticker ↑/↓
+// (movePastPurchaseTickerBlock), just per-ROW here since draft rows aren't
+// grouped into a fixed block the way FIFO fragments are. Manual reordering only
+// makes visible sense back in the table's own custom/insertion order, so — same
+// convention as movePastPurchaseTickerBlock — it clears any active column sort
+// first rather than leaving a confusing mix of the two.
+function moveSalesStrategyRow(id, direction){
+  ssColumnSortState = null;
+  const rows = getSalesStrategyRows();
+  const idx = rows.findIndex(r => r.id === id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= rows.length) return;
+  [rows[idx], rows[newIdx]] = [rows[newIdx], rows[idx]];
+  saveSalesStrategyRows(rows);
+}
 function setSalesStrategyValue(id, field, value){
   const rows = getSalesStrategyRows();
   const row = rows.find(r => r.id === id);
@@ -3031,7 +3071,7 @@ function buildSalesStrategyRowsResolved(){
   const rows = getSalesStrategyRows();
   const statsByTicker = {};
   rows.forEach(r => { if(!statsByTicker[r.ticker]) statsByTicker[r.ticker] = getSalesStrategyTickerStats(r.ticker); });
-  return rows.map(row => {
+  const resolved = rows.map(row => {
     const stats = statsByTicker[row.ticker] || { totalPurchased: 0, totalSold: 0, totalHeld: 0, heldLots: [] };
     const otherPendingUnits = rows.reduce((sum, r) => {
       if(r.id === row.id || r.ticker !== row.ticker || r.saleRealizedDate) return sum;
@@ -3055,6 +3095,25 @@ function buildSalesStrategyRowsResolved(){
       realizedSaleRowId: row.realizedSaleRowId,
     };
   });
+
+  // v5.71: an active column-header sort (ssColumnSortState, set by clicking one
+  // of the <th> sort buttons) reorders the already-resolved rows by whichever
+  // field that column shows — same 3-click asc/desc/clear convention as Past
+  // Purchases' own column sort. No sort state (the default) keeps insertion/
+  // Dup order exactly as before, so existing callers (and every pre-v5.71 test)
+  // see no change.
+  if(ssColumnSortState){
+    const { colId, direction } = ssColumnSortState;
+    resolved.sort((a, b) => {
+      const va = a[colId], vb = b[colId];
+      let cmp;
+      if(typeof va === "string" || typeof vb === "string") cmp = String(va || "").localeCompare(String(vb || ""));
+      else cmp = (Number(va) || 0) - (Number(vb) || 0);
+      return direction === "asc" ? cmp : -cmp;
+    });
+  }
+
+  return resolved;
 }
 
 // The "Confirm Sale" button's action: turns a draft row into a REAL sale on the
@@ -4966,20 +5025,57 @@ function renderFifoLotMatchFooter(params, fragments){
 // model. Rendered into #ssTableContent, same table/th/td/.cell-input styling
 // as the Lot Matching table above it (no separate CSS needed — it's the same
 // global `table`/`.table-container` rules), below the Past Purchases section.
-const SALES_STRATEGY_HEADER_HTML = `
-  <th>Ticker</th>
-  <th>Current Price</th>
-  <th>Units to Sell</th>
-  <th>Selling Price</th>
-  <th>Total Units Purchased</th>
-  <th>Total Units Sold</th>
-  <th>Units Left</th>
-  <th>Average Purchase Price of Units Left</th>
-  <th>Sale Realized Date</th>
-`;
-const SALES_STRATEGY_COLUMN_COUNT = 9;
+// v5.71: columns now carry their own per-column "sort" button (see
+// buildSalesStrategyHeaderRow/wireSalesStrategyHeaderButtons below), same
+// convention as Past Purchases' header (buildPastPurchasesHeaderRow/
+// wirePastPurchasesHeaderButtons) minus the move-column/remove-column buttons
+// that has too — Sales Strategy's 9 columns are fixed, not a user-editable
+// parameter list, so there's nothing to move or remove. `id` is the field name
+// on a resolved row (buildSalesStrategyRowsResolved's return shape) that column
+// sorts by.
+const SALES_STRATEGY_COLUMNS = [
+  { id: "ticker", label: "Ticker" },
+  { id: "currentPrice", label: "Current Price" },
+  { id: "unitsToSell", label: "Units to Sell" },
+  { id: "sellingPrice", label: "Selling Price" },
+  { id: "totalPurchased", label: "Total Units Purchased" },
+  { id: "totalSold", label: "Total Units Sold" },
+  { id: "unitsLeft", label: "Units Left" },
+  { id: "avgPurchasePriceOfUnitsLeft", label: "Average Purchase Price of Units Left" },
+  { id: "saleRealizedDate", label: "Sale Realized Date" },
+];
+const SALES_STRATEGY_COLUMN_COUNT = SALES_STRATEGY_COLUMNS.length;
 
-function renderSalesStrategyRowHTML(r){
+function buildSalesStrategyHeaderRow(){
+  return SALES_STRATEGY_COLUMNS.map(c => {
+    const isSorted = ssColumnSortState && ssColumnSortState.colId === c.id;
+    const icon = isSorted ? (ssColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+    return `<th><span class="ss-th-label">${escHtml(c.label)}</span> <button type="button" class="ss-col-sort-btn col-ctrl-btn ${isSorted ? "col-ctrl-sort-active" : ""}" data-col-id="${c.id}" title="Sort by ${escAttr(c.label)}">${icon}</button></th>`;
+  }).join("");
+}
+
+// Wires the per-column sort buttons built by buildSalesStrategyHeaderRow above
+// — same 3-click (asc -> desc -> clear back to insertion/Dup order) cycle as
+// Past Purchases' own column-header sort.
+function wireSalesStrategyHeaderButtons(theadEl){
+  if(!theadEl) return;
+  theadEl.querySelectorAll(".ss-col-sort-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const colId = btn.getAttribute("data-col-id");
+      if(!ssColumnSortState || ssColumnSortState.colId !== colId){
+        ssColumnSortState = { colId, direction: "asc" };
+      } else if(ssColumnSortState.direction === "asc"){
+        ssColumnSortState = { colId, direction: "desc" };
+      } else {
+        ssColumnSortState = null;
+      }
+      renderSalesStrategyTable();
+    });
+  });
+}
+
+function renderSalesStrategyRowHTML(r, idx, total){
   const disabled = r.saleRealizedDate ? "disabled" : "";
   const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
   const overCommittedTitle = r.overCommitted
@@ -4989,11 +5085,19 @@ function renderSalesStrategyRowHTML(r){
   const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
   const overOwnInput = (!r.saleRealizedDate && r.unitsToSell > r.unitsLeft + PP_EPS) ? ' style="border-color:#ef4444;"' : "";
 
+  // v5.71: ↑/↓ reorder this one row, same idea (and row-ctrl-btn look) as the
+  // Lot Matching table's per-ticker ↑/↓ — just moved/removed/Dup'd alongside the
+  // rest of the row's own buttons, hidden once realized exactly like Dup/× are.
+  const upDisabled = idx === 0 ? "disabled" : "";
+  const downDisabled = idx === total - 1 ? "disabled" : "";
+
   const tickerCell = r.saleRealizedDate
     ? `<td style="font-weight:600;">${escHtml(r.ticker)}</td>`
     : `<td>
         <div style="font-weight:600;">${escHtml(r.ticker)}</div>
         <div class="row-ctrl-controls">
+          <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="-1" ${upDisabled} title="Move this row up">&uarr;</button>
+          <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="1" ${downDisabled} title="Move this row down">&darr;</button>
           <button type="button" class="ss-dup-btn row-ctrl-btn" data-row-id="${r.id}" title="Duplicate this row below, same ticker — plan selling another batch at a different price" style="width:auto; padding:0 0.5rem; font-size:0.7rem;">Dup</button>
           <button type="button" class="ss-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.ticker)}" title="Remove this draft row — it was never a real sale">&times;</button>
         </div>
@@ -5036,10 +5140,11 @@ function renderSalesStrategyTable(){
 
   const bodyHtml = resolvedRows.length === 0
     ? `<tr><td colspan="${SALES_STRATEGY_COLUMN_COUNT}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No draft sales yet — pick a ticker above and click "+ Add Row" to plan one.</td></tr>`
-    : resolvedRows.map(renderSalesStrategyRowHTML).join("");
+    : resolvedRows.map((r, idx) => renderSalesStrategyRowHTML(r, idx, resolvedRows.length)).join("");
 
-  container.innerHTML = `<div class="table-container"><table><thead><tr>${SALES_STRATEGY_HEADER_HTML}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+  container.innerHTML = `<div class="table-container"><table><thead><tr>${buildSalesStrategyHeaderRow()}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
   wireSalesStrategyEditing(container);
+  wireSalesStrategyHeaderButtons(container.querySelector("thead"));
 }
 
 // Small modal (same self-built overlay pattern as
@@ -5092,6 +5197,13 @@ function wireSalesStrategyEditing(container){
       renderSalesStrategyTable();
     });
     el.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); el.blur(); } });
+  });
+
+  container.querySelectorAll(".ss-move-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      moveSalesStrategyRow(btn.getAttribute("data-row-id"), parseInt(btn.getAttribute("data-dir"), 10));
+      renderSalesStrategyTable();
+    });
   });
 
   container.querySelectorAll(".ss-dup-btn").forEach(btn => {
@@ -5579,6 +5691,96 @@ function withBuyTargetColumnPastPurchases(headers, rows){
   return { headers: newHeaders, rows: newRows };
 }
 
+// v5.71: Export to Excel/Text/Word/PDF for Sales Strategy, same idea as
+// buildPastPurchasesExportTable above — reads from buildSalesStrategyRowsResolved
+// (the exact same source renderSalesStrategyTable() itself renders from, respecting
+// whatever column sort is currently active) and mirrors renderSalesStrategyRowHTML's
+// own formatting/colors, just with the print-legible EXPORT_COLORS palette instead
+// of the live dark-theme hex values.
+function buildSalesStrategyExportTable(){
+  const resolvedRows = buildSalesStrategyRowsResolved();
+  const headers = SALES_STRATEGY_COLUMNS.map(c => c.label);
+  const rows = [];
+  const colors = [];
+  resolvedRows.forEach(r => {
+    const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
+    const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
+    const saleText = r.saleRealizedDate ? `Confirmed ${r.saleRealizedDate}` : "Pending";
+    rows.push([
+      r.ticker, priceText, r.unitsToSell, r.sellingPrice,
+      r.totalPurchased, r.totalSold, r.unitsLeft, avgPriceText, saleText,
+    ]);
+    colors.push([
+      null, null, null, null, null, null,
+      r.overCommitted ? EXPORT_COLORS.red : null,
+      null,
+      r.saleRealizedDate ? EXPORT_COLORS.emerald : null,
+    ]);
+  });
+  return { headers, rows, colors };
+}
+
+// Sales Strategy's own "Sample Excel for Data Entry" / "Import Excel" (v5.71) —
+// same round-trippable companion idea as buildSampleExcelForDataEntry_PastPurchases
+// below, scoped to Sales Strategy's only two typed-in fields (Units to Sell,
+// Selling Price): Current Price/Total Purchased/Total Sold/Units Left/Average
+// Purchase Price of Units Left are all derived fresh on every render, nothing to
+// fill in for those. Only not-yet-realized (still-draft, still-editable) rows are
+// included — a realized row is locked and done, there's nothing left to edit.
+function buildSampleExcelForDataEntry_SalesStrategy(){
+  const headers = ["Ticker", "Units to Sell", "Selling Price"];
+  const rows = getSalesStrategyRows().filter(r => !r.saleRealizedDate).map(r => [r.ticker, r.unitsToSell || "", r.sellingPrice || ""]);
+  return { headers, rows };
+}
+
+// Reads that same shape back — matched by column HEADER text (case-insensitive),
+// same convention as Past Purchases' Import Excel, so reordering columns in the
+// spreadsheet is safe and any header it doesn't recognize is reported rather than
+// silently dropped. Unlike Past Purchases' import, there's no "identical/conflict"
+// choice to make: each imported line becomes its OWN new draft row (two rows for
+// the same ticker are legitimately different batches, not a conflict), EXCEPT a
+// line that exactly matches an already-planned draft row (same ticker, same Units
+// to Sell, same Selling Price) is recognized as already-imported and skipped — so
+// re-importing an unchanged file is a safe no-op instead of piling up duplicate
+// batches every time.
+function importSalesStrategyFromRows(rowsAoA){
+  if(!rowsAoA || rowsAoA.length < 2) return { added: 0, identical: 0, unmatchedHeaders: [] };
+  const header = rowsAoA[0].map(h => String(h || "").trim().toLowerCase());
+  const tickerIdx = header.indexOf("ticker");
+  const unitsIdx = header.indexOf("units to sell");
+  const priceIdx = header.indexOf("selling price");
+  const recognizedIdx = new Set([tickerIdx, unitsIdx, priceIdx].filter(i => i >= 0));
+  const unmatchedHeaders = rowsAoA[0].filter((h, i) => !recognizedIdx.has(i) && String(h || "").trim() !== "");
+
+  // Local mirror of every still-draft row, seeded from what's already there and
+  // grown as lines are imported, so a duplicate line later in the SAME file is
+  // caught too (not just duplicates of what was already on the table before import).
+  const seen = getSalesStrategyRows().filter(r => !r.saleRealizedDate)
+    .map(r => ({ ticker: r.ticker, unitsToSell: Number(r.unitsToSell) || 0, sellingPrice: Number(r.sellingPrice) || 0 }));
+
+  let added = 0, identical = 0;
+  if(tickerIdx >= 0){
+    for(let i = 1; i < rowsAoA.length; i++){
+      const raw = rowsAoA[i];
+      const rawTicker = parseImportedCellValue(raw[tickerIdx]);
+      if(!rawTicker) continue; // blank Ticker cell -- nothing to import on this line
+      const ticker = String(rawTicker).trim().toUpperCase();
+      const units = unitsIdx >= 0 ? (parseImportedCellValue(raw[unitsIdx], "number") || 0) : 0;
+      const price = priceIdx >= 0 ? (parseImportedCellValue(raw[priceIdx], "number") || 0) : 0;
+
+      const alreadyThere = seen.some(s => s.ticker === ticker && s.unitsToSell === units && s.sellingPrice === price);
+      if(alreadyThere){ identical++; continue; }
+
+      const id = addSalesStrategyRow(ticker);
+      if(units) setSalesStrategyValue(id, "unitsToSell", units);
+      if(price) setSalesStrategyValue(id, "sellingPrice", price);
+      seen.push({ ticker, unitsToSell: units, sellingPrice: price });
+      added++;
+    }
+  }
+  return { added, identical, unmatchedHeaders };
+}
+
 function wireUpPastPurchasesRefreshButton(){
   const btn = document.getElementById("ppRefreshFromPortfolioBtn");
   const statusEl = document.getElementById("ppRefreshStatus");
@@ -5643,6 +5845,28 @@ function wireUpExportButtons(){
   if(ppPdfBtn) ppPdfBtn.addEventListener("click", () => {
     const { headers, rows, colors } = buildPastPurchasesExportTable();
     exportTableAsPdf("Past_Purchases.pdf", "Past Purchases", headers, rows, colors);
+  });
+
+  // --- Sales Strategy (v5.71) ---
+  const ssExcelBtn = document.getElementById("ssExportExcelBtn");
+  if(ssExcelBtn) ssExcelBtn.addEventListener("click", () => {
+    const { headers, rows } = buildSalesStrategyExportTable();
+    exportTableAsExcel("Sales_Strategy.xlsx", "Sales Strategy", headers, rows);
+  });
+  const ssTextBtn = document.getElementById("ssExportTextBtn");
+  if(ssTextBtn) ssTextBtn.addEventListener("click", () => {
+    const { headers, rows } = buildSalesStrategyExportTable();
+    exportTableAsText("Sales_Strategy.txt", headers, rows);
+  });
+  const ssWordBtn = document.getElementById("ssExportWordBtn");
+  if(ssWordBtn) ssWordBtn.addEventListener("click", () => {
+    const { headers, rows, colors } = buildSalesStrategyExportTable();
+    exportTableAsWord("Sales_Strategy.doc", "Sales Strategy", headers, rows, colors);
+  });
+  const ssPdfBtn = document.getElementById("ssExportPdfBtn");
+  if(ssPdfBtn) ssPdfBtn.addEventListener("click", () => {
+    const { headers, rows, colors } = buildSalesStrategyExportTable();
+    exportTableAsPdf("Sales_Strategy.pdf", "Sales Strategy", headers, rows, colors);
   });
 }
 
@@ -6119,6 +6343,59 @@ function wireUpSampleAndImportExcelButtons(){
         if(ppStatusEl){
           ppStatusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers).";
           ppStatusEl.style.color = "#ef4444";
+        }
+      }
+    });
+  }
+
+  // --- Sales Strategy (v5.71) ---
+  const ssSampleBtn = document.getElementById("ssSampleExcelBtn");
+  const ssImportBtn = document.getElementById("ssImportExcelBtn");
+  const ssImportInput = document.getElementById("ssImportExcelFileInput");
+  const ssExcelStatusEl = document.getElementById("ssExcelDataEntryStatus");
+
+  if(ssSampleBtn){
+    ssSampleBtn.addEventListener("click", () => {
+      const { headers, rows } = buildSampleExcelForDataEntry_SalesStrategy();
+      exportTableAsExcel("Sales_Strategy_Sample_Data_Entry.xlsx", "Data Entry", headers, rows);
+      if(ssExcelStatusEl){
+        ssExcelStatusEl.textContent = rows.length === 0
+          ? "No draft rows yet — add at least one with \"+ Add Row\" first (or just fill in the header row's columns and your own rows)."
+          : `Downloaded a template with all ${rows.length} draft row(s).`;
+        ssExcelStatusEl.style.color = rows.length === 0 ? "var(--amber)" : "var(--emerald)";
+      }
+    });
+  }
+
+  if(ssImportBtn && ssImportInput){
+    ssImportBtn.addEventListener("click", () => ssImportInput.click());
+    ssImportInput.addEventListener("change", async () => {
+      const file = ssImportInput.files && ssImportInput.files[0];
+      ssImportInput.value = "";
+      if(!file) return;
+      if(ssExcelStatusEl){ ssExcelStatusEl.textContent = "Reading file…"; ssExcelStatusEl.style.color = "var(--text-secondary)"; }
+      try{
+        const rowsAoA = await readWorkbookFirstSheetRows(file);
+        const result = importSalesStrategyFromRows(rowsAoA);
+        if(result.added + result.identical === 0){
+          if(ssExcelStatusEl){ ssExcelStatusEl.textContent = "No rows with a Ticker were found in that file."; ssExcelStatusEl.style.color = "var(--amber)"; }
+          return;
+        }
+        renderPastPurchasesTable(); // re-renders Sales Strategy too (and re-syncs holdings)
+        if(ssExcelStatusEl){
+          const unmatchedNote = result.unmatchedHeaders.length
+            ? ` ${result.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${result.unmatchedHeaders.join(", ")}.`
+            : "";
+          ssExcelStatusEl.textContent = result.added === 0
+            ? `Nothing new — all ${result.identical} row(s) in the file are already planned.${unmatchedNote}`
+            : `Imported ${result.added} new draft row(s), ${result.identical} already-planned row(s) ignored.${unmatchedNote}`;
+          ssExcelStatusEl.style.color = "var(--emerald)";
+        }
+      }catch(err){
+        console.error("Sales Strategy Excel import failed:", err);
+        if(ssExcelStatusEl){
+          ssExcelStatusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers).";
+          ssExcelStatusEl.style.color = "#ef4444";
         }
       }
     });
