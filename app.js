@@ -1,3 +1,12 @@
+// APP.JS BUILD: v5.75 (Added a "Refresh" button next to Sales Strategy's
+// "Display" control — a manual, on-demand trigger for the exact same Past
+// Purchases -> Sales Strategy sync that already runs automatically after
+// every Past Purchases edit (syncSalesStrategyFromHoldings, then a full
+// re-render), for whenever something here looks stale and the user wants to
+// force it right now rather than making an edit elsewhere to trigger it.
+// Reports whether anything actually changed in a short status line next to
+// the button.)
+//
 // APP.JS BUILD: v5.74 (Three Sales Strategy refinements. 1) Relabeled
 // "Total Units Purchase (Current)" to "Total Units Holding" and "Units Left"
 // to "Units Pending Plan" (SALES_STRATEGY_COLUMNS); Units Pending Plan's
@@ -387,7 +396,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.74 (Sales Strategy: \"Total Units Purchase (Current)\"→\"Total Units Holding\", \"Units Left\"→\"Units Pending Plan\" now a running total; a new purchase auto-adds a draft row when none exists to show it; new \"Display\" range control replaces the fixed 28-day completed-sale cutoff)");
+console.log("app.js loaded — build v5.75 (Sales Strategy: added a \"Refresh\" button next to \"Display\" — manually re-pulls/re-syncs this table from Past Purchases on demand, same sync that already runs automatically on every Past Purchases edit)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -8186,6 +8195,32 @@ try{
     ssDisplayRangeSelect.addEventListener("change", () => {
       saveSsDisplayRangeId(ssDisplayRangeSelect.value);
       renderSalesStrategyTable();
+    });
+  }
+
+  // v5.75: "Refresh" — a manual, on-demand version of the same Past Purchases
+  // -> Sales Strategy sync that already runs automatically after every Past
+  // Purchases edit (renderPastPurchasesTable -> syncSalesStrategyFromHoldings
+  // -> renderSalesStrategyTable). Exists for the moment something here looks
+  // stale and the user wants to force a re-pull right now rather than making
+  // (or waiting for) an edit elsewhere to trigger it.
+  const ssRefreshBtn = document.getElementById("ssRefreshBtn");
+  const ssRefreshStatusEl = document.getElementById("ssRefreshStatus");
+  if(ssRefreshBtn){
+    ssRefreshBtn.addEventListener("click", () => {
+      // Call the sync check once here, BEFORE the full re-render below, purely
+      // to learn whether it actually changed anything worth reporting -- the
+      // full renderPastPurchasesTable() call right after calls it again too,
+      // which is a safe no-op by then (same idempotent check), and is what
+      // actually re-draws every table from the just-synced data.
+      const addedRows = typeof syncSalesStrategyFromHoldings === "function" ? syncSalesStrategyFromHoldings() : false;
+      renderPastPurchasesTable();
+      if(ssRefreshStatusEl){
+        ssRefreshStatusEl.textContent = addedRows
+          ? `Refreshed from Past Purchases at ${new Date().toLocaleTimeString()} — added/updated draft row(s) for newly-pending units.`
+          : `Refreshed from Past Purchases at ${new Date().toLocaleTimeString()} — already up to date.`;
+        ssRefreshStatusEl.style.color = "var(--emerald)";
+      }
     });
   }
 
