@@ -249,7 +249,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.76 — Bug fix: Sales Strategy's "Refresh" button now actually force-resyncs — it brings back a draft row for any currently-held ticker with none (even one you removed), rather than silently deferring to the same resurrection guard the automatic per-edit sync uses.
+      Version v5.78 — Bug fix: Sales Strategy's "Refresh" now restores a deleted leftover/continuation row even when the ticker still has one other, fully-committed row, not just when it has none at all.
     </div>
   </header>
   <div class="nav-btn-row">
