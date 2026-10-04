@@ -1,4 +1,27 @@
-// APP.JS BUILD: v5.72 (Added a "Save" button to each draft Sales
+// APP.JS BUILD: v5.73 (Five Sales Strategy refinements. 1) A completed
+// (realized) sale now drops off the table — and its exports — 28 days after
+// its sale date (SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS/
+// isSalesStrategyRowExpired); the real record stays permanently on Past
+// Purchases/Lot Matching, so nothing is lost. 2) "Total Units Purchased" is
+// relabeled "Total Units Purchase (Current)" and now shows the ticker's
+// actual CURRENT holding (refreshed down as real sales are confirmed) instead
+// of the lifetime-ever-purchased count. 3) A completed sale's ticker cell now
+// also shows ↑ ↓ × (no Dup/Save — nothing left to plan) instead of plain,
+// button-less text; removing one explains it only clears the Sales Strategy
+// display record, not the real sale. 4) Column headers gained the same
+// move-left/right (&lt; &gt;) and hide (×) buttons as Past Purchases' own
+// header — reinterpreted as reorder/hide (not destroy, since there's no
+// per-row value to delete for a fixed/computed column) via new
+// ssColumnOrder/ssHiddenColumns settings (getSsColumnOrder/hideSsColumn/
+// moveSsColumn/showAllSsColumns, surfaced through a "N columns hidden — Show
+// all columns" notice above the table); renderSalesStrategyRowHTML's cells
+// now render through a per-column dispatch (renderSalesStrategyCellHTML) that
+// follows this order, and buildSalesStrategyExportTable exports exactly what's
+// visible, in the same order. 5) The manual "Ticker [dropdown] + Add Row" UI
+// is gone — auto-populate and the Save button's own auto-split already cover
+// it, with nothing left for a manual add to do.)
+//
+// v5.72 (Added a "Save" button to each draft Sales
 // Strategy row's ticker cell (alongside ↑/↓/Dup/×). Clicking it commits
 // whatever's currently typed into that row's Units to Sell/Selling Price
 // (reading the live input values directly, even if the field hasn't been
@@ -337,7 +360,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.72 (Sales Strategy rows now have a \"Save\" button that locks in a batch and auto-adds a fresh row below for any units still left over)");
+console.log("app.js loaded — build v5.73 (Sales Strategy: completed sales auto-hide after 28 days, \"Total Units Purchase (Current)\" tracks real current holding, completed rows get ↑↓×, column headers get move/hide buttons, and the manual Add Row UI is gone)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -360,7 +383,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -3074,14 +3097,32 @@ function getSalesStrategyTickerStats(ticker){
   return { totalPurchased: totalSold + totalHeld, totalSold, totalHeld, heldLots };
 }
 
+// v5.73: a completed (realized) row older than this many days drops off the
+// Sales Strategy table (and its exports) entirely — its real, permanent
+// record already lives on Past Purchases/Lot Matching, so a planning table
+// doesn't need to keep displaying it forever. A draft (not yet realized) row
+// is never affected, however old.
+const SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS = 28;
+function isSalesStrategyRowExpired(row){
+  if(!row || !row.saleRealizedDate) return false;
+  const realizedMs = new Date(row.saleRealizedDate).getTime();
+  if(isNaN(realizedMs)) return false;
+  const ageDays = (Date.now() - realizedMs) / 86400000;
+  return ageDays > SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS;
+}
+
 // Fully resolves every Sales Strategy row into exactly what the table should
-// show — Current Price, Total Units Purchased/Sold, Units Left, and Average
-// Purchase Price of Units Left — WITHOUT touching the DOM, so this is also what
-// the tests exercise directly. "Units Left" and the average price it implies
-// both account for every OTHER still-pending (not yet realized) draft row for
-// the same ticker, per the spec's own formula; a row's OWN Units to sell is
-// deliberately NOT subtracted (Units Left is the ceiling for what THIS row can
-// still plan against, not what remains after it).
+// show — Current Price, Total Units Purchase (Current)/Sold, Units Left, and
+// Average Purchase Price of Units Left — WITHOUT touching the DOM, so this is
+// also what the tests exercise directly. "Units Left" and the average price it
+// implies both account for every OTHER still-pending (not yet realized) draft
+// row for the same ticker, per the spec's own formula; a row's OWN Units to
+// sell is deliberately NOT subtracted (Units Left is the ceiling for what
+// THIS row can still plan against, not what remains after it). A completed
+// sale older than SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS is filtered out
+// of the returned list at the very end (see isSalesStrategyRowExpired) —
+// safe to do here since a realized row of any age already never contributes
+// to any OTHER row's otherPendingUnits/overCommitted math below.
 function buildSalesStrategyRowsResolved(){
   const rows = getSalesStrategyRows();
   const statsByTicker = {};
@@ -3101,7 +3142,13 @@ function buildSalesStrategyRowsResolved(){
       unitsToSell: Number(row.unitsToSell) || 0,
       sellingPrice: Number(row.sellingPrice) || 0,
       currentPrice,
-      totalPurchased: stats.totalPurchased,
+      // v5.73: this column now tracks the CURRENT real holding (totalHeld),
+      // not the lifetime-ever-purchased count (stats.totalPurchased) — per
+      // the spec's own example, confirming a sale updates this down to
+      // whatever's still actually held. Relabeled "Total Units Purchase
+      // (Current)" below; the field name stays totalPurchased to avoid
+      // rippling into every sort/export/test key that already reads it.
+      totalPurchased: stats.totalHeld,
       totalSold: stats.totalSold,
       unitsLeft: remainingQty, // = stats.totalHeld - otherPendingUnits, floored at 0 by fifoConsumeFromFront
       avgPurchasePriceOfUnitsLeft: avgPrice,
@@ -3128,7 +3175,9 @@ function buildSalesStrategyRowsResolved(){
     });
   }
 
-  return resolved;
+  // v5.73: drop completed sales older than the display window — see
+  // isSalesStrategyRowExpired's own comment above for why this is safe.
+  return resolved.filter(r => !isSalesStrategyRowExpired(r));
 }
 
 // The ticker cell's new "Save" button (v5.72): commits whatever's currently
@@ -5081,74 +5130,241 @@ function renderFifoLotMatchFooter(params, fragments){
 // model. Rendered into #ssTableContent, same table/th/td/.cell-input styling
 // as the Lot Matching table above it (no separate CSS needed — it's the same
 // global `table`/`.table-container` rules), below the Past Purchases section.
-// v5.71: columns now carry their own per-column "sort" button (see
+// v5.71: columns carry their own per-column "sort" button (see
 // buildSalesStrategyHeaderRow/wireSalesStrategyHeaderButtons below), same
 // convention as Past Purchases' header (buildPastPurchasesHeaderRow/
-// wirePastPurchasesHeaderButtons) minus the move-column/remove-column buttons
-// that has too — Sales Strategy's 9 columns are fixed, not a user-editable
-// parameter list, so there's nothing to move or remove. `id` is the field name
-// on a resolved row (buildSalesStrategyRowsResolved's return shape) that column
-// sorts by.
+// wirePastPurchasesHeaderButtons). `id` is the field name on a resolved row
+// (buildSalesStrategyRowsResolved's return shape) that column sorts by.
+// v5.73: unlike Past Purchases' pastPurchasesParams, these 9 columns are a
+// FIXED schema (each one either a plain input or computed fresh on every
+// render) — there's no per-row stored value to actually delete the way
+// removePastPurchaseParam does. So move-left/right/× here (see
+// getSsColumnOrder/getSsHiddenColumns and friends, just below) reorder and
+// HIDE a column rather than destroying anything; showAllSsColumns() is the
+// undo. The Ticker column itself is never move-able or hide-able, same as
+// Past Purchases' own Asset/Ticker column.
 const SALES_STRATEGY_COLUMNS = [
   { id: "ticker", label: "Ticker" },
   { id: "currentPrice", label: "Current Price" },
   { id: "unitsToSell", label: "Units to Sell" },
   { id: "sellingPrice", label: "Selling Price" },
-  { id: "totalPurchased", label: "Total Units Purchased" },
+  { id: "totalPurchased", label: "Total Units Purchase (Current)" },
   { id: "totalSold", label: "Total Units Sold" },
   { id: "unitsLeft", label: "Units Left" },
   { id: "avgPurchasePriceOfUnitsLeft", label: "Average Purchase Price of Units Left" },
   { id: "saleRealizedDate", label: "Sale Realized Date" },
 ];
-const SALES_STRATEGY_COLUMN_COUNT = SALES_STRATEGY_COLUMNS.length;
+const SALES_STRATEGY_NON_TICKER_COLUMN_IDS = SALES_STRATEGY_COLUMNS.filter(c => c.id !== "ticker").map(c => c.id);
 
-function buildSalesStrategyHeaderRow(){
-  return SALES_STRATEGY_COLUMNS.map(c => {
-    const isSorted = ssColumnSortState && ssColumnSortState.colId === c.id;
-    const icon = isSorted ? (ssColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
-    return `<th><span class="ss-th-label">${escHtml(c.label)}</span> <button type="button" class="ss-col-sort-btn col-ctrl-btn ${isSorted ? "col-ctrl-sort-active" : ""}" data-col-id="${c.id}" title="Sort by ${escAttr(c.label)}">${icon}</button></th>`;
-  }).join("");
+function getSsColumnOrder(){
+  let order;
+  try{ order = JSON.parse(localStorage.getItem("ssColumnOrder") || "null"); }
+  catch(e){ order = null; }
+  if(!Array.isArray(order)) order = SALES_STRATEGY_NON_TICKER_COLUMN_IDS.slice();
+  const hidden = new Set(getSsHiddenColumns());
+  order = order.filter(id => SALES_STRATEGY_NON_TICKER_COLUMN_IDS.includes(id) && !hidden.has(id));
+  // Self-heal: an id that's neither in the saved order nor hidden (a brand-new
+  // column added in a later version, or simply the very first read) gets
+  // appended at the end rather than silently never shown.
+  SALES_STRATEGY_NON_TICKER_COLUMN_IDS.forEach(id => { if(!hidden.has(id) && !order.includes(id)) order.push(id); });
+  return order;
+}
+function saveSsColumnOrder(order){
+  try{ localStorage.setItem("ssColumnOrder", JSON.stringify(order)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function getSsHiddenColumns(){
+  try{ return JSON.parse(localStorage.getItem("ssHiddenColumns") || "[]"); }
+  catch(e){ return []; }
+}
+function saveSsHiddenColumns(ids){
+  try{ localStorage.setItem("ssHiddenColumns", JSON.stringify(ids)); }
+  catch(e){ /* localStorage unavailable */ }
 }
 
-// Wires the per-column sort buttons built by buildSalesStrategyHeaderRow above
-// — same 3-click (asc -> desc -> clear back to insertion/Dup order) cycle as
-// Past Purchases' own column-header sort.
+// Swaps a column with its visible neighbor to the left (-1) / right (1).
+// Clears any active column sort first, same convention as moveSalesStrategyRow
+// — a reorder only makes visible sense back in the table's own custom order.
+function moveSsColumn(id, direction){
+  if(id === "ticker") return;
+  ssColumnSortState = null;
+  const order = getSsColumnOrder();
+  const idx = order.indexOf(id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  saveSsColumnOrder(order);
+}
+
+// Hides a column from the table and every export. Nothing is deleted — every
+// one of these columns is either a fixed input or computed fresh on every
+// render, so showAllSsColumns() below brings it right back, in whatever
+// relative order it's remembered in.
+function hideSsColumn(id){
+  if(id === "ticker") return;
+  saveSsColumnOrder(getSsColumnOrder().filter(cid => cid !== id));
+  const hidden = getSsHiddenColumns();
+  if(!hidden.includes(id)) saveSsHiddenColumns([...hidden, id]);
+  if(ssColumnSortState && ssColumnSortState.colId === id) ssColumnSortState = null;
+}
+
+// The undo for hideSsColumn — restores every hidden column, appended back
+// onto the end of the visible order.
+function showAllSsColumns(){
+  const hidden = getSsHiddenColumns();
+  if(hidden.length === 0) return;
+  saveSsColumnOrder([...getSsColumnOrder(), ...hidden]);
+  saveSsHiddenColumns([]);
+}
+
+// The single source of truth for "what does the table look like right now":
+// the Ticker column definition, plus the currently-visible non-ticker columns
+// already in display order. The header, the row renderer, the empty-state
+// colspan, and the Excel/Text/Word/PDF exports all build from this, so hiding
+// or reordering a column changes every one of them together.
+function getSalesStrategyDisplayColumns(){
+  const byId = {};
+  SALES_STRATEGY_COLUMNS.forEach(c => { byId[c.id] = c; });
+  const columns = getSsColumnOrder().map(id => byId[id]).filter(Boolean);
+  return { ticker: byId.ticker, columns };
+}
+
+function buildSalesStrategyHeaderRow(){
+  const { ticker, columns } = getSalesStrategyDisplayColumns();
+  const tickerSorted = ssColumnSortState && ssColumnSortState.colId === ticker.id;
+  const tickerIcon = tickerSorted ? (ssColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+  let html = `<th>
+    <div><span class="ss-th-label">${escHtml(ticker.label)}</span></div>
+    <div class="col-header-controls">
+      <button type="button" class="ss-col-btn col-ctrl-btn ${tickerSorted ? "col-ctrl-sort-active" : ""}" data-action="sort" data-col-id="${ticker.id}" title="Sort by ${escAttr(ticker.label)}">${tickerIcon}</button>
+    </div>
+  </th>`;
+  columns.forEach((c, idx) => {
+    const isSorted = ssColumnSortState && ssColumnSortState.colId === c.id;
+    const icon = isSorted ? (ssColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+    html += `<th>
+      <div><span class="ss-th-label">${escHtml(c.label)}</span></div>
+      <div class="col-header-controls">
+        <button type="button" class="ss-col-btn col-ctrl-btn ${isSorted ? "col-ctrl-sort-active" : ""}" data-action="sort" data-col-id="${c.id}" title="Sort by ${escAttr(c.label)}">${icon}</button>
+        <button type="button" class="ss-col-btn col-ctrl-btn" data-action="move" data-col-id="${c.id}" data-dir="-1" ${idx === 0 ? "disabled" : ""} title="Move left">&lt;</button>
+        <button type="button" class="ss-col-btn col-ctrl-btn" data-action="move" data-col-id="${c.id}" data-dir="1" ${idx === columns.length - 1 ? "disabled" : ""} title="Move right">&gt;</button>
+        <button type="button" class="ss-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-col-id="${c.id}" title="Hide this column (use “Show all columns” below the table to bring it back)">&times;</button>
+      </div>
+    </th>`;
+  });
+  return html;
+}
+
+// Wires the sort/move/remove buttons built by buildSalesStrategyHeaderRow
+// above — same convention as Past Purchases' own
+// wirePastPurchasesHeaderButtons, just hide instead of destroy for "remove".
 function wireSalesStrategyHeaderButtons(theadEl){
   if(!theadEl) return;
-  theadEl.querySelectorAll(".ss-col-sort-btn").forEach(btn => {
+  theadEl.querySelectorAll(".ss-col-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const colId = btn.getAttribute("data-col-id");
-      if(!ssColumnSortState || ssColumnSortState.colId !== colId){
-        ssColumnSortState = { colId, direction: "asc" };
-      } else if(ssColumnSortState.direction === "asc"){
-        ssColumnSortState = { colId, direction: "desc" };
-      } else {
-        ssColumnSortState = null;
+      const action = btn.getAttribute("data-action");
+      if(action === "sort"){
+        if(!ssColumnSortState || ssColumnSortState.colId !== colId){
+          ssColumnSortState = { colId, direction: "asc" };
+        } else if(ssColumnSortState.direction === "asc"){
+          ssColumnSortState = { colId, direction: "desc" };
+        } else {
+          ssColumnSortState = null;
+        }
+        renderSalesStrategyTable();
+      } else if(action === "move"){
+        moveSsColumn(colId, parseInt(btn.getAttribute("data-dir"), 10));
+        renderSalesStrategyTable();
+      } else if(action === "remove"){
+        hideSsColumn(colId);
+        renderSalesStrategyTable();
       }
-      renderSalesStrategyTable();
     });
   });
 }
 
-function renderSalesStrategyRowHTML(r, idx, total){
-  const disabled = r.saleRealizedDate ? "disabled" : "";
-  const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
-  const overCommittedTitle = r.overCommitted
-    ? ` title="Other pending draft rows for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
-    : "";
-  const unitsLeftColor = r.overCommitted ? "#ef4444" : "var(--text-primary)";
-  const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
-  const overOwnInput = (!r.saleRealizedDate && r.unitsToSell > r.unitsLeft + PP_EPS) ? ' style="border-color:#ef4444;"' : "";
+// Small "N column(s) hidden" notice + "Show all columns" link, shown right
+// above the table whenever hideSsColumn has hidden at least one column — the
+// only way back, since (unlike Past Purchases' own Columns panel) there's no
+// separate column-management UI for Sales Strategy to restore one from.
+function renderSsHiddenColumnsNotice(){
+  const el = document.getElementById("ssHiddenColumnsNotice");
+  if(!el) return;
+  const hidden = getSsHiddenColumns();
+  if(hidden.length === 0){ el.innerHTML = ""; return; }
+  const labelById = {};
+  SALES_STRATEGY_COLUMNS.forEach(c => { labelById[c.id] = c.label; });
+  const names = hidden.map(id => labelById[id] || id).join(", ");
+  el.innerHTML = `<span style="color:var(--text-secondary); font-size:0.85rem;">${hidden.length} column${hidden.length === 1 ? "" : "s"} hidden (${escHtml(names)}) — </span> <button type="button" id="ssShowAllColumnsBtn" class="tab-btn" style="padding:0.3rem 0.8rem; font-size:0.8rem;">Show all columns</button>`;
+  const btn = el.querySelector("#ssShowAllColumnsBtn");
+  if(btn) btn.addEventListener("click", () => { showAllSsColumns(); renderSalesStrategyTable(); });
+}
 
+// Renders one <td> for a given non-ticker column id — exactly the same
+// formatting/color/title logic each column has always had, just factored out
+// so renderSalesStrategyRowHTML (below) can loop over whichever columns are
+// currently visible, in whatever order the user has them in, instead of
+// assuming a fixed sequence.
+function renderSalesStrategyCellHTML(colId, r){
+  switch(colId){
+    case "currentPrice": {
+      const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
+      return `<td>${priceText}</td>`;
+    }
+    case "unitsToSell": {
+      const disabled = r.saleRealizedDate ? "disabled" : "";
+      const overOwnInput = (!r.saleRealizedDate && r.unitsToSell > r.unitsLeft + PP_EPS) ? ' style="border-color:#ef4444;"' : "";
+      return `<td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="unitsToSell" type="number" step="1" value="${r.unitsToSell}" ${disabled}${overOwnInput}></td>`;
+    }
+    case "sellingPrice": {
+      const disabled = r.saleRealizedDate ? "disabled" : "";
+      return `<td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="sellingPrice" type="number" step="0.01" value="${r.sellingPrice}" ${disabled}></td>`;
+    }
+    case "totalPurchased":
+      return `<td>${ppFmtNum(r.totalPurchased)}</td>`;
+    case "totalSold":
+      return `<td>${ppFmtNum(r.totalSold)}</td>`;
+    case "unitsLeft": {
+      const overCommittedTitle = r.overCommitted
+        ? ` title="Other pending draft rows for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
+        : "";
+      const unitsLeftColor = r.overCommitted ? "#ef4444" : "var(--text-primary)";
+      return `<td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>`;
+    }
+    case "avgPurchasePriceOfUnitsLeft": {
+      const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
+      return `<td>${avgPriceText}</td>`;
+    }
+    case "saleRealizedDate":
+      return r.saleRealizedDate
+        ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real sale row on the Lot Matching table above.">&#10003; ${escHtml(r.saleRealizedDate)}</span></td>`
+        : `<td><button type="button" class="ss-confirm-btn tab-btn" data-row-id="${r.id}" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Confirm Sale</button></td>`;
+    default:
+      return "<td></td>";
+  }
+}
+
+function renderSalesStrategyRowHTML(r, idx, total){
   // v5.71: ↑/↓ reorder this one row, same idea (and row-ctrl-btn look) as the
-  // Lot Matching table's per-ticker ↑/↓ — just moved/removed/Dup'd alongside the
-  // rest of the row's own buttons, hidden once realized exactly like Dup/× are.
+  // Lot Matching table's per-ticker ↑/↓. v5.73: a REALIZED row now also gets
+  // ↑/↓ and × (no Dup/Save — there's nothing left to plan or duplicate once a
+  // row is a done, locked sale) instead of showing plain text with no
+  // controls at all.
   const upDisabled = idx === 0 ? "disabled" : "";
   const downDisabled = idx === total - 1 ? "disabled" : "";
 
   const tickerCell = r.saleRealizedDate
-    ? `<td style="font-weight:600;">${escHtml(r.ticker)}</td>`
+    ? `<td>
+        <div style="font-weight:600;">${escHtml(r.ticker)}</div>
+        <div class="row-ctrl-controls">
+          <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="-1" ${upDisabled} title="Move this row up">&uarr;</button>
+          <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="1" ${downDisabled} title="Move this row down">&darr;</button>
+          <button type="button" class="ss-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.ticker)}" data-realized="1" title="Remove this completed sale record from this table — the real sale on Past Purchases/Lot Matching is not affected">&times;</button>
+        </div>
+      </td>`
     : `<td>
         <div style="font-weight:600;">${escHtml(r.ticker)}</div>
         <div class="row-ctrl-controls">
@@ -5159,49 +5375,30 @@ function renderSalesStrategyRowHTML(r, idx, total){
           <button type="button" class="ss-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.ticker)}" title="Remove this draft row — it was never a real sale">&times;</button>
         </div>
       </td>`;
-  const saleCell = r.saleRealizedDate
-    ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real sale row on the Lot Matching table above.">&#10003; ${escHtml(r.saleRealizedDate)}</span></td>`
-    : `<td><button type="button" class="ss-confirm-btn tab-btn" data-row-id="${r.id}" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Confirm Sale</button></td>`;
 
-  return `<tr>
-    ${tickerCell}
-    <td>${priceText}</td>
-    <td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="unitsToSell" type="number" step="1" value="${r.unitsToSell}" ${disabled}${overOwnInput}></td>
-    <td><input class="cell-input cell-input-num ss-input" data-row-id="${r.id}" data-field="sellingPrice" type="number" step="0.01" value="${r.sellingPrice}" ${disabled}></td>
-    <td>${ppFmtNum(r.totalPurchased)}</td>
-    <td>${ppFmtNum(r.totalSold)}</td>
-    <td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>
-    <td>${avgPriceText}</td>
-    ${saleCell}
-  </tr>`;
+  const { columns } = getSalesStrategyDisplayColumns();
+  const cellsHtml = columns.map(c => renderSalesStrategyCellHTML(c.id, r)).join("");
+
+  return `<tr>${tickerCell}${cellsHtml}</tr>`;
 }
 
 function renderSalesStrategyTable(){
   const container = document.getElementById("ssTableContent");
   if(!container) return; // section not present in this build/test harness
 
-  // Keep the "add a new draft row" ticker dropdown in step with whichever
-  // tickers are actually on the active Past Purchases list right now.
-  const tickerSelect = document.getElementById("ssNewTicker");
-  if(tickerSelect){
-    const tickers = getPastPurchaseTickerOrder();
-    const prevValue = tickerSelect.value;
-    tickerSelect.innerHTML = tickers.length
-      ? tickers.map(t => `<option value="${escAttr(t)}">${escHtml(t)}</option>`).join("")
-      : `<option value="">No tickers on this list yet</option>`;
-    if(tickers.includes(prevValue)) tickerSelect.value = prevValue;
-  }
-
   const resolvedRows = buildSalesStrategyRowsResolved();
   lastSalesStrategyResolvedRows = resolvedRows;
 
+  const { columns } = getSalesStrategyDisplayColumns();
+  const colCount = 1 + columns.length;
   const bodyHtml = resolvedRows.length === 0
-    ? `<tr><td colspan="${SALES_STRATEGY_COLUMN_COUNT}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No draft sales yet — pick a ticker above and click "+ Add Row" to plan one.</td></tr>`
+    ? `<tr><td colspan="${colCount}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No draft sales yet — one is auto-added the moment you hold a ticker on the Past Purchases list above.</td></tr>`
     : resolvedRows.map((r, idx) => renderSalesStrategyRowHTML(r, idx, resolvedRows.length)).join("");
 
   container.innerHTML = `<div class="table-container"><table><thead><tr>${buildSalesStrategyHeaderRow()}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
   wireSalesStrategyEditing(container);
   wireSalesStrategyHeaderButtons(container.querySelector("thead"));
+  renderSsHiddenColumnsNotice();
 }
 
 // Small modal (same self-built overlay pattern as
@@ -5289,7 +5486,15 @@ function wireSalesStrategyEditing(container){
   container.querySelectorAll(".ss-remove-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const ticker = btn.getAttribute("data-ticker");
-      if(confirm(`Remove this draft "${ticker}" sale plan row? This only removes the plan — it was never a real sale.`)){
+      // v5.73: a REALIZED row's × removes it from this display only — it
+      // already created a real sale on Past Purchases/Lot Matching, unlike a
+      // draft row's × (which never was a real sale), so the confirmation
+      // wording has to say something different depending on which this is.
+      const isRealized = btn.getAttribute("data-realized") === "1";
+      const message = isRealized
+        ? `Remove this completed "${ticker}" sale record from the Sales Strategy table? The real sale it created on Past Purchases/Lot Matching is NOT affected — this only removes it from this display.`
+        : `Remove this draft "${ticker}" sale plan row? This only removes the plan — it was never a real sale.`;
+      if(confirm(message)){
         removeSalesStrategyRow(btn.getAttribute("data-row-id"));
         renderSalesStrategyTable();
       }
@@ -5317,22 +5522,14 @@ function wireSalesStrategyEditing(container){
   });
 }
 
-function wireUpSalesStrategyAddRow(){
-  const addBtn = document.getElementById("ssAddRowBtn");
-  const statusEl = document.getElementById("ssAddRowStatus");
-  if(!addBtn) return;
-  addBtn.addEventListener("click", () => {
-    const sel = document.getElementById("ssNewTicker");
-    const ticker = sel ? sel.value : "";
-    if(!ticker){
-      if(statusEl){ statusEl.textContent = "Add a ticker to Past Purchases first."; statusEl.style.color = "var(--amber)"; }
-      return;
-    }
-    addSalesStrategyRow(ticker);
-    renderSalesStrategyTable();
-    if(statusEl){ statusEl.textContent = `Added a draft sale row for ${ticker}.`; statusEl.style.color = "var(--emerald)"; }
-  });
-}
+// v5.73: the manual "Ticker [dropdown] + Add Row" UI (and the function that
+// wired it, wireUpSalesStrategyAddRow) is gone — auto-populate
+// (syncSalesStrategyFromHoldings, v5.70) and the ticker cell's own Save
+// button (saveSalesStrategyRowAndSplit, v5.72) together mean a draft row for
+// every held ticker is already there, and any remaining units always get
+// their own follow-up row, with no manual "add a row" step needed anymore.
+// addSalesStrategyRow(ticker) itself is KEPT — it's still used internally by
+// the sync/import/duplicate functions above (and their tests).
 
 // --- Export: Excel / Text / PDF, for both tables ---
 // Both builders read from the snapshots kept up to date by
@@ -5770,25 +5967,36 @@ function withBuyTargetColumnPastPurchases(headers, rows){
 // whatever column sort is currently active) and mirrors renderSalesStrategyRowHTML's
 // own formatting/colors, just with the print-legible EXPORT_COLORS palette instead
 // of the live dark-theme hex values.
+// v5.73: follows whatever columns are currently visible/reordered (see
+// getSalesStrategyDisplayColumns) rather than the full fixed
+// SALES_STRATEGY_COLUMNS list directly, for the same "export what you see"
+// consistency Past Purchases' own exports already have with its column order.
 function buildSalesStrategyExportTable(){
   const resolvedRows = buildSalesStrategyRowsResolved();
-  const headers = SALES_STRATEGY_COLUMNS.map(c => c.label);
+  const { ticker, columns } = getSalesStrategyDisplayColumns();
+  const headers = [ticker.label, ...columns.map(c => c.label)];
   const rows = [];
   const colors = [];
   resolvedRows.forEach(r => {
     const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
     const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
     const saleText = r.saleRealizedDate ? `Confirmed ${r.saleRealizedDate}` : "Pending";
-    rows.push([
-      r.ticker, priceText, r.unitsToSell, r.sellingPrice,
-      r.totalPurchased, r.totalSold, r.unitsLeft, avgPriceText, saleText,
-    ]);
-    colors.push([
-      null, null, null, null, null, null,
-      r.overCommitted ? EXPORT_COLORS.red : null,
-      null,
-      r.saleRealizedDate ? EXPORT_COLORS.emerald : null,
-    ]);
+    const valueById = {
+      currentPrice: priceText,
+      unitsToSell: r.unitsToSell,
+      sellingPrice: r.sellingPrice,
+      totalPurchased: r.totalPurchased,
+      totalSold: r.totalSold,
+      unitsLeft: r.unitsLeft,
+      avgPurchasePriceOfUnitsLeft: avgPriceText,
+      saleRealizedDate: saleText,
+    };
+    const colorById = {
+      unitsLeft: r.overCommitted ? EXPORT_COLORS.red : null,
+      saleRealizedDate: r.saleRealizedDate ? EXPORT_COLORS.emerald : null,
+    };
+    rows.push([r.ticker, ...columns.map(c => valueById[c.id])]);
+    colors.push([null, ...columns.map(c => colorById[c.id] || null)]);
   });
   return { headers, rows, colors };
 }
@@ -7969,7 +8177,6 @@ try{
 }
 
 try{
-  wireUpSalesStrategyAddRow();
   renderSalesStrategyTable();
 }catch(err){
   console.error("Failed to wire up the Sales Strategy table:", err);
