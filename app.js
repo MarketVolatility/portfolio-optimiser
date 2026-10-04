@@ -1,4 +1,19 @@
-// APP.JS BUILD: v5.71 (Sales Strategy now carries the same set of
+// APP.JS BUILD: v5.72 (Added a "Save" button to each draft Sales
+// Strategy row's ticker cell (alongside ↑/↓/Dup/×). Clicking it commits
+// whatever's currently typed into that row's Units to Sell/Selling Price
+// (reading the live input values directly, even if the field hasn't been
+// blurred yet) and, if any of that ticker's held units are still left over
+// once every non-realized row for it is added up, immediately inserts a
+// fresh blank draft row directly below to plan them — e.g. a ticker with 10
+// units held, saved as "5 units to sell", gets a new row below showing
+// "5 units left", with no manual "+ Add Row"/"Dup" click needed. Skips adding
+// a row when nothing's left over, or when a ready-to-use blank continuation
+// row for that ticker is already sitting right there (so repeated Save
+// clicks never pile up redundant empty rows). The goal: no held ticker's
+// units are ever left unaccounted-for and forgotten. New function:
+// saveSalesStrategyRowAndSplit().)
+//
+// v5.71 (Sales Strategy now carries the same set of
 // functions as Past Purchases. Added "Sample Excel for Data Entry" / "Import
 // Excel" (scoped to its two typed-in fields, Ticker/Units to Sell/Selling
 // Price — a line that exactly matches an already-planned draft row is skipped,
@@ -322,7 +337,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.71 (Sales Strategy now has the same Excel Sample/Import/Export buttons as Past Purchases, plus per-column header sort and ticker-cell row reorder)");
+console.log("app.js loaded — build v5.72 (Sales Strategy rows now have a \"Save\" button that locks in a batch and auto-adds a fresh row below for any units still left over)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3116,6 +3131,47 @@ function buildSalesStrategyRowsResolved(){
   return resolved;
 }
 
+// The ticker cell's new "Save" button (v5.72): commits whatever's currently
+// typed into THIS row's Units to Sell / Selling Price (even if the input
+// hasn't been blurred yet, so the "change" event that normally writes it
+// hasn't fired) and, if any of this ticker's held units are still left over
+// once every non-realized row for it (including this one) is added up, adds a
+// fresh blank draft row directly below — same insert duplicateSalesStrategyRow
+// already does — pre-positioned to plan that remainder. This is how "Units
+// Left" (10 - this row's 5 = 5) becomes visible as its own row's ceiling
+// without the user having to remember to click "Dup" or "+ Add Row" — the
+// point being nothing held ever gets silently left unaccounted-for. Skips
+// adding a new row when: nothing's left over (this row's units already cover
+// everything held), or a ready-to-use blank continuation row for this same
+// ticker is already sitting directly below (so repeated Save clicks, or
+// Save after an earlier Dup, don't pile up redundant empty rows). Returns the
+// new row's id, or null if none was added.
+function saveSalesStrategyRowAndSplit(id, unitsToSell, sellingPrice){
+  setSalesStrategyValue(id, "unitsToSell", Number(unitsToSell) || 0);
+  setSalesStrategyValue(id, "sellingPrice", Number(sellingPrice) || 0);
+
+  const rows = getSalesStrategyRows();
+  const idx = rows.findIndex(r => r.id === id);
+  if(idx === -1) return null;
+  const row = rows[idx];
+  if(row.saleRealizedDate) return null; // locked rows have no Save button anyway
+
+  const stats = getSalesStrategyTickerStats(row.ticker);
+  const totalPlanned = rows.reduce((sum, r) => {
+    if(r.ticker !== row.ticker || r.saleRealizedDate) return sum;
+    return sum + (Number(r.unitsToSell) || 0);
+  }, 0); // every non-realized row for this ticker, INCLUDING this one's just-saved amount
+  const remaining = stats.totalHeld - totalPlanned;
+  if(remaining <= PP_EPS) return null; // nothing left over -- no follow-up row needed
+
+  const next = rows[idx + 1];
+  const nextIsReadyBlankContinuation = next && next.ticker === row.ticker && !next.saleRealizedDate
+    && (Number(next.unitsToSell) || 0) === 0 && (Number(next.sellingPrice) || 0) === 0;
+  if(nextIsReadyBlankContinuation) return null;
+
+  return duplicateSalesStrategyRow(id);
+}
+
 // The "Confirm Sale" button's action: turns a draft row into a REAL sale on the
 // active Past Purchases list — adds a new sale row for the ticker (same helper
 // the Lot Matching table's own per-ticker "Sell" button uses, so it also seeds
@@ -5098,6 +5154,7 @@ function renderSalesStrategyRowHTML(r, idx, total){
         <div class="row-ctrl-controls">
           <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="-1" ${upDisabled} title="Move this row up">&uarr;</button>
           <button type="button" class="ss-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="1" ${downDisabled} title="Move this row down">&darr;</button>
+          <button type="button" class="ss-save-btn row-ctrl-btn" data-row-id="${r.id}" title="Save this batch's Units to Sell/Selling Price. If any units of ${escAttr(r.ticker)} are still left over once every row is counted, a new blank row is added below to plan them too — so none get missed." style="width:auto; padding:0 0.5rem; font-size:0.7rem; color:#34d399;">Save</button>
           <button type="button" class="ss-dup-btn row-ctrl-btn" data-row-id="${r.id}" title="Duplicate this row below, same ticker — plan selling another batch at a different price" style="width:auto; padding:0 0.5rem; font-size:0.7rem;">Dup</button>
           <button type="button" class="ss-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.ticker)}" title="Remove this draft row — it was never a real sale">&times;</button>
         </div>
@@ -5202,6 +5259,22 @@ function wireSalesStrategyEditing(container){
   container.querySelectorAll(".ss-move-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       moveSalesStrategyRow(btn.getAttribute("data-row-id"), parseInt(btn.getAttribute("data-dir"), 10));
+      renderSalesStrategyTable();
+    });
+  });
+
+  container.querySelectorAll(".ss-save-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-row-id");
+      const tr = btn.closest("tr");
+      // Read the inputs' LIVE values directly, not the already-stored row --
+      // if the user clicks Save right after typing (before the field's own
+      // "change"/blur fires), this is what picks up that latest value.
+      const unitsInput = tr ? tr.querySelector("input[data-field='unitsToSell']") : null;
+      const priceInput = tr ? tr.querySelector("input[data-field='sellingPrice']") : null;
+      const units = unitsInput ? parseFloat(unitsInput.value) : 0;
+      const price = priceInput ? parseFloat(priceInput.value) : 0;
+      saveSalesStrategyRowAndSplit(id, isNaN(units) ? 0 : units, isNaN(price) ? 0 : price);
       renderSalesStrategyTable();
     });
   });
