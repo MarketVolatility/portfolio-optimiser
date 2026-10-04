@@ -1,3 +1,46 @@
+// APP.JS BUILD: v5.78 (Bug fix: Sales Strategy's "Refresh" button failed to
+// restore a deleted LEFTOVER/continuation row for a ticker that still had
+// one OTHER, fully-committed row. Reported case: stock X had a row planning
+// 3 of its 8 held units, plus a second blank row (created by clicking "Save"
+// on the first) showing the remaining 5 as pending; deleting that second row
+// left the first row still correctly showing "5 units pending plan" on its
+// own, but Refresh wouldn't bring the dedicated row back -- only clicking
+// Save on the remaining row did. Root cause: the Refresh button's coverage
+// check (since v5.76) only asked "does this ticker have ANY non-realized row
+// at all," which was already true (the first row never left), so it never
+// got as far as checking whether that row's own Units to Sell actually
+// covered the full holding. Fix: a forced sync now asks the SAME question
+// the Save button's own split logic already asks (saveSalesStrategyRowAndSplit)
+// -- sum Units to Sell across every non-realized row for the ticker and
+// compare to Total Units Holding -- and adds a fresh blank row whenever
+// something's left over and no ready blank (0 Units to Sell, 0 Selling
+// Price) row already exists to represent it. The automatic per-edit sync is
+// untouched (still the shallower "any row exists" check), so ordinary
+// editing still never resurrects a single deliberately-removed row.)
+//
+// APP.JS BUILD: v5.77 (Bug fix: adding a ticker to Past Purchases via
+// "Add to Past Purchases" (individual asset addition) could silently produce
+// NO visible row at all, with no way to even type its first Units Purchased
+// in -- reported with MSFT, then confirmed with AAPL/META too, while V and SE
+// worked fine. Root cause: the Lot Matching table (the only Past Purchases
+// table since v5.64) only ever draws a row for a real FIFO "buy"/"sale"/
+// "match" event (computePastPurchasesFifoLotBreakdown); a freshly added
+// ticker with nothing pulled in from the Portfolio Lists table (no override
+// entered there yet for that symbol -- see pullMainTableDataIntoPastPurchases)
+// starts at 0 Units Purchased with no sale data either, so it generated
+// ZERO events and thus zero rows -- the row existed in storage but had
+// nothing on screen to edit. V/SE "worked" purely because they already had
+// Units Purchased data on the Portfolio Lists table to pull in, giving them
+// an immediate real "buy" event; AAPL/META/MSFT didn't, so they had nothing.
+// Fix: computePastPurchasesFifoLotBreakdown now emits a qty-0 "blank" event
+// for any row that produces no real buy/sale/match event, which always
+// renders as one plain editable placeholder row (Units Purchased/Average
+// Purchase Price/Date Purchased, etc. all start blank/0 and are fully
+// editable like any other cell) -- kept visible even under "Current
+// Holdings" only, so the toggle state can never reproduce this silently
+// either. A row like this was never counted as "held" anywhere (Current
+// Holding list, Sales Strategy auto-seeding, exports) and still isn't.)
+//
 // APP.JS BUILD: v5.76 (Bug fix: clicking Sales Strategy's "Refresh" button
 // failed to bring back a draft row for a ticker the user had removed, even
 // though it was still held with real pending units (reported: AVGO, removed,
@@ -413,7 +456,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.76 (bug fix: Sales Strategy's \"Refresh\" button now force-resyncs — it brings back a draft row for any currently-held ticker with none, even one you'd removed, instead of silently deferring to the same resurrection guard the automatic per-edit sync uses)");
+console.log("app.js loaded — build v5.78 (bug fix: Sales Strategy's \"Refresh\" button now restores a deleted leftover/continuation row even when the ticker still has one other, fully-committed row — it checks total Units to Sell against Total Units Holding, same as the Save button's own split logic, instead of stopping at \"does any row exist\")");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3448,6 +3491,11 @@ function saveSalesStrategyLastSeenHeld(map){
 // updated afterward either way, so the very next ordinary (non-forced) edit
 // correctly sees "no change" relative to whatever Refresh just settled on.
 //
+// v5.78: forced mode no longer stops at "does any row exist" either -- see
+// the detailed comment right above the coverage loop below for why a ticker
+// that still has ONE fully-committed row can legitimately need Refresh to
+// restore a second, separately-deleted leftover row.
+//
 // The snapshot is updated for every held ticker every run, whether or not a
 // row was added. Returns true iff either pass added anything.
 function syncSalesStrategyFromHoldings(force){
@@ -3466,22 +3514,51 @@ function syncSalesStrategyFromHoldings(force){
 
   if(seeded.size !== seededSizeBefore) saveSalesStrategySeededTickers(Array.from(seeded));
 
-  // v5.74/v5.76: re-check coverage for every held ticker NOT already freshly
-  // seeded above -- does it still have a non-realized draft row to show its
-  // pending units? If not: a forced call (Refresh) adds one unconditionally;
-  // an ordinary call only adds one when holding has genuinely risen since the
-  // last time this ran (see the long comment above for why).
+  // v5.74/v5.76/v5.78: re-check coverage for every held ticker NOT already
+  // freshly seeded above. The two modes deliberately ask DIFFERENT questions:
+  //
+  // - An ordinary (unforced) call stays shallow on purpose: does this ticker
+  //   have ANY non-realized draft row at all? If one already exists, its own
+  //   "Units Pending Plan" recomputes automatically on every render (the
+  //   running-total formula in buildSalesStrategyRowsResolved), so a holding
+  //   increase alone never needs a new row -- only a ticker with genuinely
+  //   NONE yet (and only once holding has genuinely risen since last seen,
+  //   see the long comment above) gets one.
+  //
+  // - A forced call (Refresh) asks the SAME "anything left over" question the
+  //   Save button's own split logic already asks (saveSalesStrategyRowAndSplit):
+  //   sum this ticker's Units to Sell across every non-realized row, and
+  //   compare to Total Units Holding. Reported bug: a ticker can keep one
+  //   fully-committed row (say 3 of 8 planned) after its OTHER row -- a blank
+  //   leftover/continuation row Save itself had created for the remaining 5,
+  //   with nothing typed into it yet -- gets deleted. The shallow "a row
+  //   exists" check above would (correctly, for the unforced path) leave that
+  //   alone, but it meant Refresh couldn't restore the dedicated row for that
+  //   obviously-still-pending remainder either, even though clicking "Save"
+  //   on the remaining row immediately recreates it. Refresh now runs that
+  //   same global-sum check directly: if something's left over AND no ready
+  //   blank row (Units to Sell = Selling Price = 0 -- exactly what that
+  //   leftover row looks like) already exists for the ticker, it adds one.
   let addedForCoverage = false;
   const lastSeenHeld = getSalesStrategyLastSeenHeld();
   const lastSeenChanged = {};
   heldTickers.forEach(t => {
     const stats = getSalesStrategyTickerStats(t);
     if(!toSeed.includes(t)){ // a brand-new row above already covers this round
-      const hasDraftRow = getSalesStrategyRows().some(r => r.ticker === t && !r.saleRealizedDate);
-      const previouslySeen = Object.prototype.hasOwnProperty.call(lastSeenHeld, t);
-      const priorHeld = previouslySeen ? lastSeenHeld[t] : stats.totalHeld; // unseen ticker: baseline to "no change" rather than flagging it
-      const genuineIncrease = stats.totalHeld > priorHeld + PP_EPS;
-      if(!hasDraftRow && (force || genuineIncrease)){ addSalesStrategyRow(t); addedForCoverage = true; }
+      const tickerRows = getSalesStrategyRows().filter(r => r.ticker === t && !r.saleRealizedDate);
+      let needsRow;
+      if(force){
+        const totalPlanned = tickerRows.reduce((sum, r) => sum + (Number(r.unitsToSell) || 0), 0);
+        const remaining = stats.totalHeld - totalPlanned;
+        const hasReadyBlankRow = tickerRows.some(r => (Number(r.unitsToSell) || 0) === 0 && (Number(r.sellingPrice) || 0) === 0);
+        needsRow = remaining > PP_EPS && !hasReadyBlankRow;
+      } else {
+        const previouslySeen = Object.prototype.hasOwnProperty.call(lastSeenHeld, t);
+        const priorHeld = previouslySeen ? lastSeenHeld[t] : stats.totalHeld; // unseen ticker: baseline to "no change" rather than flagging it
+        const genuineIncrease = stats.totalHeld > priorHeld + PP_EPS;
+        needsRow = tickerRows.length === 0 && genuineIncrease;
+      }
+      if(needsRow){ addSalesStrategyRow(t); addedForCoverage = true; }
     }
     lastSeenChanged[t] = stats.totalHeld;
   });
@@ -4521,6 +4598,16 @@ function computePastPurchasesFifoLotBreakdown(rows, params){
       if(residual > PP_EPS) events.push({ type: "buy", date: datePurchased, idx, rowId: row.id, units: residual, price: avg });
     } else if(hasSaleData && sold > PP_EPS && sellP){
       events.push({ type: "sale", date: dateSale, idx, rowId: row.id, qty: sold, sell });
+    } else {
+      // v5.77: a row with no real buy or sale data yet (e.g. just added via
+      // "Add to Past Purchases"/individual asset addition, with nothing pulled
+      // in from a Portfolio List) produces no FIFO event at all under the rules
+      // above -- left alone, it would never turn into a "buy" or "unmatched"
+      // entry, so it would render ZERO rows in the Lot Matching table: a ticker
+      // that's definitely in the data, but invisible, with no cell anywhere to
+      // even type its first Units Purchased into. A "blank" event guarantees it
+      // still surfaces as one qty-0 editable placeholder row (see Pass 2 below).
+      events.push({ type: "blank", date: datePurchased, idx, rowId: row.id });
     }
   });
 
@@ -4542,6 +4629,12 @@ function computePastPurchasesFifoLotBreakdown(rows, params){
       if(ev.type === "buy"){ lots.push({ rowId: ev.rowId, date: ev.date, price: ev.price, remaining: ev.units }); return; }
       if(ev.type === "match"){
         out.matches.push({ ticker, buyRowId: ev.buyRowId, buyDate: ev.buyDate, buyPrice: ev.buyPrice, sellRowId: ev.sellRowId, sellDate: ev.sellDate, sellPrice: ev.sellPrice, qty: ev.qty, realized: ev.qty * (ev.sellPrice - ev.buyPrice) });
+        return;
+      }
+      if(ev.type === "blank"){
+        // v5.77: a qty-0 placeholder so this row always has an editable fragment
+        // (see Pass 1's "blank" comment above) -- never consumes/produces lots.
+        out.unmatched.push({ ticker, buyRowId: ev.rowId, buyDate: ev.date || "", buyPrice: 0, qty: 0, isBlank: true });
         return;
       }
       // ev.type === "sale": draw from the oldest lot(s) with units remaining.
@@ -5091,9 +5184,14 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
 
   // "Current Holdings" ON, at fragment granularity: only still-held (unmatched)
   // fragments — a sold lot isn't a "current holding" anymore. The footer below
-  // always totals the FULL, unfiltered `fragments` list regardless.
+  // always totals the FULL, unfiltered `fragments` list regardless. v5.77: a
+  // "blank" placeholder fragment (a row with no buy/sale data yet — see
+  // computePastPurchasesFifoLotBreakdown) is always kept, holdings filter or
+  // not — it isn't a holding either way, but hiding it would silently bring
+  // back the exact "my new row doesn't appear" bug this version fixes,
+  // whenever the toggle happens to be on.
   const showHoldingsOnly = getPpShowCurrentHoldingsOnly();
-  const visibleFragments = showHoldingsOnly ? fragments.filter(f => !f.isMatch) : fragments;
+  const visibleFragments = showHoldingsOnly ? fragments.filter(f => !f.isMatch || f.data.isBlank) : fragments;
 
   let bodyHtml = "";
   if(visibleFragments.length === 0){
