@@ -249,7 +249,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.68 — Lot Matching footer now shows Book Value and Current Market Value totals, each in its own column.
+      Version v5.69 — Added a "Sales Strategy" section below Past Purchases to plan, batch, and confirm future sales.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -536,6 +536,23 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       This table lays purchases and sales out as FIFO-matched lots: a purchase splits across several rows here if it fed more than one sale, and a sale splits across several rows if it drew from more than one purchase — always oldest-purchase-first (FIFO), even when "Cost basis" above is set to Average cost, since Average cost blends prices across lots and has nothing clean to split into rows like this. Every cell here is editable and writes back to the real purchase or sale it belongs to. In the ticker cell: <strong>↑ ↓</strong> reorders that ticker's whole block of rows, <strong>Sell</strong> records a new sale, and <strong>×</strong> deletes; "Held: x/y" shows how many units of that purchase are still unsold. The "Total current market and book value" (shown as two totals — Book Value and Current Market Value, each in its own column), "Total Realized Gain to date", and monthly Realized Gain totals below are computed from these FIFO-matched rows.
     </div>
     <div id="ppLotMatchContent"></div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Sales Strategy</h2>
+  </div>
+  <div class="disclaimer">
+    Plan a sale of a ticker already on this Past Purchases list without touching your real holdings yet. Pick a ticker below and <strong>+ Add Row</strong>, then enter <strong>Units to Sell</strong> and a <strong>Selling Price</strong> — use the ticker cell's <strong>Dup</strong> button to add another row for the same ticker if you want to sell it off in separate batches at different prices. <strong>Units Left</strong> = Total Units Purchased − Total Units Sold − Units to Sell already planned in every OTHER still-pending row for that ticker; <strong>Average Purchase Price of Units Left</strong> is the FIFO cost of whichever lots would remain after those other rows. Nothing here is real until you click <strong>Confirm Sale</strong> and pick the date — that adds a real sale row to the Lot Matching table above and updates every table and total that depends on it. A confirmed row is locked and shown in green.
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1rem;">
+    <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Ticker
+      <select id="ssNewTicker" class="form-input" style="width:160px;"></select>
+    </label>
+    <button id="ssAddRowBtn">+ Add Row</button>
+    <span id="ssAddRowStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div style="margin-bottom:2rem;">
+    <div id="ssTableContent"></div>
   </div>
 
   </div>
