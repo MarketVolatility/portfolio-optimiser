@@ -254,7 +254,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.82 — Excel exports rebuilt: frozen bold header row, auto column widths, no external library needed.
+      Version v5.83 — Call options added to Past Purchases and Sales Strategy, with strike, expiry, import/export, free price API.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -454,6 +454,19 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <button id="ppAddTickerBtn">Add to Past Purchases</button>
         <span id="ppAddTickerStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
       </div>
+      <div class="chart-note" style="margin-top:1rem; margin-bottom:0.5rem;"><strong>Call options:</strong> each contract (ticker + strike + expiration) is tracked and FIFO-matched on its own, never mixed with the stock or other contracts. Units = contracts; gains and values are multiplied by the contract size. An option still unsold after its expiration date counts as expired worthless (sold at $0.00 on that date).</div>
+      <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+        <input id="ppNewOptTicker" placeholder="Underlying (e.g. AAPL)" class="form-input" style="width:170px;">
+        <input id="ppNewOptStrike" type="number" min="0" step="0.5" placeholder="Strike price" class="form-input" style="width:130px;">
+        <label style="display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary); gap:2px;">Expiration date
+          <input id="ppNewOptExpiry" type="date" class="form-input" style="width:160px;">
+        </label>
+        <button id="ppAddOptionBtn">Add call option</button>
+        <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="Shares per option contract, used for every option's gain, book value and market value.">Shares per contract
+          <input id="optMultiplierInput" type="number" min="1" step="1" class="form-input" style="width:80px;">
+        </label>
+        <span id="ppAddOptionStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+      </div>
       <div class="chart-note" style="margin-top:0.75rem;">Existing rows (click × to remove):</div>
       <div id="ppTickerList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
     </div>
@@ -604,6 +617,14 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <span id="alphaVantageKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
     <button id="fetchAlphaVantageLiveBtn" title="Independent from Finnhub's 'Fetch live data' above — uses only this Alpha Vantage key, and its own status message here.">Fetch live data</button>
     <span id="alphaVantageFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="marketDataApiKeyInput" style="flex:1; min-width:220px;">Marketdata.app API key — call-option prices for Past Purchases / Sales Strategy (free plan: 100 requests/day, 1 per contract, data 24h delayed) <a href="https://www.marketdata.app/" target="_blank" style="color:var(--accent-blue); font-weight:400;">(get free key)</a></label>
+    <input id="marketDataApiKeyInput" type="text" placeholder="paste token here" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:220px;">
+    <button id="saveMarketDataKeyBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save key</button>
+    <span id="marketDataKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    <button id="fetchMarketDataOptionsBtn" title="Fetches a current price for every call-option contract you still hold on the open Past Purchases list. Stocks are not affected. You can also type any option's price straight into its Current Price cell.">Fetch option prices</button>
+    <span id="marketDataFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   </div>
