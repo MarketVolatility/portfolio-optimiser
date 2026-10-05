@@ -254,7 +254,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.83 — Call options added to Past Purchases and Sales Strategy, with strike, expiry, import/export, free price API.
+      Version v5.84 — Tradier added as a second call-option price source, with optional proxy for browser access.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -625,6 +625,16 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <span id="marketDataKeyStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
     <button id="fetchMarketDataOptionsBtn" title="Fetches a current price for every call-option contract you still hold on the open Past Purchases list. Stocks are not affected. You can also type any option's price straight into its Current Price cell.">Fetch option prices</button>
     <span id="marketDataFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="tradierApiKeyInput" style="flex:1 1 100%;">Tradier — second source for call-option prices. Paste your Tradier access token, pick sandbox (free, delayed) or live, and enter the URL of your proxy (recommended — Tradier needs an Authorization header that browsers usually can't send; see the included tradier-proxy.ts, a ready-to-deploy Supabase edge function). Leave the proxy blank to try a direct call. <a href="https://docs.tradier.com/docs/getting-started" target="_blank" style="color:var(--accent-blue); font-weight:400;">(Tradier docs)</a></label>
+    <input id="tradierApiKeyInput" type="text" placeholder="Tradier access token" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:1; min-width:200px;">
+    <input id="tradierProxyUrlInput" type="text" placeholder="Proxy URL, e.g. https://xxxx.supabase.co/functions/v1/tradier-proxy" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; flex:2; min-width:260px;">
+    <select id="tradierEnvSelect" style="background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px;"><option value="sandbox">Sandbox</option><option value="live">Live</option></select>
+    <button id="saveTradierSettingsBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Save</button>
+    <span id="tradierSettingsStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    <button id="fetchTradierOptionsBtn" title="Fetches prices for every call-option contract you still hold, in one batched request. Stocks are not affected.">Fetch option prices (Tradier)</button>
+    <span id="tradierFetchStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
 
   </div>
