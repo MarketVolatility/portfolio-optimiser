@@ -1,4 +1,7 @@
-// APP.JS BUILD: v5.83 (CALL OPTIONS: Past Purchases and Sales Strategy now hold stocks AND
+// APP.JS BUILD: v5.84 (Tradier added as a SECOND call-option price source below Marketdata.app: token, sandbox/live,
+//   optional proxy URL (tradier-proxy.ts Supabase edge function, token sent in x-tradier-token), one batched
+//   quote request for all held contracts; mid(bid,ask) -> last -> close.)
+// v5.83 (CALL OPTIONS: Past Purchases and Sales Strategy now hold stocks AND
 //   call options in the same tables. New Strike Price / Expiration Date columns (after Ticker);
 //   a row with a Strike Price > 0 is an option. Each contract (ticker+strike+expiry) is matched
 //   FIFO separately; units = contracts, money values x contract multiplier (default 100,
@@ -496,7 +499,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.83 (call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.84 (Tradier option prices as 2nd source; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -519,7 +522,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "tradierApiKey", "tradierProxyUrl", "tradierEnv", "optionPrices", "optionContractMultiplier", "optionColumnsAdded"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -1188,6 +1191,89 @@ async function fetchMarketDataOptionPricesForHeld(){
   renderPastPurchasesTable();
   const note = failed.length ? ` Could not fetch: ${failed.join("; ")}.` : "";
   say(`Updated ${ok} of ${keys.length} option price(s) (24h-delayed free data; ${getMarketDataCallCountToday()}/${MARKETDATA_DAILY_CREDITS} credits used today).${note}`, failed.length ? "var(--amber)" : "var(--emerald)");
+}
+
+// --- Tradier: call-option prices, second source (v5.84) ---
+// Tradier's API needs an "Authorization: Bearer <token>" header, which a plain
+// browser page often cannot send cross-origin. So there are two modes:
+//   * Proxy URL filled in (recommended): the app calls YOUR tiny proxy (e.g. a
+//     Supabase edge function, tradier-proxy.ts) with the token in an
+//     x-tradier-token header; the proxy adds the Bearer header server-side.
+//   * Proxy URL empty: the app calls Tradier directly (works only if Tradier's
+//     server allows the browser request; otherwise it fails with a clear message).
+// All held contracts go out in ONE batched request (symbols=A,B,C).
+function getSavedTradierKey(){ try{ return localStorage.getItem("tradierApiKey") || ""; }catch(e){ return ""; } }
+function saveTradierKey(k){ try{ localStorage.setItem("tradierApiKey", k); }catch(e){ /* unavailable */ } }
+function getSavedTradierProxy(){ try{ return localStorage.getItem("tradierProxyUrl") || ""; }catch(e){ return ""; } }
+function saveTradierProxy(u){ try{ localStorage.setItem("tradierProxyUrl", u); }catch(e){ /* unavailable */ } }
+function getSavedTradierEnv(){ try{ return localStorage.getItem("tradierEnv") === "live" ? "live" : "sandbox"; }catch(e){ return "sandbox"; } }
+function saveTradierEnv(v){ try{ localStorage.setItem("tradierEnv", v === "live" ? "live" : "sandbox"); }catch(e){ /* unavailable */ } }
+// One quote object -> a price: mid of bid/ask, else last, else close, else the one side of the market.
+function ppPickTradierPrice(q){
+  if(!q) return undefined;
+  const bid = Number(q.bid), ask = Number(q.ask), last = Number(q.last), close = Number(q.close);
+  if(bid > 0 && ask > 0) return (bid + ask) / 2;
+  if(last > 0) return last;
+  if(close > 0) return close;
+  if(bid > 0) return bid;
+  return undefined;
+}
+// Tradier response -> { OCCSYMBOL: price } (quote may be one object or an array).
+function parseTradierQuotes(data){
+  const out = {};
+  let q = data && data.quotes && data.quotes.quote;
+  if(!q) return out;
+  if(!Array.isArray(q)) q = [q];
+  q.forEach(x => { const p = ppPickTradierPrice(x); if(x && x.symbol && p !== undefined) out[String(x.symbol).toUpperCase()] = p; });
+  return out;
+}
+async function fetchTradierQuotes(occSymbols, token, env, proxyUrl){
+  const list = occSymbols.join(",");
+  let res;
+  if(proxyUrl){
+    const sep = proxyUrl.includes("?") ? "&" : "?";
+    res = await fetch(`${proxyUrl}${sep}symbols=${encodeURIComponent(list)}&env=${encodeURIComponent(env)}`, { headers: { "x-tradier-token": token } });
+  }else{
+    const host = env === "live" ? "api.tradier.com" : "sandbox.tradier.com";
+    res = await fetch(`https://${host}/v1/markets/quotes?symbols=${encodeURIComponent(list)}&greeks=false`, { headers: { "Authorization": "Bearer " + token, "Accept": "application/json" } });
+  }
+  let data = null;
+  try{ data = await res.json(); }catch(e){ /* empty body */ }
+  if(!res.ok && !(data && data.quotes)){
+    const why = (data && (data.error || data.fault && data.fault.faultstring)) || ("HTTP " + res.status);
+    throw new Error(String(why));
+  }
+  return parseTradierQuotes(data);
+}
+async function fetchTradierOptionPricesForHeld(){
+  const statusEl = document.getElementById("tradierFetchStatus");
+  const say = (msg, color) => { if(statusEl){ statusEl.textContent = msg; statusEl.style.color = color || "var(--text-secondary)"; } };
+  const token = getSavedTradierKey();
+  if(!token){ say("Add and save a Tradier access token first.", "var(--amber)"); return; }
+  const keys = getHeldOptionKeys();
+  if(keys.length === 0){ say("No held call options on this Past Purchases list to fetch.", "var(--amber)"); return; }
+  const occByKey = {};
+  keys.forEach(k => { const p = ppParseKey(k); const o = ppOccSymbol(p.symbol, p.strike, p.expiry); if(o) occByKey[k] = o; });
+  const usable = Object.keys(occByKey);
+  if(usable.length === 0){ say("Held contracts are missing a strike or expiration date.", "var(--amber)"); return; }
+  const env = getSavedTradierEnv(), proxy = getSavedTradierProxy();
+  say(`Fetching ${usable.length} contract(s) from Tradier ${env}${proxy ? " via your proxy" : " directly"}…`);
+  let prices;
+  try{
+    prices = await fetchTradierQuotes(usable.map(k => occByKey[k]), token, env, proxy);
+  }catch(err){
+    const hint = proxy ? "" : " If this says 'Failed to fetch', the browser blocked the direct call -- set a Proxy URL (see tradier-proxy.ts).";
+    say(`Tradier fetch failed: ${err.message || err}.${hint}`, "var(--amber)");
+    return;
+  }
+  let ok = 0; const failed = [];
+  usable.forEach(k => {
+    const p = prices[occByKey[k]];
+    if(p > 0){ setOptionPrice(k, p, "tradier"); ok++; } else failed.push(ppKeyLabel(k));
+  });
+  renderPastPurchasesTable();
+  const note = failed.length ? ` No quote for: ${failed.join("; ")}.` : "";
+  say(`Updated ${ok} of ${usable.length} option price(s) from Tradier ${env}${env === "sandbox" ? " (sandbox data is delayed)" : ""}.${note}`, failed.length ? "var(--amber)" : "var(--emerald)");
 }
 
 // --- SEC EDGAR ---
@@ -8867,6 +8953,24 @@ try{
   }
   const fetchMarketDataBtn = document.getElementById("fetchMarketDataOptionsBtn");
   if(fetchMarketDataBtn) fetchMarketDataBtn.addEventListener("click", fetchMarketDataOptionPricesForHeld);
+
+  // v5.84: Tradier (second option-price source) -- token, proxy URL, environment.
+  const trKey = document.getElementById("tradierApiKeyInput"), trProxy = document.getElementById("tradierProxyUrlInput"), trEnv = document.getElementById("tradierEnvSelect");
+  if(trKey) trKey.value = getSavedTradierKey();
+  if(trProxy) trProxy.value = getSavedTradierProxy();
+  if(trEnv) trEnv.value = getSavedTradierEnv();
+  const saveTradierBtn = document.getElementById("saveTradierSettingsBtn");
+  if(saveTradierBtn){
+    saveTradierBtn.addEventListener("click", () => {
+      saveTradierKey(trKey.value.trim());
+      saveTradierProxy(trProxy.value.trim());
+      saveTradierEnv(trEnv.value);
+      const el = document.getElementById("tradierSettingsStatus");
+      if(el){ el.textContent = "Saved."; el.style.color = "var(--emerald)"; }
+    });
+  }
+  const fetchTradierBtn = document.getElementById("fetchTradierOptionsBtn");
+  if(fetchTradierBtn) fetchTradierBtn.addEventListener("click", fetchTradierOptionPricesForHeld);
 }catch(err){
   console.error("Failed to wire up live-data controls:", err);
 }
