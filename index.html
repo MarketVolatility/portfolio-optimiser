@@ -129,6 +129,11 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 .cell-input:hover { border-color: var(--border-color); }
 .cell-input:focus { outline: none; border-color: var(--accent-blue); background: var(--bg-main); }
 .cell-input-num { width: 90px; }
+/* v5.80: an empty Date Sale shows the placeholder 0000-00-00. The real <input type=date> stays underneath (so the date picker still works), its own blank "mm/dd/yyyy" text is hidden while unfocused, and the placeholder sits over it until a real date is picked. */
+.pp-date-zero-wrap { position: relative; display: block; }
+.pp-date-zero-wrap .pp-date-empty:not(:focus) { color: transparent; }
+.pp-date-zero-wrap .pp-date-zero { position: absolute; left: calc(0.5rem + 1px); top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-secondary); font-size: 0.95rem; }
+.pp-date-zero-wrap:focus-within .pp-date-zero { display: none; }
 .cell-input-unconfirmed { color: #9ca3af; font-style: italic; }
 .cell-textarea {
   min-height: 60px; resize: vertical; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.4;
@@ -249,7 +254,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.78 — Bug fix: Sales Strategy's "Refresh" now restores a deleted leftover/continuation row even when the ticker still has one other, fully-committed row, not just when it has none at all.
+      Version v5.80 — Past Purchases: newest first, exports match table, At Buy Target removed, 0000-00-00 for missing Date Sale.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -496,13 +501,13 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
       <option value="date-new">Date Added (newest first)</option>
       <option value="date-old">Date Added (oldest first)</option>
       <option value="alpha">Alphabetical (Asset)</option>
-      <option value="param-date-purchased">Date Purchased (most recent first)</option>
+      <option value="param-date-purchased" selected>Date Purchased (most recent first) — default</option>
       <option value="param-date-purchased-old">Date Purchased (oldest first)</option>
       <option value="param-date-sale">Date Sale (most recent first)</option>
       <option value="param-date-sale-old">Date Sale (oldest first)</option>
       <option value="param-sale-profit">Realized Gain (highest first)</option>
       <option value="param-missed-gain">Missed Gain % (highest first)</option>
-      <option value="custom" selected>Custom order (reorder with ↑ ↓)</option>
+      <option value="custom">Custom order (reorder with ↑ ↓)</option>
     </select>
   </div>
 
