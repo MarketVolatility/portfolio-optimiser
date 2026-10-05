@@ -1,3 +1,7 @@
+// APP.JS BUILD: v5.81 (Excel exports (every table) now freeze the header row so
+// it stays visible while scrolling. SheetJS's free build can't write freeze
+// panes, so the finished .xlsx is post-processed with JSZip (loaded from the
+// same CDN fallbacks); if JSZip can't load, the normal un-frozen file is saved.)
 // APP.JS BUILD: v5.80 (Past Purchases: (1) default display is now by Date
 // Purchased, newest purchase at the top (dropdown default; header sorts and
 // "custom" order still work). (2) FIFO lot matching is now independent of the
@@ -474,7 +478,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.80 (Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.81 (Excel exports freeze the header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -5974,6 +5978,11 @@ const EXPORT_COLORS = {
 // needs a real library, since there's no browser-native way to produce a true .xlsx
 // binary, so it keeps the CDN-retry approach.)
 const EXPORT_LIB_URLS = {
+  jszip: [
+    "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
+    "https://unpkg.com/jszip@3.10.1/dist/jszip.min.js",
+  ],
   xlsx: [
     "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
@@ -6015,6 +6024,37 @@ async function exportTableAsExcel(filename, sheetName, headers, rows){
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31)); // Excel sheet-name length limit
+  // v5.81: freeze the header row so it stays visible when scrolling. SheetJS's
+  // free build can't write freeze panes, so the finished .xlsx (a zip) is opened
+  // with JSZip and a frozen-pane <sheetViews> block is added to the sheet XML.
+  // Any failure (JSZip blocked, unexpected XML) falls back to the plain file.
+  try{
+    const jzOk = await ensureLibraryLoaded(() => typeof JSZip !== "undefined", EXPORT_LIB_URLS.jszip);
+    if(jzOk){
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const zip = await JSZip.loadAsync(out);
+      const path = "xl/worksheets/sheet1.xml";
+      let xml = await zip.file(path).async("string");
+      if(!/<sheetViews>/.test(xml)){
+        const views = '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>';
+        // sheetViews must come after <dimension> (or <sheetPr>) and before <sheetFormatPr>/<cols>/<sheetData>.
+        if(/<dimension[^>]*\/>/.test(xml)) xml = xml.replace(/(<dimension[^>]*\/>)/, "$1" + views);
+        else xml = xml.replace(/(<worksheet[^>]*>)/, "$1" + views);
+        zip.file(path, xml);
+        const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        return;
+      }
+    }
+  }catch(err){
+    console.warn("Frozen-header Excel export failed; falling back to a plain file:", err);
+  }
   XLSX.writeFile(wb, filename);
 }
 
