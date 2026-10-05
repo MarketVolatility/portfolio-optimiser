@@ -1,3 +1,21 @@
+// APP.JS BUILD: v5.80 (Past Purchases: (1) default display is now by Date
+// Purchased, newest purchase at the top (dropdown default; header sorts and
+// "custom" order still work). (2) FIFO lot matching is now independent of the
+// display order — it always reads rows in stored order and matches oldest buys
+// to oldest sales; only a sale that exceeds the purchases on file (data further
+// down incomplete) stays unmatched and is reported under the table.
+// (3) Every Past Purchases export (Excel/Text/Word/PDF) is now built from the
+// same display model as the on-screen table: same columns, same row order, same
+// formatted cells, plus the same totals / Realized Gain / per-month summary
+// rows. (4) The "At Buy Target" column was removed from Past Purchases exports
+// (Portfolio Lists export unchanged). (5) A missing Date Sale shows and exports
+// as 0000-00-00 (display/export/import only — nothing is stored; it is never
+// treated as a real date). (6) Date import/export hardened: dates export as
+// plain YYYY-MM-DD text; import converts Excel serials with timezone-free
+// arithmetic, supports the 1904 date system, validates real calendar dates,
+// and leaves ambiguous/unreadable dates blank while listing them in the status
+// message. "Sample Excel for Data Entry" follows the displayed order.
+// (v5.79, a Sales Strategy trade-history display mode, was abandoned.))
 // APP.JS BUILD: v5.78 (Bug fix: Sales Strategy's "Refresh" button failed to
 // restore a deleted LEFTOVER/continuation row for a ticker that still had
 // one OTHER, fully-committed row. Reported case: stock X had a row planning
@@ -456,7 +474,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.78 (bug fix: Sales Strategy's \"Refresh\" button now restores a deleted leftover/continuation row even when the ticker still has one other, fully-committed row — it checks total Units to Sell against Total Units Holding, same as the Save button's own split logic, instead of stopping at \"does any row exist\")");
+console.log("app.js loaded — build v5.80 (Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -4401,6 +4419,19 @@ function setPpCostBasisMethod(method){
   try{ localStorage.setItem("ppCostBasisMethod", method === "fifo" ? "fifo" : "average"); }
   catch(e){ /* localStorage unavailable */ }
 }
+// v5.80: "0000-00-00" is the on-screen/exported PLACEHOLDER for "no Date Sale"
+// (a purchase nobody has sold, or a sale whose date was never entered). It is
+// never a real date: stored data keeps a blank there, and anything that does
+// carry the literal placeholder (a pasted/imported value) must still be read
+// as "no date" -- otherwise it would match the strict YYYY-MM-DD test below,
+// sort as the OLDEST event of all (so a sale carrying it would be matched
+// before any purchase exists) and break the monthly Realized Gain grouping.
+const PP_NO_DATE_PLACEHOLDER = "0000-00-00";
+function ppCleanDate(d){
+  const s = String(d === undefined || d === null ? "" : d).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  return s.slice(0, 4) === "0000" ? "" : s;
+}
 function ppFindParamByLabel(params, labels){
   const norm = x => String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
   const wanted = Array.isArray(labels) ? labels : [labels];
@@ -4419,7 +4450,7 @@ function computePastPurchasesLedger(rows, params, method){
   const dateSalePs = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
   const valOf = (row, p) => { const v = row.values || {}; return v[p.id] !== undefined ? v[p.id] : p.defaultValue; };
   const numOf = (row, p) => p ? (Number(valOf(row, p)) || 0) : 0;
-  const dateOf = (row, p) => { const d = p ? String(valOf(row, p) || "") : ""; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  const dateOf = (row, p) => p ? ppCleanDate(valOf(row, p)) : "";
   const methodName = method === "fifo" ? "FIFO" : "average";
   const out = {};
   const eventsByTicker = {};
@@ -4570,7 +4601,7 @@ function computePastPurchasesFifoLotBreakdown(rows, params){
   const dateSalePs = params.filter(p => !p.computed && String(p.label).trim().toLowerCase() === "date sale");
   const valOf = (row, p) => { const v = row.values || {}; return v[p.id] !== undefined ? v[p.id] : p.defaultValue; };
   const numOf = (row, p) => p ? (Number(valOf(row, p)) || 0) : 0;
-  const dateOf = (row, p) => { const d = p ? String(valOf(row, p) || "") : ""; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  const dateOf = (row, p) => p ? ppCleanDate(valOf(row, p)) : "";
 
   // Pass 1: turn each row into a "buy" (adds to the FIFO queue), a "match" (a
   // single row with its own Units Purchased AND Selling Price — resolved directly
@@ -4753,6 +4784,15 @@ function resolvePastPurchaseRowValues(row){
   return resolved;
 }
 
+// v5.80: the "Sort by" dropdown's current mode. The DEFAULT is now "Date
+// Purchased (most recent first)" -- newest purchase at the top -- instead of
+// "Custom order" (also what applies if the dropdown isn't on the page at all).
+const PP_DEFAULT_SORT_MODE = "param-date-purchased";
+function getPpSortMode(){
+  const el = (typeof document !== "undefined") ? document.getElementById("ppSortMode") : null;
+  return el && el.value ? el.value : PP_DEFAULT_SORT_MODE;
+}
+
 function getPastPurchasesSortedRows(){
   const rows = getPastPurchasesRows().slice(); // persisted custom order, as a starting point
 
@@ -4788,7 +4828,7 @@ function getPastPurchasesSortedRows(){
     });
   };
 
-  const sortMode = document.getElementById('ppSortMode') ? document.getElementById('ppSortMode').value : 'custom';
+  const sortMode = getPpSortMode();
   if(sortMode === 'alpha') rows.sort((a, b) => String(a.asset).localeCompare(String(b.asset)));
   else if(sortMode === 'date-new') rows.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
   else if(sortMode === 'date-old') rows.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
@@ -4886,10 +4926,9 @@ function wirePastPurchasesHeaderButtons(theadEl){
 // Matching (FIFO) table (renderPastPurchasesLotMatchBreakdown, below) is now the
 // only Past Purchases table, and it's fully editable itself. This function is now
 // just the shared orchestrator: it works out the current row order and the
-// "Current Holdings" filter (still needed for Excel/Text/Word/PDF exports, which
-// keep working from the raw rows — see buildPastPurchasesExportTable/
-// lastPastPurchasesVisibleRows — since the underlying row data model hasn't
-// changed, only how it's displayed/edited), keeps the "Current Holding" Portfolio
+// "Current Holdings" filter (v5.80: the Excel/Text/Word/PDF exports no longer use
+// these raw rows -- they rebuild the displayed table itself, see
+// buildPastPurchasesExportTable), keeps the "Current Holding" Portfolio
 // list's FIFO-verified ticker membership in sync, and hands off to the FIFO table.
 function renderPastPurchasesTable(){
   const params = getPastPurchasesParams();
@@ -5078,7 +5117,13 @@ function renderFifoFragmentCellHTML(p, f, params){
   }
 
   const target = fifoFragmentFieldTarget(p, f.data, f.isMatch);
+  // v5.80: Date Sale with no date shows 0000-00-00 (not a bare dash/blank) --
+  // the same text the exports carry, so the table and its exports agree.
+  const isDateSaleCol = String(p.label).trim().toLowerCase() === "date sale";
   if(!target){
+    if(isDateSaleCol){
+      return `<td style="color:var(--text-secondary);" title="Nothing sold on this lot yet, so there is no sale date — use the ticker cell's Sell button to record a sale.">${PP_NO_DATE_PLACEHOLDER}</td>`;
+    }
     return `<td style="color:var(--text-secondary);" title="Nothing sold on this lot yet — use the ticker cell's Sell button to record a sale.">—</td>`;
   }
   const val = resolved[p.id];
@@ -5088,6 +5133,10 @@ function renderFifoFragmentCellHTML(p, f, params){
     return `<td><input class="cell-input pp-frag-input" ${commonAttrs} data-type="text" data-frag-base="${escAttr(v)}" type="text" value="${escAttr(v)}"></td>`;
   }
   if(p.type === "date"){
+    if(isDateSaleCol && !ppCleanDate(val)){
+      // A sale with no date yet: real (empty) date input underneath, placeholder over it.
+      return `<td><span class="pp-date-zero-wrap"><input class="cell-input pp-frag-input pp-date-empty" ${commonAttrs} data-type="date" data-frag-base="" type="date" value=""><span class="pp-date-zero" aria-hidden="true">${PP_NO_DATE_PLACEHOLDER}</span></span></td>`;
+    }
     return `<td><input class="cell-input pp-frag-input" ${commonAttrs} data-type="date" data-frag-base="${escAttr(val || '')}" type="date" value="${escAttr(val || '')}"></td>`;
   }
   // Same "hit your buy target" emerald highlight as the old raw table's Current
@@ -5116,16 +5165,29 @@ function renderFifoFragmentCellHTML(p, f, params){
 // buttons below actually edit) whenever no column-header sort is active;
 // ppColumnSortState (shared with the header) sorts the flat fragment list by
 // that column instead, same as before.
-function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
-  const container = document.getElementById("ppLotMatchContent");
-  if(!container) return;
-  const breakdown = computePastPurchasesFifoLotBreakdown(orderedRows, params);
+// v5.80: works out WHICH fragments the Past Purchases (Lot Matching) table
+// shows and in WHAT ORDER -- the single source of truth shared by the on-screen
+// table (renderPastPurchasesLotMatchBreakdown) and every export
+// (buildPastPurchasesExportTable), so an export is the table's own rows by
+// construction instead of a parallel re-derivation that could drift from it.
+//
+// Matching (computePastPurchasesFifoLotBreakdown) is ALWAYS run over the rows
+// in their STORED order, never the on-screen order: it already walks events by
+// DATE, oldest first, so a recent sale is matched against earlier purchases
+// wherever those rows happen to sit; feeding it the display order would only
+// let a re-sort change same-day tie-breaks (and disagree with Sales Strategy,
+// which reads the stored order). Only a sale with no earlier purchases left to
+// draw on (older data missing from the list) stays unmatched, and is reported
+// under the table.
+//
+// Default order (no column-header sort, "Sort by" on its default "Date
+// Purchased (most recent first)"): every fragment sorted flat by its purchase
+// date, newest purchase at the top; a fragment with no purchase date goes last.
+function buildPastPurchasesDisplayModel(params, orderedRows){
+  const breakdown = computePastPurchasesFifoLotBreakdown(getPastPurchasesRows(), params);
   const allTickers = Object.keys(breakdown);
-
-  if(allTickers.length === 0){
-    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">${params.length === 0 ? "Add at least one parameter above to start tracking data for these assets." : "Nothing to show yet — add a purchase (Units Purchased + Average Purchase Price) to see it here."}</div>`;
-    return;
-  }
+  const model = { breakdown, allTickers, tickers: [], tickerIndex: {}, rowsById: {}, fragments: [], visibleFragments: [], allIssues: [], heldByBuyRow: {} };
+  if(allTickers.length === 0) return model;
 
   let tickers;
   if(ppColumnSortState){
@@ -5144,7 +5206,6 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
 
   const rowsById = {};
   orderedRows.forEach(r => { rowsById[r.id] = r; });
-  const unitsP = ppFindParamByLabel(params, "units purchased");
   const builtinCache = {};
   const allIssues = [];
   const fragments = []; // { ticker, isMatch, data, resolved }
@@ -5163,12 +5224,6 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
   // sold).
   const heldByBuyRow = {};
   Object.values(breakdown).forEach(t => { t.unmatched.forEach(u => { heldByBuyRow[u.buyRowId] = (heldByBuyRow[u.buyRowId] || 0) + u.qty; }); });
-  const totalUnitsForRow = (rowId) => {
-    const row = rowsById[rowId];
-    if(!row || !unitsP) return 0;
-    const v = row.values ? row.values[unitsP.id] : undefined;
-    return Number(v !== undefined ? v : unitsP.defaultValue) || 0;
-  };
 
   if(ppColumnSortState){
     const { colId, direction } = ppColumnSortState;
@@ -5180,6 +5235,16 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
       else cmp = (va || 0) - (vb || 0);
       return direction === "asc" ? cmp : -cmp;
     });
+  } else {
+    const sortMode = getPpSortMode();
+    if(sortMode === "param-date-purchased" || sortMode === "param-date-purchased-old"){
+      const dir = sortMode === "param-date-purchased" ? -1 : 1;
+      fragments.sort((a, b) => {
+        const da = a.data.buyDate || "", db = b.data.buyDate || "";
+        if(da === db) return 0; // stable: ties keep their ticker-group / FIFO order
+        return (da < db ? -1 : 1) * dir;
+      });
+    }
   }
 
   // "Current Holdings" ON, at fragment granularity: only still-held (unmatched)
@@ -5192,6 +5257,29 @@ function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
   // whenever the toggle happens to be on.
   const showHoldingsOnly = getPpShowCurrentHoldingsOnly();
   const visibleFragments = showHoldingsOnly ? fragments.filter(f => !f.isMatch || f.data.isBlank) : fragments;
+
+  Object.assign(model, { tickers, tickerIndex, rowsById, fragments, visibleFragments, allIssues, heldByBuyRow });
+  return model;
+}
+
+function renderPastPurchasesLotMatchBreakdown(params, orderedRows){
+  const container = document.getElementById("ppLotMatchContent");
+  if(!container) return;
+  const model = buildPastPurchasesDisplayModel(params, orderedRows);
+  const { allTickers, tickers, tickerIndex, rowsById, fragments, visibleFragments, allIssues, heldByBuyRow } = model;
+
+  if(allTickers.length === 0){
+    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">${params.length === 0 ? "Add at least one parameter above to start tracking data for these assets." : "Nothing to show yet — add a purchase (Units Purchased + Average Purchase Price) to see it here."}</div>`;
+    return;
+  }
+
+  const unitsP = ppFindParamByLabel(params, "units purchased");
+  const totalUnitsForRow = (rowId) => {
+    const row = rowsById[rowId];
+    if(!row || !unitsP) return 0;
+    const v = row.values ? row.values[unitsP.id] : undefined;
+    return Number(v !== undefined ? v : unitsP.defaultValue) || 0;
+  };
 
   let bodyHtml = "";
   if(visibleFragments.length === 0){
@@ -5340,12 +5428,26 @@ function wireFifoFragmentEditing(tbody){
 // the pre-existing darker var(--accent-blue) (#2563eb); Current Market Value's
 // live cells are #a78bfa, so its total uses the darker #7c3aed (also
 // EXPORT_COLORS.violet).
+// v5.80: the footer is now built as plain structured rows (see
+// buildFifoFooterRows) and drawn from those, so the on-screen footer and the
+// summary rows at the bottom of an export are the same rows by construction.
 function renderFifoLotMatchFooter(params, fragments){
+  return buildFifoFooterRows(params, fragments).map(r => {
+    const titleAttr = r.title ? ` title="${escAttr(r.title)}"` : "";
+    const cells = r.cells.map(c => c.style ? `<td style="${c.style}">${c.text}</td>` : `<td></td>`).join("");
+    return `<tr style="${r.rowStyle}"${titleAttr}><td style="${r.labelStyle}">${r.label}</td>${cells}</tr>`;
+  }).join("");
+}
+
+// One entry per footer row: { label, title, rowStyle, labelStyle, cells[] } where
+// each cell is { text, style, exportColor } (text "" / style "" = an empty cell).
+function buildFifoFooterRows(params, fragments){
   const bookValueParam = params.find(p => p.computed && p.formula === 'bookValuePP');
   const cmvParam = params.find(p => p.computed && p.formula === 'currentMarketValuePP');
   const saleProfitParam = params.find(p => p.computed && p.formula === 'salesProfitPP');
   const dateSaleParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === 'date sale');
-  let footHtml = '';
+  const emptyCells = () => params.map(() => ({ text: "", style: "", exportColor: null }));
+  const rows = [];
 
   if(bookValueParam || cmvParam){
     const bookColIndex = bookValueParam ? params.findIndex(p => p.id === bookValueParam.id) : -1;
@@ -5356,17 +5458,10 @@ function renderFifoLotMatchFooter(params, fragments){
     const totalCmv = cmvParam ? fragments.reduce((sum, f) => {
       return sum + (f.resolved['_' + cmvParam.id + '_ready'] ? (f.resolved[cmvParam.id] || 0) : 0);
     }, 0) : 0;
-    footHtml += `<tr style="background:rgba(255,255,255,0.02);"><td style="font-weight:600; color:var(--text-secondary);">Total current market and book value</td>`;
-    params.forEach((p, idx) => {
-      if(idx === bookColIndex){
-        footHtml += `<td style="font-weight:600; color:var(--accent-blue);">$${totalBookValue.toFixed(2)}</td>`;
-      } else if(idx === cmvColIndex){
-        footHtml += `<td style="font-weight:600; color:#7c3aed;">$${totalCmv.toFixed(2)}</td>`;
-      } else {
-        footHtml += `<td></td>`;
-      }
-    });
-    footHtml += `</tr>`;
+    const cells = emptyCells();
+    if(bookColIndex >= 0) cells[bookColIndex] = { text: `$${totalBookValue.toFixed(2)}`, style: "font-weight:600; color:var(--accent-blue);", exportColor: EXPORT_COLORS.blue };
+    if(cmvColIndex >= 0) cells[cmvColIndex] = { text: `$${totalCmv.toFixed(2)}`, style: "font-weight:600; color:#7c3aed;", exportColor: EXPORT_COLORS.violet };
+    rows.push({ label: "Total current market and book value", title: "", rowStyle: "background:rgba(255,255,255,0.02);", labelStyle: "font-weight:600; color:var(--text-secondary);", cells });
   }
 
   if(saleProfitParam){
@@ -5376,13 +5471,9 @@ function renderFifoLotMatchFooter(params, fragments){
     }, 0);
     const sign = total >= 0 ? '+' : '-';
     const color = total >= 0 ? 'var(--emerald)' : '#ef4444';
-    footHtml += `<tr style="background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);"><td style="font-weight:700; color:#fff;">Total Realized Gain to date</td>`;
-    params.forEach((p, idx) => {
-      footHtml += idx === colIndex
-        ? `<td style="font-weight:700; color:${color};">${sign}$${Math.abs(total).toFixed(2)}</td>`
-        : `<td></td>`;
-    });
-    footHtml += `</tr>`;
+    const cells = emptyCells();
+    cells[colIndex] = { text: `${sign}$${Math.abs(total).toFixed(2)}`, style: `font-weight:700; color:${color};`, exportColor: total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red };
+    rows.push({ label: "Total Realized Gain to date", title: "", rowStyle: "background:rgba(255,255,255,0.03); border-top:2px solid var(--border-color);", labelStyle: "font-weight:700; color:#fff;", cells });
   }
 
   if(saleProfitParam && dateSaleParam){
@@ -5406,18 +5497,14 @@ function renderFifoLotMatchFooter(params, fragments){
       const sign = g.total >= 0 ? '+' : '-';
       const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
       const label = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
-      const tickerTitle = ` title="Includes: ${escAttr(g.tickers.join(', '))} (${g.tickers.length} row${g.tickers.length === 1 ? '' : 's'})"`;
-      footHtml += `<tr style="background:rgba(255,255,255,0.02);"${tickerTitle}><td style="font-weight:600; color:var(--text-secondary);">${label}</td>`;
-      params.forEach((p, idx) => {
-        footHtml += idx === colIndex
-          ? `<td style="font-weight:600; color:${color};">${sign}$${Math.abs(g.total).toFixed(2)}</td>`
-          : `<td></td>`;
-      });
-      footHtml += `</tr>`;
+      const title = `Includes: ${g.tickers.join(', ')} (${g.tickers.length} row${g.tickers.length === 1 ? '' : 's'})`;
+      const cells = emptyCells();
+      cells[colIndex] = { text: `${sign}$${Math.abs(g.total).toFixed(2)}`, style: `font-weight:600; color:${color};`, exportColor: g.total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red };
+      rows.push({ label, title, rowStyle: "background:rgba(255,255,255,0.02);", labelStyle: "font-weight:600; color:var(--text-secondary);", cells });
     });
   }
 
-  return footHtml;
+  return rows;
 }
 
 // --- Sales Strategy (v5.69) ---
@@ -6138,95 +6225,97 @@ function buildMainTableExportTable(){
   return { headers, rows, colors };
 }
 
-// Companion to the per-row value logic below: returns a colors row (parallel to a
-// cells row, ticker column always null) for a Past Purchases row, mirroring
-// renderPastPurchasesTable's row-loop color decisions with the export palette.
-function getPastPurchasesExportRowColors(resolved, params){
-  return [null, ...params.map(p => {
-    if(p.computed && p.formula === "salesProfitPP"){
-      const ready = resolved["_" + p.id + "_ready"];
+// v5.80: the Past Purchases exports (Excel / Text / Word / PDF) are now the
+// table AS DISPLAYED -- same rows (the Lot Matching fragments, in the table's
+// current order, honoring "Current Holdings" and any column sort), same columns
+// in the same order, same cell values, and the same summary rows at the bottom
+// -- instead of the raw stored rows they used to dump. The value/color rules
+// below mirror renderFifoFragmentCellHTML cell for cell.
+//
+// Date Sale with no date is exported as 0000-00-00 (a held lot has none yet),
+// exactly what the table shows. Dates are always plain "YYYY-MM-DD" TEXT, never
+// converted to a spreadsheet date, so no timezone/locale can move them.
+function getFifoFragmentExportValue(p, f){
+  const resolved = f.resolved;
+  if(p.computed){
+    const ready = resolved["_" + p.id + "_ready"];
+    const val = resolved[p.id] || 0;
+    if(p.formula === "salesProfitPP" || p.formula === "unrealizedGainPP"){
+      if(!ready) return "—";
+      return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
+    }
+    if(p.formula === "currentMarketValuePP" || p.formula === "bookValuePP"){
+      if(!ready) return "—";
+      return "$" + Math.abs(val).toFixed(2);
+    }
+    if(p.formula === "missedGainPct"){
+      if(!ready || val === 0) return "—";
+      return Number(val).toFixed(1) + "%";
+    }
+    if(ready === false) return "—";
+    return Number(val).toFixed(1) + "%";
+  }
+  const isDateSaleCol = String(p.label).trim().toLowerCase() === "date sale";
+  const target = fifoFragmentFieldTarget(p, f.data, f.isMatch);
+  if(!target) return isDateSaleCol ? PP_NO_DATE_PLACEHOLDER : "—";
+  const val = resolved[p.id];
+  if(p.type === "text") return val === undefined || val === null ? "" : String(val);
+  if(p.type === "date"){
+    if(isDateSaleCol) return ppCleanDate(val) || PP_NO_DATE_PLACEHOLDER;
+    return val ? String(val) : "";
+  }
+  return Number(val) || 0;
+}
+
+function getFifoFragmentExportColor(p, f, params){
+  const resolved = f.resolved;
+  if(p.computed){
+    const ready = resolved["_" + p.id + "_ready"];
+    const val = resolved[p.id] || 0;
+    if(p.formula === "salesProfitPP"){
       if(!ready) return EXPORT_COLORS.grey;
-      const val = resolved[p.id] || 0;
       return val >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
     }
-    if(p.computed && p.formula === "unrealizedGainPP"){
-      const ready = resolved["_" + p.id + "_ready"];
+    if(p.formula === "unrealizedGainPP"){
       if(!ready) return EXPORT_COLORS.grey;
-      const val = resolved[p.id] || 0;
       return val >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.dustyPink;
     }
-    if(p.computed && p.formula === "missedGainPct"){
-      const ready = resolved["_" + p.id + "_ready"];
-      const val = resolved[p.id] || 0;
+    if(p.formula === "missedGainPct"){
       if(!ready || val === 0) return EXPORT_COLORS.grey;
       return val > 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
     }
-    if(p.computed && p.formula === "bookValuePP"){
-      const ready = resolved["_" + p.id + "_ready"];
-      if(!ready) return null;
-      const li = resolved._ledger;
-      return (li && li.heldUnits > PP_EPS) ? EXPORT_COLORS.lightBlue : null;
-    }
-    if(p.computed && p.formula === "currentMarketValuePP"){
-      const ready = resolved["_" + p.id + "_ready"];
-      return ready ? EXPORT_COLORS.violet : null;
-    }
-    if(!p.computed && String(p.label).trim().toLowerCase() === "current price"){
-      return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.emerald : null;
-    }
-    return null;
-  })];
+    if(p.formula === "bookValuePP") return ready ? EXPORT_COLORS.lightBlue : EXPORT_COLORS.grey;
+    if(p.formula === "currentMarketValuePP") return ready ? EXPORT_COLORS.violet : EXPORT_COLORS.grey;
+    return ready === false ? EXPORT_COLORS.grey : null;
+  }
+  if(!fifoFragmentFieldTarget(p, f.data, f.isMatch)) return EXPORT_COLORS.grey; // the "—" / 0000-00-00 placeholder cells
+  if(String(p.label).trim().toLowerCase() === "current price"){
+    return isAtOrBelowBuyPriceTarget(resolved[p.id], params, resolved) ? EXPORT_COLORS.emerald : null;
+  }
+  return null;
 }
 
-// Mirrors the tfoot logic in renderPastPurchasesTable() (monthly subtotals +
-// grand total) so exports carry the same summary rows shown on screen.
 function buildPastPurchasesExportTable(){
   const params = getPastPurchasesParams();
-  // Body rows mirror exactly what's currently visible on screen (respecting the
-  // "Current Holdings" filter, if it's on). v5.63: no more summary/total rows here —
-  // this table no longer carries its own tfoot (see renderPastPurchasesTable); the
-  // accurate totals are the Lot Matching (FIFO) table's own summary rows instead.
-  const visibleRows = lastPastPurchasesVisibleRows || lastPastPurchasesOrderedRows || [];
+  const model = buildPastPurchasesDisplayModel(params, getPastPurchasesSortedRows());
   const headers = ["Ticker", ...params.map(p => p.label)];
-
   const rows = [];
   const colors = [];
-  visibleRows.forEach(row => {
-    const resolved = resolvePastPurchaseRowValues(row);
-    const cells = params.map(p => {
-      if(p.computed && p.formula === "salesProfitPP"){
-        const ready = resolved["_" + p.id + "_ready"];
-        if(!ready) return "—";
-        const val = resolved[p.id] || 0;
-        return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
-      }
-      if(p.computed && p.formula === "unrealizedGainPP"){
-        const ready = resolved["_" + p.id + "_ready"];
-        if(!ready) return "—";
-        const val = resolved[p.id] || 0;
-        return (val >= 0 ? "+" : "-") + "$" + Math.abs(val).toFixed(2);
-      }
-      if(p.computed && (p.formula === "bookValuePP" || p.formula === "currentMarketValuePP")){
-        const ready = resolved["_" + p.id + "_ready"];
-        if(!ready) return "—";
-        return "$" + Math.abs(resolved[p.id] || 0).toFixed(2);
-      }
-      if(p.computed){
-        const ready = resolved["_" + p.id + "_ready"];
-        if(ready === false) return "—";
-        return Number(resolved[p.id] || 0).toFixed(1) + "%";
-      }
-      return resolved[p.id];
-    });
-    rows.push([row.asset, ...cells]);
-    colors.push(getPastPurchasesExportRowColors(resolved, params));
+  model.visibleFragments.forEach(f => {
+    rows.push([f.ticker, ...params.map(p => getFifoFragmentExportValue(p, f))]);
+    colors.push([null, ...params.map(p => getFifoFragmentExportColor(p, f, params))]);
   });
-
+  // The same summary rows the table shows underneath (totals, Realized Gain to
+  // date, one per month) -- always totaling EVERY fragment, like the table.
+  buildFifoFooterRows(params, model.fragments).forEach(r => {
+    rows.push([r.label, ...r.cells.map(c => c.text)]);
+    colors.push([null, ...r.cells.map(c => c.exportColor)]);
+  });
   return { headers, rows, colors };
 }
 
 // Excel and Text exports have no way to show real cell color the way Word/PDF do
-// (colored via getMainTableExportColor/getPastPurchasesExportRowColors instead —
+// (colored via getMainTableExportColor/getFifoFragmentExportColor instead —
 // Excel's export library can't write cell styles, and plain text has no color at
 // all). So for those two formats only, the "hit your buy target" signal is carried
 // as a plain "At Buy Target" Yes/No column appended onto a COPY of the export
@@ -6244,25 +6333,9 @@ function withBuyTargetColumnMainTable(headers, rows){
   return { headers: newHeaders, rows: newRows };
 }
 
-// Same idea for Past Purchases, but its export rows include summary/footer rows
-// AFTER the per-asset ones (Total current market and book value, Total Realized
-// Gain to date, monthly breakdowns — see buildPastPurchasesExportTable above) — only the first
-// visibleRows.length rows are real assets, so only those get a Yes/No; footer
-// rows get a blank cell, matching how every other non-participating column in
-// those rows is already left blank.
-function withBuyTargetColumnPastPurchases(headers, rows){
-  const params = getPastPurchasesParams();
-  const visibleRows = lastPastPurchasesVisibleRows || lastPastPurchasesOrderedRows || [];
-  const cpParam = params.find(p => !p.computed && String(p.label).trim().toLowerCase() === "current price");
-  const newHeaders = [...headers, "At Buy Target"];
-  const newRows = rows.map((r, idx) => {
-    if(idx >= visibleRows.length || !cpParam) return [...r, ""]; // a footer/summary row, or no Current Price column to check
-    const resolved = resolvePastPurchaseRowValues(visibleRows[idx]);
-    const hit = isAtOrBelowBuyPriceTarget(resolved[cpParam.id], params, resolved);
-    return [...r, hit ? "Yes" : "No"];
-  });
-  return { headers: newHeaders, rows: newRows };
-}
+// v5.80: Past Purchases no longer appends an "At Buy Target" column to its
+// exports -- the table has no such column, and its exports now match the table.
+// (The Portfolio Lists export above still carries it.)
 
 // v5.71: Export to Excel/Text/Word/PDF for Sales Strategy, same idea as
 // buildPastPurchasesExportTable above — reads from buildSalesStrategyRowsResolved
@@ -6411,14 +6484,12 @@ function wireUpExportButtons(){
 
   const ppExcelBtn = document.getElementById("ppExportExcelBtn");
   if(ppExcelBtn) ppExcelBtn.addEventListener("click", () => {
-    const built = buildPastPurchasesExportTable();
-    const { headers, rows } = withBuyTargetColumnPastPurchases(built.headers, built.rows);
+    const { headers, rows } = buildPastPurchasesExportTable();
     exportTableAsExcel("Past_Purchases.xlsx", "Past Purchases", headers, rows);
   });
   const ppTextBtn = document.getElementById("ppExportTextBtn");
   if(ppTextBtn) ppTextBtn.addEventListener("click", () => {
-    const built = buildPastPurchasesExportTable();
-    const { headers, rows } = withBuyTargetColumnPastPurchases(built.headers, built.rows);
+    const { headers, rows } = buildPastPurchasesExportTable();
     exportTableAsText("Past_Purchases.txt", headers, rows);
   });
   const ppWordBtn = document.getElementById("ppExportWordBtn");
@@ -6507,9 +6578,20 @@ function buildSampleExcelForDataEntry_Portfolio(){
 function buildSampleExcelForDataEntry_PastPurchases(){
   const params = getEditablePastPurchasesParams();
   const headers = ["Asset", ...params.map(p => p.label)];
-  const rows = getPastPurchasesRows().filter(r => r.asset).map(row => {
+  // v5.80: rows in the order the table shows them (default: newest purchase first);
+  // dates are written as clean ISO text (never a date serial, so no timezone or
+  // 1900/1904 ambiguity on re-import) and an empty Date Sale as 0000-00-00.
+  const rows = getPastPurchasesSortedRows().filter(r => r.asset).map(row => {
     const values = row.values || {};
-    return [row.asset, ...params.map(p => values[p.id] !== undefined ? values[p.id] : "")];
+    return [row.asset, ...params.map(p => {
+      const v = values[p.id] !== undefined ? values[p.id] : "";
+      if(p.type === "date"){
+        const c = ppCleanDate(v);
+        if(c) return c;
+        return String(p.label).trim().toLowerCase() === "date sale" ? PP_NO_DATE_PLACEHOLDER : "";
+      }
+      return v;
+    })];
   });
   return { headers, rows };
 }
@@ -6518,9 +6600,13 @@ function buildSampleExcelForDataEntry_PastPurchases(){
 // expect for that column's type: numbers stay numbers, dates become "YYYY-MM-DD"
 // strings (matching every date input elsewhere in this app), everything else is a
 // trimmed string. Returns undefined for a genuinely blank cell or an unparseable
-// number, so the caller can skip it (leaving any existing value untouched) rather
-// than overwriting good data with 0/"".
-function parseImportedCellValue(raw, type){
+// number/date, so the caller can skip it (leaving any existing value untouched)
+// rather than overwriting good data with 0/"".
+//
+// v5.80: date cells go through parseImportedDateCell (below), which reports a
+// date it can't read with certainty through ctx.onIssue(message) instead of
+// guessing at it or storing the raw text as if it were a date.
+function parseImportedCellValue(raw, type, ctx){
   if(raw === undefined || raw === null) return undefined;
   if(typeof raw === "string" && raw.trim() === "") return undefined;
   if(type === "number"){
@@ -6528,18 +6614,98 @@ function parseImportedCellValue(raw, type){
     return isFinite(n) ? n : undefined;
   }
   if(type === "date"){
-    // Formats using LOCAL date components (never toISOString, which converts to
-    // UTC first and can shift the calendar day backward/forward across midnight
-    // depending on the browser's timezone) so a purchase date typed as "Jan 15"
-    // always comes back as "Jan 15", not "Jan 14".
-    const toLocalYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if(raw instanceof Date && !isNaN(raw)) return toLocalYmd(raw);
-    const s = String(raw).trim();
-    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const parsed = new Date(s);
-    return isNaN(parsed) ? s : toLocalYmd(parsed);
+    const res = parseImportedDateCell(raw, ctx);
+    if(res.issue && ctx && typeof ctx.onIssue === "function") ctx.onIssue(res.issue);
+    return res.value;
   }
   return String(raw).trim();
+}
+
+const PP_IMPORT_MONTHS = { jan:1, january:1, feb:2, february:2, mar:3, march:3, apr:4, april:4, may:5, jun:6, june:6, jul:7, july:7, aug:8, august:8, sep:9, sept:9, september:9, oct:10, october:10, nov:11, november:11, dec:12, december:12 };
+
+// A real calendar date (rejects 31 Feb, month 13, year 0000 ...).
+function ppIsValidYmd(y, m, d){
+  if(!(y >= 1000 && y <= 9999 && m >= 1 && m <= 12 && d >= 1)) return false;
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate(); // day 0 of the NEXT month = last day of this one
+}
+function ppFormatYmd(y, m, d){
+  return String(y).padStart(4, "0") + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+// Returns { value, issue }: value is "YYYY-MM-DD", or undefined for blank / "no
+// date" / unreadable; issue (only when something was unreadable or ambiguous) is
+// a short human-readable reason.
+//
+// Never depends on the browser's timezone for a spreadsheet DATE: an Excel
+// date is a serial number (days since 1899-12-30), which is converted with plain
+// UTC calendar arithmetic -- so the day in the file is the day that comes out,
+// in every timezone. (ctx.date1904 handles the old Mac-Excel 1904 date system.)
+//   - "0000-00-00" (this app's own "no Date Sale" marker) and its look-alikes
+//     mean "no date": blank, not an error, and never stored as a date.
+//   - 2026-03-15 / 2026/03/15 / 2026.3.15 / 20260315 / 15 Mar 2026 / Mar 15, 2026
+//     are unambiguous. 13/03/2026 and 03/13/2026 are too (only one reading can
+//     be a month). 03/04/2026 is NOT -- it is reported and left blank rather than
+//     silently read as the wrong day.
+function parseImportedDateCell(raw, ctx){
+  ctx = ctx || {};
+  if(raw === undefined || raw === null) return { value: undefined };
+
+  if(raw instanceof Date){
+    if(isNaN(raw)) return { value: undefined, issue: "not a valid date" };
+    // A Date at exactly 00:00:00 UTC carries its calendar day in the UTC parts;
+    // anything else (local midnight) carries it in the local parts.
+    const utcMidnight = raw.getUTCHours() === 0 && raw.getUTCMinutes() === 0 && raw.getUTCSeconds() === 0 && raw.getUTCMilliseconds() === 0;
+    const y = utcMidnight ? raw.getUTCFullYear() : raw.getFullYear();
+    const m = (utcMidnight ? raw.getUTCMonth() : raw.getMonth()) + 1;
+    const d = utcMidnight ? raw.getUTCDate() : raw.getDate();
+    return ppIsValidYmd(y, m, d) ? { value: ppFormatYmd(y, m, d) } : { value: undefined, issue: "not a valid date" };
+  }
+
+  if(typeof raw === "number"){
+    if(!isFinite(raw) || raw === 0) return { value: undefined };
+    if(Number.isInteger(raw) && raw >= 19000101 && raw <= 21001231){ // 20260315
+      const y = Math.floor(raw / 10000), m = Math.floor(raw / 100) % 100, d = raw % 100;
+      return ppIsValidYmd(y, m, d) ? { value: ppFormatYmd(y, m, d) } : { value: undefined, issue: `"${raw}" is not a valid date` };
+    }
+    let serial = Math.floor(raw) + (ctx.date1904 ? 1462 : 0);
+    // 18264 = 1950-01-01: anything earlier is far more likely a stray number
+    // (e.g. a bare year) than a purchase date, so it's reported, not guessed.
+    if(serial < 18264 || serial > 2958465) return { value: undefined, issue: `the number ${raw} is not a plausible date` };
+    const dt = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+    return { value: ppFormatYmd(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()) };
+  }
+
+  const s = String(raw).trim();
+  if(s === "" || /^[-—–]+$/.test(s) || /^(n\/?a|none|null)$/i.test(s)) return { value: undefined };
+  if(/^0{4}[-\/.]0{1,2}[-\/.]0{1,2}$/.test(s) || /^0{1,2}[-\/.]0{1,2}[-\/.]0{4}$/.test(s)) return { value: undefined }; // "no date" marker
+
+  let m;
+  if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/)) || (m = s.match(/^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})$/))){
+    const y = +m[1], mo = +m[2], d = +m[3];
+    return ppIsValidYmd(y, mo, d) ? { value: ppFormatYmd(y, mo, d) } : { value: undefined, issue: `"${s}" is not a valid date` };
+  }
+  if(/^\d{8}$/.test(s)) return parseImportedDateCell(Number(s), ctx);
+  if((m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})$/))){
+    const a = +m[1], b = +m[2];
+    let y = +m[3];
+    if(m[3].length === 2) y += y < 50 ? 2000 : 1900;
+    let day, mon;
+    if(a > 12 && b <= 12){ day = a; mon = b; }
+    else if(b > 12 && a <= 12){ mon = a; day = b; }
+    else if(a === b && a <= 12){ day = a; mon = b; }
+    else if(a <= 12 && b <= 12) return { value: undefined, issue: `"${s}" could be day/month or month/day — written as YYYY-MM-DD it would be unambiguous` };
+    else return { value: undefined, issue: `"${s}" is not a valid date` };
+    return ppIsValidYmd(y, mon, day) ? { value: ppFormatYmd(y, mon, day) } : { value: undefined, issue: `"${s}" is not a valid date` };
+  }
+  if((m = s.match(/^(\d{1,2})(?:st|nd|rd|th)?[ \-\/.]+([A-Za-z]{3,9})\.?[ \-\/.,]+(\d{4})$/))){
+    const mon = PP_IMPORT_MONTHS[m[2].toLowerCase()];
+    if(mon && ppIsValidYmd(+m[3], mon, +m[1])) return { value: ppFormatYmd(+m[3], mon, +m[1]) };
+  }
+  if((m = s.match(/^([A-Za-z]{3,9})\.?[ \-\/.]+(\d{1,2})(?:st|nd|rd|th)?,?[ \-\/.]+(\d{4})$/))){
+    const mon = PP_IMPORT_MONTHS[m[1].toLowerCase()];
+    if(mon && ppIsValidYmd(+m[3], mon, +m[2])) return { value: ppFormatYmd(+m[3], mon, +m[2]) };
+  }
+  return { value: undefined, issue: `"${s}" is not a recognised date` };
 }
 
 // Reads the first sheet of an uploaded .xlsx/.xls File as an array-of-arrays
@@ -6552,10 +6718,18 @@ async function readWorkbookFirstSheetRows(file){
     throw new Error('Excel import needs its helper library, and it could not be loaded from any available source just now. Please check your internet connection (or any ad-blocker/firewall that might be blocking cdn.jsdelivr.net, cdnjs.cloudflare.com, or unpkg.com) and try again.');
   }
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: true });
+  // v5.80: cellDates is OFF on purpose. With it on, SheetJS hands back a JS Date
+  // built in the browser's LOCAL timezone, which can land on the neighbouring day
+  // (notably across a daylight-saving change); with it off a date cell arrives as
+  // its plain Excel serial number, which parseImportedDateCell converts with
+  // timezone-free arithmetic. Text cells (this app's own exports write dates as
+  // "YYYY-MM-DD" text) arrive untouched either way.
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: false });
   const sheetName = wb.SheetNames[0];
   if(!sheetName) return [];
-  return XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, blankrows: false, defval: "" });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, blankrows: false, defval: "" });
+  rows.date1904 = !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904);
+  return rows;
 }
 
 // Applies an imported array-of-arrays into the CURRENTLY OPEN Portfolio List.
@@ -6594,7 +6768,7 @@ function importExcelIntoActivePortfolioList(rowsAoA){
 
     colMap.forEach((def, idx) => {
       if(!def) return;
-      let value = parseImportedCellValue(rowArr[idx], def.type);
+      let value = parseImportedCellValue(rowArr[idx], def.type, { date1904: !!rowsAoA.date1904 });
       if(value === undefined) return;
       if(def.options && typeof value === "string"){
         // e.g. Stability's dropdown options — accept any casing the user typed.
@@ -6628,7 +6802,7 @@ function importExcelIntoActivePortfolioList(rowsAoA){
 //      rows so a ticker's purchases and sales stay together.
 // Each existing row can be matched by at most one file line.
 function planPastPurchasesImport(rowsAoA){
-  const plan = { records: [], identical: [], toAdd: [], conflicts: [], unmatchedHeaders: [] };
+  const plan = { records: [], identical: [], toAdd: [], conflicts: [], unmatchedHeaders: [], dateIssues: [] };
   if(!rowsAoA || rowsAoA.length === 0) return plan;
   const [headerRow, ...dataRows] = rowsAoA;
   const editableParams = getEditablePastPurchasesParams();
@@ -6651,7 +6825,8 @@ function planPastPurchasesImport(rowsAoA){
     const vals = {};
     colMap.forEach((param, idx) => {
       if(!param) return;
-      const value = parseImportedCellValue(rowArr[idx], param.type);
+      const ctx = { date1904: !!rowsAoA.date1904, onIssue: msg => plan.dateIssues.push({ fileRow: i + 2, label: param.label, message: msg }) };
+      const value = parseImportedCellValue(rowArr[idx], param.type, ctx);
       if(value === undefined) return;
       vals[param.id] = value;
     });
@@ -6918,10 +7093,14 @@ function wireUpSampleAndImportExcelButtons(){
             ? ` ${plan.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${plan.unmatchedHeaders.join(", ")}.`
             : "";
           const conflictNote = plan.conflicts.length ? `, ${result.replaced} replaced, ${result.kept} kept as-is` : "";
+          const di = plan.dateIssues || [];
+          const dateNote = di.length
+            ? ` ⚠ ${di.length} date cell(s) could not be read with certainty and were left blank: ` + di.slice(0, 5).map(d => `row ${d.fileRow}, ${d.label}: ${d.message}`).join("; ") + (di.length > 5 ? `; …and ${di.length - 5} more` : "") + "."
+            : "";
           ppStatusEl.textContent = (result.added + result.replaced === 0)
-            ? `Nothing new — all ${result.identical + result.kept} row(s) in the file are already in "${getActivePastPurchasesList().name}".${unmatchedNote}`
-            : `Imported into "${getActivePastPurchasesList().name}": ${result.added} new row(s) added, ${result.identical} identical row(s) ignored${conflictNote}.${unmatchedNote}`;
-          ppStatusEl.style.color = "var(--emerald)";
+            ? `Nothing new — all ${result.identical + result.kept} row(s) in the file are already in "${getActivePastPurchasesList().name}".${unmatchedNote}${dateNote}`
+            : `Imported into "${getActivePastPurchasesList().name}": ${result.added} new row(s) added, ${result.identical} identical row(s) ignored${conflictNote}.${unmatchedNote}${dateNote}`;
+          ppStatusEl.style.color = di.length ? "var(--amber)" : "var(--emerald)";
         }
       }catch(err){
         console.error("Past Purchases Excel import failed:", err);
