@@ -254,7 +254,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.84 — Past Purchases sample Excel: Current Price column removed, rows sorted latest date first.
+      Version v5.84 — Sample Excel: no Current Price, latest first; re-import same-named file; overwrite option.
     </div>
   </header>
   <div class="nav-btn-row">
@@ -541,6 +541,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="ppSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every row of the currently open Past Purchases list (purchases and sales, one line each), with every fillable parameter as a column, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
     <button id="ppImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into the currently open Past Purchases list. Each line becomes its own row (purchases and sales can be on separate lines); lines already in the table are ignored, new ones are added next to that ticker's rows, and you'll be asked what to do with any line that conflicts with an existing row.">⬆ Import Excel</button>
     <input id="ppImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <label style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:var(--text-secondary);" title="When ticked, importing REPLACES every row in the open Past Purchases list with the rows in the file (you are asked to confirm first). Leave unticked to merge as before."><input type="checkbox" id="ppImportOverwrite"> Overwrite list with file</label>
     <span id="ppExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
   <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
