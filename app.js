@@ -1,4 +1,6 @@
-// APP.JS BUILD: v5.84 (Past Purchases "Sample Excel for Data Entry": Current Price column removed; rows ordered by date,
+// APP.JS BUILD: v5.84 (Excel import: every click opens a FRESH file picker so an amended file with the same name can always be re-selected; Past Purchases gets an
+//   "Overwrite list with file" checkbox (replaces the open list's rows with the file's rows, after a confirm).
+//   Also: Past Purchases "Sample Excel for Data Entry": Current Price column removed; rows ordered by date,
 //   latest first, buys and sales mixed (sale rows use Date Sale, buy rows Date Purchased; undated rows last).)
 // v5.83 (CALL OPTIONS: Past Purchases and Sales Strategy now hold stocks AND
 //   call options in the same tables. New Strike Price / Expiration Date columns (after Ticker);
@@ -498,7 +500,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.84 (sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.84 (fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -7556,6 +7558,36 @@ function showPastPurchasesImportConflictDialog(plan){
   });
 }
 
+// v5.84: opens the system file picker through a BRAND-NEW <input type=file> every
+// time, then hands the chosen file to the real (hidden) import input so its normal
+// change handler runs. A new input has no remembered selection, so choosing a file
+// with the SAME name as last time (e.g. the amended copy of an exported sample) always
+// fires a change and is always read fresh from disk.
+function openFreshExcelPicker(targetInput){
+  if(!targetInput) return;
+  targetInput.value = "";
+  const tmp = document.createElement("input");
+  tmp.type = "file";
+  tmp.accept = targetInput.accept || ".xlsx,.xls";
+  tmp.style.display = "none";
+  document.body.appendChild(tmp);
+  tmp.addEventListener("change", () => {
+    const f = tmp.files && tmp.files[0];
+    tmp.remove();
+    if(!f) return;
+    try{
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      targetInput.files = dt.files;
+      targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }catch(e){
+      console.error("Could not hand the chosen file to the import handler:", e);
+    }
+  });
+  tmp.addEventListener("cancel", () => tmp.remove());
+  tmp.click();
+}
+
 function wireUpSampleAndImportExcelButtons(){
   // --- Portfolio Lists ---
   const sampleBtn = document.getElementById("sampleExcelBtn");
@@ -7577,7 +7609,7 @@ function wireUpSampleAndImportExcelButtons(){
   }
 
   if(importBtn && importInput){
-    importBtn.addEventListener("click", () => importInput.click());
+    importBtn.addEventListener("click", () => openFreshExcelPicker(importInput));
     importInput.addEventListener("change", async () => {
       const file = importInput.files && importInput.files[0];
       importInput.value = ""; // allow re-selecting the exact same file later
@@ -7630,8 +7662,9 @@ function wireUpSampleAndImportExcelButtons(){
     });
   }
 
+  let overwriteBackupPP = null;
   if(ppImportBtn && ppImportInput){
-    ppImportBtn.addEventListener("click", () => ppImportInput.click());
+    ppImportBtn.addEventListener("click", () => openFreshExcelPicker(ppImportInput));
     ppImportInput.addEventListener("change", async () => {
       const file = ppImportInput.files && ppImportInput.files[0];
       ppImportInput.value = "";
@@ -7639,10 +7672,32 @@ function wireUpSampleAndImportExcelButtons(){
       if(ppStatusEl){ ppStatusEl.textContent = "Reading file…"; ppStatusEl.style.color = "var(--text-secondary)"; }
       try{
         const rowsAoA = await readWorkbookFirstSheetRows(file);
-        const plan = planPastPurchasesImport(rowsAoA);
+        let plan = planPastPurchasesImport(rowsAoA);
         if(plan.records.length === 0){
           if(ppStatusEl){ ppStatusEl.textContent = "No rows with an Asset were found in that file."; ppStatusEl.style.color = "var(--amber)"; }
           return;
+        }
+        // v5.84 OVERWRITE mode: the open list's rows are replaced by the file's rows
+        // (so an amended copy of an exported sample simply becomes the new data).
+        const overwriteBox = document.getElementById("ppImportOverwrite");
+        let overwritten = false;
+        overwriteBackupPP = null;
+        if(overwriteBox && overwriteBox.checked){
+          const existing = getPastPurchasesRows();
+          if(!confirm(`Overwrite mode: this will REPLACE all ${existing.length} row(s) currently in "${getActivePastPurchasesList().name}" with the ${plan.records.length} row(s) from "${file.name}". Continue?`)){
+            if(ppStatusEl){ ppStatusEl.textContent = "Import cancelled — nothing was changed."; ppStatusEl.style.color = "var(--amber)"; }
+            return;
+          }
+          const backup = JSON.parse(JSON.stringify(existing));
+          try{
+            savePastPurchasesRows([]);
+            plan = planPastPurchasesImport(rowsAoA);
+            overwritten = true;
+            overwriteBackupPP = backup;
+          }catch(e){
+            savePastPurchasesRows(backup);
+            throw e;
+          }
         }
         let actions = [];
         if(plan.conflicts.length){
@@ -7669,12 +7724,15 @@ function wireUpSampleAndImportExcelButtons(){
           const dateNote = di.length
             ? ` ⚠ ${di.length} date cell(s) could not be read with certainty and were left blank: ` + di.slice(0, 5).map(d => `row ${d.fileRow}, ${d.label}: ${d.message}`).join("; ") + (di.length > 5 ? `; …and ${di.length - 5} more` : "") + "."
             : "";
-          ppStatusEl.textContent = (result.added + result.replaced === 0)
+          ppStatusEl.textContent = overwritten
+            ? `Overwrote "${getActivePastPurchasesList().name}" with ${result.added} row(s) from "${file.name}".${unmatchedNote}${dateNote}`
+            : (result.added + result.replaced === 0)
             ? `Nothing new — all ${result.identical + result.kept} row(s) in the file are already in "${getActivePastPurchasesList().name}".${unmatchedNote}${dateNote}`
             : `Imported into "${getActivePastPurchasesList().name}": ${result.added} new row(s) added, ${result.identical} identical row(s) ignored${conflictNote}.${unmatchedNote}${dateNote}`;
           ppStatusEl.style.color = di.length ? "var(--amber)" : "var(--emerald)";
         }
       }catch(err){
+        if(overwriteBackupPP){ try{ savePastPurchasesRows(overwriteBackupPP); }catch(e2){ /* keep going */ } overwriteBackupPP = null; } // overwrite failed midway: put the old rows back
         console.error("Past Purchases Excel import failed:", err);
         if(ppStatusEl){
           ppStatusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers).";
@@ -7704,7 +7762,7 @@ function wireUpSampleAndImportExcelButtons(){
   }
 
   if(ssImportBtn && ssImportInput){
-    ssImportBtn.addEventListener("click", () => ssImportInput.click());
+    ssImportBtn.addEventListener("click", () => openFreshExcelPicker(ssImportInput));
     ssImportInput.addEventListener("change", async () => {
       const file = ssImportInput.files && ssImportInput.files[0];
       ssImportInput.value = "";
