@@ -1,4 +1,7 @@
-// APP.JS BUILD: v5.84 (Excel import: every click opens a FRESH file picker so an amended file with the same name can always be re-selected; Past Purchases gets an
+// APP.JS BUILD: v5.84 (ONE DATE FORMAT everywhere: DD/MM/YYYY -- on screen, in every date entry box (now text boxes, with a typed-date parser: DD/MM/YYYY, ISO and
+//   other forms accepted, junk reverted), status/dialog messages, monthly labels (MM/YYYY), Excel/Text/Word/PDF exports, sample Excel, and the "no sale date" marker 00/00/0000.
+//   Storage stays YYYY-MM-DD, so sorting/FIFO/sync are unchanged. Excel import reads an ambiguous 03/04/2026 DAY-first. Today's date now uses the LOCAL date, not UTC.)
+// Earlier v5.84 notes: Excel import: every click opens a FRESH file picker so an amended file with the same name can always be re-selected; Past Purchases gets an
 //   "Overwrite list with file" checkbox (replaces the open list's rows with the file's rows, after a confirm).
 //   Also: Past Purchases "Sample Excel for Data Entry": Current Price column removed; rows ordered by date,
 //   latest first, buys and sales mixed (sale rows use Date Sale, buy rows Date Purchased; undated rows last).)
@@ -500,7 +503,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.84 (fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.84 (DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2460,7 +2463,7 @@ function addCustomParam({label, type, defaultValue, finnhubField, finnhubUnitDiv
     // ordinary blank default stays blank, rather than every unfilled date field
     // silently claiming today's date (same fix as Past Purchases' own
     // addPastPurchaseParam, and for the same reason — see its comment).
-    resolvedDefault = (defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : (defaultValue || "");
+    resolvedDefault = (defaultValue === "__today__") ? ppToday() : (parseDateTextToIso(defaultValue) || "");
   } else if(isText){
     resolvedDefault = defaultValue || "";
   } else {
@@ -3553,7 +3556,7 @@ function realizeSalesStrategyRow(id, dateStr){
   const units = Number(row.unitsToSell) || 0;
   if(units <= 0) return false;
   const price = Number(row.sellingPrice) || 0;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateStr || "") ? dateStr : new Date().toISOString().slice(0, 10);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateStr || "") ? dateStr : ppToday();
 
   const newRowId = addPastPurchaseSaleRowForTicker(row.ticker);
   if(!newRowId) return false;
@@ -4301,7 +4304,7 @@ function addPastPurchaseParam({label, type, defaultValue, computed, formula}){
     // Only the explicit "__today__" sentinel resolves to today's date — an
     // ordinary blank default (like "Date Sale"'s) stays blank, rather than every
     // unfilled date field silently claiming today's date.
-    resolvedDefault = (defaultValue === "__today__") ? new Date().toISOString().slice(0,10) : (defaultValue || "");
+    resolvedDefault = (defaultValue === "__today__") ? ppToday() : (parseDateTextToIso(defaultValue) || "");
   } else if(isText){
     resolvedDefault = defaultValue || "";
   } else {
@@ -4679,7 +4682,72 @@ function setPpCostBasisMethod(method){
 // as "no date" -- otherwise it would match the strict YYYY-MM-DD test below,
 // sort as the OLDEST event of all (so a sale carrying it would be matched
 // before any purchase exists) and break the monthly Realized Gain grouping.
-const PP_NO_DATE_PLACEHOLDER = "0000-00-00";
+const PP_NO_DATE_PLACEHOLDER = "00/00/0000";
+// v5.84: ONE date format for everything the user sees, types, exports or imports:
+// DD/MM/YYYY. Dates are still STORED as "YYYY-MM-DD" (so sorting, FIFO matching,
+// cloud sync and old data are untouched); only the display / entry / file layer
+// converts. fmtDMY: stored ISO -> "DD/MM/YYYY" ("" if not a date).
+function fmtDMY(iso){
+  const m = String(iso === undefined || iso === null ? "" : iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+// Typed text -> stored ISO. "" for blank / the "00/00/0000" marker, null if it is not a
+// date it can read with certainty. Accepts DD/MM/YYYY (also - or . separators, D/M/YY)
+// and the old YYYY-MM-DD.
+function parseDateTextToIso(text){
+  const s = String(text === undefined || text === null ? "" : text).trim();
+  if(!s) return "";
+  const r = parseImportedDateCell(s, {});
+  if(r.value) return r.value;
+  return r.issue ? null : "";
+}
+// "DD/MM/YYYY HH:MM" for "Exported ..." stamps.
+function fmtDMYHM(d){
+  d = d || new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Attributes for a date <input>: a TEXT box showing DD/MM/YYYY (a native date box
+// would show whatever the browser/OS locale decides). The stored ISO rides in
+// data-iso; a global listener (wireDateTextInputs) converts typed text back to ISO
+// for the existing change handlers and re-displays DD/MM/YYYY afterwards.
+function dateTextInputAttrs(iso, withPlaceholder){
+  return `type="text" inputmode="numeric" maxlength="10" autocomplete="off" data-datefmt="1" data-iso="${escAttr(iso || "")}" value="${escAttr(fmtDMY(iso))}"${withPlaceholder === false ? "" : ' placeholder="DD/MM/YYYY"'}`;
+}
+// Reads a date text box (or null if the element is missing) as ISO / "" / null(invalid).
+function readDateTextBox(el){
+  if(!el) return "";
+  return parseDateTextToIso(el.value);
+}
+function wireDateTextInputs(){
+  if(window.__dateTextWired) return;
+  window.__dateTextWired = true;
+  // Capture phase: runs BEFORE each cell's own change handler. Valid text is swapped
+  // for ISO (what those handlers expect); unreadable text is reverted and the change
+  // swallowed so nothing is overwritten with junk.
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('input[data-datefmt]')) return;
+    const iso = parseDateTextToIso(el.value);
+    if(iso === null){
+      e.stopImmediatePropagation();
+      el.value = fmtDMY(el.getAttribute("data-iso"));
+      el.title = "Not a date I can read — use DD/MM/YYYY, e.g. 31/12/2026.";
+      el.style.outline = "1px solid #ef4444";
+      setTimeout(() => { el.style.outline = ""; }, 1800);
+      return;
+    }
+    el.style.outline = "";
+    el.setAttribute("data-iso", iso);
+    el.value = iso;
+  }, true);
+  // Bubble phase: after the cell handlers have run, show DD/MM/YYYY again.
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('input[data-datefmt]')) return;
+    el.value = fmtDMY(el.getAttribute("data-iso"));
+  }, false);
+}
 function ppCleanDate(d){
   const s = String(d === undefined || d === null ? "" : d).trim();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
@@ -4728,7 +4796,7 @@ function ppParseKey(key){
 }
 function ppKeyLabel(key){
   const k = ppParseKey(key);
-  return k.isOption ? `${k.symbol} $${k.strike} call exp ${k.expiry || "(no date)"}` : k.symbol;
+  return k.isOption ? `${k.symbol} $${k.strike} call exp ${fmtDMY(k.expiry) || "(no date)"}` : k.symbol;
 }
 function ppKeyMult(key){
   return ppParseKey(key).isOption ? getOptionContractMultiplier() : 1;
@@ -5032,7 +5100,7 @@ function computePastPurchasesFifoLotBreakdown(rows, params){
         left -= take;
       }
       if(left > PP_EPS){
-        out.issues.push(`Sale of ${ppFmtNum(ev.qty)} unit(s) on ${ev.date || "an unspecified date"} is ${ppFmtNum(left)} unit(s) more than were held at that point.`);
+        out.issues.push(`Sale of ${ppFmtNum(ev.qty)} unit(s) on ${fmtDMY(ev.date) || "an unspecified date"} is ${ppFmtNum(left)} unit(s) more than were held at that point.`);
       }
     });
     // v5.83: an option past its expiration date with contracts still unsold
@@ -5504,7 +5572,7 @@ function renderFifoFragmentCellHTML(p, f, params){
     const lbl = String(p.label).trim().toLowerCase();
     if(f.data.expired && (isDateSaleCol || lbl === "selling price" || lbl === "units sold")){
       const ev = f.resolved[p.id];
-      return `<td style="color:var(--text-secondary);" title="Expired worthless: no sale was recorded by the expiration date, so these contracts are counted as sold at $0.00 on that date.">${isDateSaleCol ? escHtml(ev || "") : (Number(ev) || 0)} <span style="font-size:0.7rem;">${isDateSaleCol ? "(expired)" : ""}</span></td>`;
+      return `<td style="color:var(--text-secondary);" title="Expired worthless: no sale was recorded by the expiration date, so these contracts are counted as sold at $0.00 on that date.">${isDateSaleCol ? escHtml(fmtDMY(ev) || ev || "") : (Number(ev) || 0)} <span style="font-size:0.7rem;">${isDateSaleCol ? "(expired)" : ""}</span></td>`;
     }
     if(ppFindParamByLabel([p], ["strike price", "strike", "expiration date", "expiry date", "expiration", "expiry"])){
       return `<td style="color:var(--text-secondary);" title="A stock row. To record a call option, use "Add call option" in the +/- Asset panel above.">—</td>`;
@@ -5523,9 +5591,9 @@ function renderFifoFragmentCellHTML(p, f, params){
   if(p.type === "date"){
     if(isDateSaleCol && !ppCleanDate(val)){
       // A sale with no date yet: real (empty) date input underneath, placeholder over it.
-      return `<td><span class="pp-date-zero-wrap"><input class="cell-input pp-frag-input pp-date-empty" ${commonAttrs} data-type="date" data-frag-base="" type="date" value=""><span class="pp-date-zero" aria-hidden="true">${PP_NO_DATE_PLACEHOLDER}</span></span></td>`;
+      return `<td><span class="pp-date-zero-wrap"><input class="cell-input pp-frag-input pp-date-empty" ${commonAttrs} data-type="date" data-frag-base="" ${dateTextInputAttrs("", false)}><span class="pp-date-zero" aria-hidden="true">${PP_NO_DATE_PLACEHOLDER}</span></span></td>`;
     }
-    return `<td><input class="cell-input pp-frag-input" ${commonAttrs} data-type="date" data-frag-base="${escAttr(val || '')}" type="date" value="${escAttr(val || '')}"></td>`;
+    return `<td><input class="cell-input pp-frag-input" ${commonAttrs} data-type="date" data-frag-base="${escAttr(val || '')}" ${dateTextInputAttrs(ppCleanDate(val) || "")}></td>`;
   }
   // Same "hit your buy target" emerald highlight as the old raw table's Current
   // Price column.
@@ -5893,7 +5961,7 @@ function buildFifoFooterRows(params, fragments){
       const g = groups[key];
       const sign = g.total >= 0 ? '+' : '-';
       const color = g.total >= 0 ? 'var(--emerald)' : '#ef4444';
-      const label = `Realized Gain for month of ${PP_MONTH_ABBR[g.month - 1]} of ${g.year}`;
+      const label = `Realized Gain for month of ${String(g.month).padStart(2, "0")}/${g.year}`;
       const title = `Includes: ${g.tickers.join(', ')} (${g.tickers.length} row${g.tickers.length === 1 ? '' : 's'})`;
       const cells = emptyCells();
       cells[colIndex] = { text: `${sign}$${Math.abs(g.total).toFixed(2)}`, style: `font-weight:600; color:${color};`, exportColor: g.total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red };
@@ -6100,7 +6168,7 @@ function renderSalesStrategyCellHTML(colId, r){
     case "strike":
       return r.isOption ? `<td>$${Number(r.strike).toFixed(2)}</td>` : `<td style="color:var(--text-secondary);">—</td>`;
     case "expiry":
-      return r.isOption ? `<td>${escHtml(r.expiry || "—")}</td>` : `<td style="color:var(--text-secondary);">—</td>`;
+      return r.isOption ? `<td>${escHtml(fmtDMY(r.expiry) || "—")}</td>` : `<td style="color:var(--text-secondary);">—</td>`;
     case "currentPrice": {
       const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
       return `<td>${priceText}</td>`;
@@ -6131,7 +6199,7 @@ function renderSalesStrategyCellHTML(colId, r){
     }
     case "saleRealizedDate":
       return r.saleRealizedDate
-        ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real sale row on the Lot Matching table above.">&#10003; ${escHtml(r.saleRealizedDate)}</span></td>`
+        ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real sale row on the Lot Matching table above.">&#10003; ${escHtml(fmtDMY(r.saleRealizedDate) || r.saleRealizedDate)}</span></td>`
         : `<td><button type="button" class="ss-confirm-btn tab-btn" data-row-id="${r.id}" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Confirm Sale</button></td>`;
     default:
       return "<td></td>";
@@ -6212,14 +6280,14 @@ function showSaleRealizedConfirmDialog(resolvedRow){
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "true");
     panel.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; width:100%; max-width:420px; color:var(--text-primary);";
-    const today = new Date().toISOString().slice(0, 10);
+    const today = ppToday();
     panel.innerHTML = `
       <h3 style="margin:0 0 0.5rem; color:#facc15; font-size:1.1rem;">Confirm sale of ${escHtml(resolvedRow.label || resolvedRow.ticker)}</h3>
       <div style="color:var(--text-secondary); font-size:0.9rem; line-height:1.5; margin-bottom:0.9rem;">
         This adds a real sale row to the Lot Matching table above: <strong>${ppFmtNum(resolvedRow.unitsToSell)}</strong> unit(s) of <strong>${escHtml(resolvedRow.label || resolvedRow.ticker)}</strong> at <strong>$${Number(resolvedRow.sellingPrice).toFixed(2)}</strong>. Pick the date this sale actually happened.
       </div>
       <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:1rem;">Sale date
-        <input type="date" id="ssConfirmDateInput" class="form-input" value="${today}">
+        <input id="ssConfirmDateInput" class="form-input" ${dateTextInputAttrs(today)}>
       </label>
       <div style="display:flex; gap:0.6rem; justify-content:flex-end;">
         <button type="button" class="tab-btn" data-final="cancel">Cancel</button>
@@ -6232,7 +6300,11 @@ function showSaleRealizedConfirmDialog(resolvedRow){
     const onKey = (e) => { if(e.key === "Escape") finish(null); };
     document.addEventListener("keydown", onKey);
     panel.querySelector('[data-final="cancel"]').addEventListener("click", () => finish(null));
-    panel.querySelector('[data-final="confirm"]').addEventListener("click", () => finish(dateInput.value || today));
+    panel.querySelector('[data-final="confirm"]').addEventListener("click", () => {
+      const iso = parseDateTextToIso(dateInput.value);
+      if(iso === null){ dateInput.style.outline = "1px solid #ef4444"; dateInput.title = "Use DD/MM/YYYY, e.g. 31/12/2026."; return; }
+      finish(iso || today);
+    });
   });
 }
 
@@ -6580,7 +6652,7 @@ function exportTableAsWord(filename, title, headers, rows, colors){
 </head>
 <body>
 <h2 style="font-family:Segoe UI, Arial, sans-serif;">${escCell(title)}</h2>
-<p style="font-family:Segoe UI, Arial, sans-serif; color:#555555; font-size:11px;">Exported ${escCell(new Date().toLocaleString())}</p>
+<p style="font-family:Segoe UI, Arial, sans-serif; color:#555555; font-size:11px;">Exported ${escCell(fmtDMYHM())}</p>
 <table style="border-collapse:collapse; font-family:Segoe UI, Arial, sans-serif; font-size:11px;">${headHtml}${bodyHtml}</table>
 </body></html>`;
   downloadTextBlob(filename, html, "application/msword");
@@ -6623,7 +6695,7 @@ function exportTableAsPdf(filename, title, headers, rows, colors){
 </head>
 <body>
   <h2>${escCell(title)}</h2>
-  <p class="meta">Exported ${escCell(new Date().toLocaleString())}</p>
+  <p class="meta">Exported ${escCell(fmtDMYHM())}</p>
   <table><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table>
 </body></html>`;
 
@@ -6690,6 +6762,7 @@ function getMainTableExportValue(item, colDef){
       return "$" + Math.abs(Number(val) || 0).toFixed(2);
     }
     if(colDef.computed) return Number(val).toFixed(1) + "%";
+    if(colDef.type === "date") return fmtDMY(ppCleanDate(val)) || (val || "");
     return val;
   }
   return item[colDef.id];
@@ -6789,15 +6862,15 @@ function getFifoFragmentExportValue(p, f){
     const lbl = String(p.label).trim().toLowerCase();
     if(f.data.expired && (isDateSaleCol || lbl === "selling price" || lbl === "units sold")){
       const ev = resolved[p.id];
-      return isDateSaleCol ? (ev || PP_NO_DATE_PLACEHOLDER) : (Number(ev) || 0);
+      return isDateSaleCol ? (fmtDMY(ppCleanDate(ev)) || PP_NO_DATE_PLACEHOLDER) : (Number(ev) || 0);
     }
     return isDateSaleCol ? PP_NO_DATE_PLACEHOLDER : "—";
   }
   const val = resolved[p.id];
   if(p.type === "text") return val === undefined || val === null ? "" : String(val);
   if(p.type === "date"){
-    if(isDateSaleCol) return ppCleanDate(val) || PP_NO_DATE_PLACEHOLDER;
-    return val ? String(val) : "";
+    if(isDateSaleCol) return fmtDMY(ppCleanDate(val)) || PP_NO_DATE_PLACEHOLDER;
+    return val ? (fmtDMY(ppCleanDate(val)) || String(val)) : "";
   }
   return Number(val) || 0;
 }
@@ -6891,10 +6964,10 @@ function buildSalesStrategyExportTable(){
   resolvedRows.forEach(r => {
     const priceText = r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`;
     const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
-    const saleText = r.saleRealizedDate ? `Confirmed ${r.saleRealizedDate}` : "Pending";
+    const saleText = r.saleRealizedDate ? `Confirmed ${fmtDMY(r.saleRealizedDate) || r.saleRealizedDate}` : "Pending";
     const valueById = {
       strike: r.isOption ? r.strike : "—",
-      expiry: r.isOption ? (r.expiry || "") : "—",
+      expiry: r.isOption ? (fmtDMY(r.expiry) || "") : "—",
       currentPrice: priceText,
       unitsToSell: r.unitsToSell,
       sellingPrice: r.sellingPrice,
@@ -6928,7 +7001,7 @@ function buildSampleExcelForDataEntry_SalesStrategy(){
   const headers = ["Ticker", "Strike Price", "Expiration Date", "Units to Sell", "Selling Price"];
   const rows = getSalesStrategyRows().filter(r => !r.saleRealizedDate).map(r => {
     const k = ppParseKey(r.ticker);
-    return [k.symbol, k.isOption ? k.strike : "", k.isOption ? k.expiry : "", r.unitsToSell || "", r.sellingPrice || ""];
+    return [k.symbol, k.isOption ? k.strike : "", k.isOption ? fmtDMY(k.expiry) : "", r.unitsToSell || "", r.sellingPrice || ""];
   });
   return { headers, rows };
 }
@@ -7155,7 +7228,7 @@ function buildSampleExcelForDataEntry_PastPurchases(){
       const v = values[p.id] !== undefined ? values[p.id] : "";
       if(p.type === "date"){
         const c = ppCleanDate(v);
-        if(c) return c;
+        if(c) return fmtDMY(c);
         return String(p.label).trim().toLowerCase() === "date sale" ? PP_NO_DATE_PLACEHOLDER : "";
       }
       return v;
@@ -7257,11 +7330,11 @@ function parseImportedDateCell(raw, ctx){
     const a = +m[1], b = +m[2];
     let y = +m[3];
     if(m[3].length === 2) y += y < 50 ? 2000 : 1900;
+    // v5.84: the app's standard is DD/MM/YYYY, so an ambiguous 03/04/2026 is read day-first
+    // (3 April); a clearly month-first one (04/25/2026) is still understood.
     let day, mon;
-    if(a > 12 && b <= 12){ day = a; mon = b; }
-    else if(b > 12 && a <= 12){ mon = a; day = b; }
-    else if(a === b && a <= 12){ day = a; mon = b; }
-    else if(a <= 12 && b <= 12) return { value: undefined, issue: `"${s}" could be day/month or month/day — written as YYYY-MM-DD it would be unambiguous` };
+    if(b > 12 && a <= 12){ mon = a; day = b; }
+    else if(a <= 31 && b <= 12){ day = a; mon = b; }
     else return { value: undefined, issue: `"${s}" is not a valid date` };
     return ppIsValidYmd(y, mon, day) ? { value: ppFormatYmd(y, mon, day) } : { value: undefined, issue: `"${s}" is not a valid date` };
   }
@@ -7497,7 +7570,7 @@ function showPastPurchasesImportConflictDialog(plan){
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "true");
     panel.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; width:100%; max-width:960px; max-height:85vh; overflow:auto; color:var(--text-primary);";
-    const show = v => (v === undefined || v === null || v === "") ? "(blank)" : String(v);
+    const show = v => (v === undefined || v === null || v === "") ? "(blank)" : (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? fmtDMY(v) : String(v));
     const cell = "padding:0.5rem 0.6rem; border-bottom:1px solid var(--border-color); position:static; background:transparent; vertical-align:top; line-height:1.4;";
     const smallBtn = "padding:0.4rem 0.9rem; font-size:0.85rem;";
     let html = `<h3 style="margin:0 0 0.5rem; color:#facc15; font-size:1.15rem;">Import: ${plan.conflicts.length} row(s) differ from what's already in "${escHtml(getActivePastPurchasesList().name)}"</h3>
@@ -8127,7 +8200,7 @@ function renderCellHTML(colDef, item, badge){
       return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
     }
     if(colDef.type === 'date'){
-      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="date" value="${escAttr(val)}"></td>`;
+      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" ${dateTextInputAttrs(ppCleanDate(val) || "")}></td>`;
     }
     return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
   }
@@ -8807,7 +8880,7 @@ try{
         const preset = PP_PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("newParamLabel").value = preset.label;
         document.getElementById("newParamType").value = preset.type;
-        document.getElementById("newParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
+        document.getElementById("newParamDefault").value = preset.defaultValue === "__today__" ? fmtDMY(ppToday()) : preset.defaultValue;
         selectedPresetMeta = (preset.finnhubField || preset.computed) ? {
           finnhubField: preset.finnhubField, finnhubUnitDivisor: preset.finnhubUnitDivisor,
           computed: preset.computed, formula: preset.formula
@@ -9276,9 +9349,9 @@ try{
       const say = (m, c) => { if(statusEl){ statusEl.textContent = m; statusEl.style.color = c; } };
       const sym = document.getElementById("ppNewOptTicker").value.trim().toUpperCase();
       const strike = parseFloat(document.getElementById("ppNewOptStrike").value);
-      const expiry = document.getElementById("ppNewOptExpiry").value;
-      if(!sym || !(strike > 0) || !ppCleanDate(expiry)){
-        say("Enter the underlying ticker, a strike price above 0, and an expiration date.", "var(--amber)");
+      const expiry = readDateTextBox(document.getElementById("ppNewOptExpiry")); // ISO, "" or null
+      if(!sym || !(strike > 0) || !expiry){
+        say("Enter the underlying ticker, a strike price above 0, and an expiration date as DD/MM/YYYY.", "var(--amber)");
         return;
       }
       addPastPurchaseOptionRow(sym, strike, expiry);
@@ -9288,7 +9361,7 @@ try{
       renderPastPurchasesColumnOrderList();
       renderPastPurchasesRowOrderList();
       renderPPListSelector();
-      say(`${sym} $${strike} call exp ${expiry} added — enter its Units Purchased (contracts), Average Purchase Price and Date Purchased in the table.`, "var(--emerald)");
+      say(`${sym} $${strike} call exp ${fmtDMY(expiry)} added — enter its Units Purchased (contracts), Average Purchase Price and Date Purchased in the table.`, "var(--emerald)");
       document.getElementById("ppNewOptTicker").value = "";
     });
   }
@@ -9325,7 +9398,7 @@ try{
         const preset = PP_PARAM_PRESETS[parseInt(val, 10)];
         document.getElementById("ppNewParamLabel").value = preset.label;
         document.getElementById("ppNewParamType").value = preset.type;
-        document.getElementById("ppNewParamDefault").value = preset.defaultValue === "__today__" ? new Date().toISOString().slice(0,10) : preset.defaultValue;
+        document.getElementById("ppNewParamDefault").value = preset.defaultValue === "__today__" ? fmtDMY(ppToday()) : preset.defaultValue;
         ppSelectedPresetMeta = preset.computed ? { computed: true, formula: preset.formula } : null;
       }
     });
@@ -9392,6 +9465,7 @@ try{
 }
 
 try{
+  wireDateTextInputs();
   wireUpSampleAndImportExcelButtons();
 }catch(err){
   console.error("Failed to wire up Sample Excel / Import Excel buttons:", err);
