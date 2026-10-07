@@ -1,3 +1,5 @@
+// APP.JS BUILD: v5.91 (Portfolio table shows call options: Strike Price + Expiration Date columns, option rows in Current Holding and the other auto lists; Methodology and Glossary headings are expanders; all expanders and section toggles share one look (▶ open, ◀ fold); deleting a list or resetting is ONE pop-up with the password; password boxes are masked with a Show/Hide button.)
+// (full history below)
 // APP.JS BUILD: v5.90 ("Current and Potential Holding" = the Current Holding set (held, shown in Sales Strategy) + every Buy Strategy ticker; fully-sold tickers no longer linger in it. New Portfolio list "All Past Purchases": every ticker on any of your Past Purchases lists (stocks), whatever is held or sold.)
 // v5.89 (Fix: the Portfolio auto lists now follow the ACTIVE Past Purchases list's tables only (Current Holding = tickers shown in Sales Strategy with Total Units Holding > 0; no more tickers held on other Past Purchases lists or removed from Sales Strategy).)
 // v5.88 (Portfolio auto lists: "Current Holding" now follows Sales Strategy (still-held tickers shown there); new "Current and Potential Holding" (every ticker in Sales Strategy + Buy Strategy);
@@ -520,7 +522,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.90 (All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.91 (Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -543,7 +545,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -676,14 +678,14 @@ function applyAllCollapsedSections(){
     const btn = document.getElementById(s.toggleBtn);
     const isOpen = s.id === openId;
     if(body) body.style.display = isOpen ? "" : "none";
-    if(btn){ btn.textContent = isOpen ? "▼" : "▶"; btn.setAttribute("aria-expanded", String(isOpen)); }
+    if(btn){ btn.textContent = isOpen ? "◀" : "▶"; btn.setAttribute("aria-expanded", String(isOpen)); }
     if(s.navBtn){
       const navEl = document.getElementById(s.navBtn);
       if(navEl) navEl.classList.toggle("nav-btn-active", isOpen);
     }
   });
 }
-// A section's own ▼/▶ header button: clicking the currently-open section
+// A section's own ◀/▶ header button: clicking the currently-open section
 // collapses it (nothing open); clicking any other section's header switches the
 // accordion to it, closing whichever was open before.
 function toggleCollapsibleSection(sectionId, toggleBtnId){
@@ -773,10 +775,60 @@ function authError(error){
 // cancelled/failure message written to it; the caller still gets a plain
 // true/false back either way. Returns true only once the password has
 // actually been confirmed correct.
-async function verifyAccountPasswordForDestructiveAction(actionLabel, statusEl){
+// One combined pop-up: says what will happen AND asks for the password, with a
+// masked field and a Show/Hide button. Resolves to the typed password or null.
+function showPasswordConfirmDialog({title, message, confirmLabel, email}){
+  return new Promise(resolve => {
+    const back = document.createElement("div");
+    back.id = "pwConfirmDialog";
+    back.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; display:flex; align-items:center; justify-content:center; padding:1rem;";
+    const box = document.createElement("div");
+    box.setAttribute("role", "dialog");
+    box.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; max-width:440px; width:100%; color:var(--text-primary);";
+    const h = document.createElement("div");
+    h.style.cssText = "font-weight:600; font-size:1.05rem; margin-bottom:0.5rem;";
+    h.textContent = title || "Please confirm";
+    const p = document.createElement("div");
+    p.style.cssText = "font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.75rem;";
+    p.textContent = message || "";
+    const lab = document.createElement("label");
+    lab.style.cssText = "display:block; font-size:0.8rem; margin-bottom:0.3rem;";
+    lab.textContent = "Re-enter the password for " + (email || "this account") + " to confirm:";
+    const input = document.createElement("input");
+    input.type = "password"; input.id = "pwConfirmInput"; input.autocomplete = "current-password";
+    input.style.cssText = "width:100%; box-sizing:border-box;";
+    lab.appendChild(input);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1rem;";
+    const cancel = document.createElement("button");
+    cancel.type = "button"; cancel.id = "pwConfirmCancel"; cancel.textContent = "Cancel";
+    const ok = document.createElement("button");
+    ok.type = "button"; ok.id = "pwConfirmOk"; ok.textContent = confirmLabel || "Confirm";
+    row.appendChild(cancel); row.appendChild(ok);
+    box.appendChild(h); box.appendChild(p); box.appendChild(lab); box.appendChild(row);
+    back.appendChild(box);
+    document.body.appendChild(back);
+    attachPasswordToggle(input);
+    const done = (v) => { back.remove(); resolve(v); };
+    cancel.addEventListener("click", () => done(null));
+    ok.addEventListener("click", () => done(input.value));
+    input.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); done(input.value); } else if(e.key === "Escape"){ done(null); } });
+    back.addEventListener("keydown", e => { if(e.key === "Escape") done(null); });
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
+// `opts` = {title, message, confirmLabel}: the single pop-up's wording.
+async function verifyAccountPasswordForDestructiveAction(actionLabel, statusEl, opts){
+  opts = opts || {};
   const emailInline = document.getElementById("loggedInEmailInline");
   const currentEmail = (emailInline && emailInline.textContent || "").trim();
-  const enteredPassword = prompt(`For your security, re-enter the password for ${currentEmail || "this account"} to confirm ${actionLabel}:`);
+  const enteredPassword = await showPasswordConfirmDialog({
+    title: opts.title || ("Confirm " + actionLabel),
+    message: opts.message || ("For your security, confirm " + actionLabel + " with your account password."),
+    confirmLabel: opts.confirmLabel || "Confirm",
+    email: currentEmail
+  });
   if(enteredPassword === null) return false; // cancelled
   if(!enteredPassword){
     if(statusEl){ statusEl.textContent = `Cancelled — a password is required to confirm ${actionLabel}.`; statusEl.style.color = "var(--amber)"; }
@@ -828,6 +880,7 @@ async function openDashboard(user){
   if(overlay) overlay.style.display = 'none';
   if(appShell) appShell.style.display = 'block';
   document.querySelectorAll('input[type="password"]').forEach(el => { el.value = ''; });
+  resetPasswordToggles();
 
   const syncStatusEl = document.getElementById('syncStatus');
   if(syncStatusEl){ syncStatusEl.textContent = 'Checking for cloud data…'; syncStatusEl.style.color = 'var(--sub)'; }
@@ -2278,6 +2331,9 @@ function wireUpDetailedUpdate(){
 // Ticker (always first, sticky) and Remove (always last) are NOT part of this reorderable
 // set — everything else, including custom parameters, can be repositioned freely.
 const BUILTIN_COLUMNS = [
+  // v5.91: call options. Read-only, derived from the contract: a stock row shows a dash.
+  { id: "strike", label: "Strike Price", type: "number", computed: true },
+  { id: "expiry", label: "Expiration Date", type: "date", computed: true },
   { id: "name", label: "Company Name", type: "text", computed: false },
   { id: "roa", label: "ROA (%)", type: "number", computed: false },
   { id: "pe", label: "P/E Multiple", type: "number", computed: false },
@@ -2552,6 +2608,19 @@ function getColumnOrder(){
       // Append any columns not yet in the saved order (new custom params, or new
       // built-in fields added in a future update) so nothing silently disappears.
       defaultOrder.forEach(id => { if(!savedSet.has(id)) validSaved.push(id); });
+      // v5.91: Strike Price / Expiration Date belong right after Ticker. One-time move for an
+      // account whose saved order predates them (after that the user's own moves stick).
+      let moved = false;
+      try{ moved = localStorage.getItem("mainStrikeExpiryFront") === "1"; }catch(e){ moved = true; }
+      if(!moved){
+        try{ localStorage.setItem("mainStrikeExpiryFront", "1"); }catch(e){ /* unavailable */ }
+        const front = ["strike", "expiry"].filter(id => validSaved.includes(id));
+        if(front.length){
+          const rest = validSaved.filter(id => !front.includes(id));
+          validSaved.length = 0; validSaved.push(...front, ...rest);
+          saveColumnOrder(validSaved);
+        }
+      }
       return validSaved;
     }
   }catch(e){ /* fall through to default */ }
@@ -2793,7 +2862,7 @@ function computeAllPastPurchasesTickers(){
   const optP = ppOptionParams(getPastPurchasesParams());
   const out = new Set();
   Object.values(getAllPastPurchasesLists()).forEach(list => {
-    (list.rows || []).forEach(r => { const k = ppRowKey(r, optP); if(k && k.indexOf("|") === -1) out.add(k); });
+    (list.rows || []).forEach(r => { const k = ppRowKey(r, optP); if(k) out.add(k); });
   });
   return Array.from(out).sort();
 }
@@ -2812,7 +2881,7 @@ function computeCurrentHoldingTickersPerSalesStrategy(){
     const breakdown = computePastPurchasesFifoLotBreakdown(list.rows || [], params);
     const inSS = new Set((list.salesStrategy || []).map(r => r.ticker));
     Object.keys(breakdown).forEach(t => {
-      if(t.indexOf("|") !== -1 || !inSS.has(t)) return;
+      if(!inSS.has(t)) return;
       if(breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS)) held.add(t);
     });
   });
@@ -2824,7 +2893,7 @@ function computeCurrentHoldingTickersPerSalesStrategy(){
 function computePotentialHoldingTickers(){
   const out = new Set(computeCurrentHoldingTickersPerSalesStrategy());
   ppActiveListsForAutoPortfolio().forEach(list => {
-    (list.buyStrategy || []).forEach(r => { if(r.ticker && r.ticker.indexOf("|") === -1) out.add(r.ticker); });
+    (list.buyStrategy || []).forEach(r => { if(r.ticker) out.add(r.ticker); });
   });
   return Array.from(out).sort();
 }
@@ -2851,7 +2920,7 @@ function computePurchasedTickers(months){
       const units = unitsP ? (Number(v[unitsP.id] !== undefined ? v[unitsP.id] : unitsP.defaultValue) || 0) : 0;
       if(!(units > 0)) return;
       const key = ppRowKey(r, optP);
-      if(!key || key.indexOf("|") !== -1) return;
+      if(!key) return;
       if(from){
         const d = dateP ? ppCleanDate(v[dateP.id] !== undefined ? v[dateP.id] : dateP.defaultValue) : "";
         if(!d || d < from || d > today) return;
@@ -2894,15 +2963,23 @@ function syncCurrentHoldingsList(){
   }
 }
 
-function getWorkingData(explicitList){
+function getWorkingData(explicitList, includeOptions){
   const list = explicitList || getActiveList();
   const removed = list.removedTickers || [];
   const overrides = getGlobalOverrides();
   const baseTickers = list.useBaseData ? marketData.filter(a => !removed.includes(a.ticker)).map(a => a.ticker) : [];
-  const customTickers = (list.includedCustomTickers || []).filter(t => !removed.includes(t));
+  // v5.91: a list entry containing "|" is a call-option CONTRACT KEY (TICKER|strike|YYYY-MM-DD).
+  // Only the Portfolio table itself (and its row-order / remove helpers) asks for them; every
+  // stock-only consumer (live fetch, prompts, Excel import/sample, ...) still gets stocks only.
+  const customTickers = (list.includedCustomTickers || []).filter(t => !removed.includes(t) && (includeOptions || String(t).indexOf("|") === -1));
   const allTickers = [...new Set([...baseTickers, ...customTickers])];
 
   return allTickers.map(ticker => {
+    if(String(ticker).indexOf("|") !== -1){
+      return { ticker, name: ppKeyLabel(ticker), roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "",
+        revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, operatingExpenses: 0, beta: 1.0,
+        _overrides: overrides[ticker] || {} };
+    }
     const baseAsset = marketData.find(a => a.ticker === ticker);
     const shell = baseAsset
       ? { ...baseAsset }
@@ -2982,7 +3059,7 @@ function applyRowOrder(tickers){
 }
 
 function moveRowInList(ticker, direction){
-  const working = getWorkingData().map(a => a.ticker);
+  const working = getWorkingData(undefined, true).map(a => a.ticker);
   const order = applyRowOrder(working);
   const idx = order.indexOf(ticker);
   if(idx === -1) return;
@@ -4909,6 +4986,65 @@ function wireIntroDisclaimers(){
 
 // v5.87: "Existing assets / rows (click x to remove)" lists fold behind a heading button
 // (▶ opens, ◀ folds back); default is just the heading.
+// Turns each heading of the Methodology and Glossary tables into the same
+// expander button used elsewhere: heading only by default, ▶ opens, ◀ folds back.
+function wireGlossaryExpanders(){
+  const host = document.getElementById("methodologyGlossarySectionBody");
+  if(!host) return;
+  host.querySelectorAll(":scope > .table-container").forEach((box, i) => {
+    const h = box.querySelector(":scope > h2");
+    if(!h || h.getAttribute("data-gl-wired")) return;
+    const label = h.textContent.trim();
+    const body = document.createElement("div");
+    body.id = "glBody" + (i + 1);
+    body.style.cssText = "display:none; margin-top:1rem;";
+    let n = h.nextSibling;
+    while(n){ const next = n.nextSibling; body.appendChild(n); n = next; }
+    box.appendChild(body);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "expander-toggle expander-heading";
+    btn.setAttribute("data-expander", body.id);
+    btn.setAttribute("data-display", "block");
+    btn.setAttribute("data-label", label);
+    btn.setAttribute("data-gl-wired", "1");
+    btn.textContent = label + " ▶";
+    h.replaceWith(btn);
+  });
+}
+
+// ---- Password fields: hidden by default, Show/Hide button beside each ----
+function attachPasswordToggle(input){
+  if(!input || input.getAttribute("data-pw-toggle")) return;
+  input.setAttribute("data-pw-toggle", "1");
+  const wrap = document.createElement("span");
+  wrap.className = "pw-wrap";
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pw-toggle-btn";
+  b.textContent = "Show";
+  b.setAttribute("aria-label", "Show password");
+  b.addEventListener("click", () => {
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    b.textContent = show ? "Hide" : "Show";
+    b.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  });
+  wrap.appendChild(b);
+}
+function resetPasswordToggles(){
+  document.querySelectorAll("input[data-pw-toggle]").forEach(el => {
+    el.type = "password";
+    const b = el.parentNode && el.parentNode.querySelector(".pw-toggle-btn");
+    if(b){ b.textContent = "Show"; b.setAttribute("aria-label", "Show password"); }
+  });
+}
+function wirePasswordToggles(){
+  document.querySelectorAll('input[type="password"]').forEach(attachPasswordToggle);
+}
+
 function wireExpanders(){
   document.querySelectorAll("[data-expander]").forEach(btn => {
     if(btn.getAttribute("data-expander-wired")) return;
@@ -4917,7 +5053,7 @@ function wireExpanders(){
     const label = btn.getAttribute("data-label") || btn.textContent.replace(/[▶◀]\s*$/, "").trim();
     if(!target) return;
     const render = (open) => {
-      target.style.display = open ? "flex" : "none";
+      target.style.display = open ? (btn.getAttribute("data-display") || "flex") : "none";
       btn.textContent = label + (open ? " ◀" : " ▶");
       btn.setAttribute("aria-expanded", open ? "true" : "false");
       btn.title = open ? "Fold this list back" : "Show this list";
@@ -7685,6 +7821,9 @@ function exportTableAsPdf(filename, title, headers, rows, colors){
 // Renders one main-table cell to a plain export value (mirrors renderCellHTML's
 // formatting for computed/custom columns, but returns text/numbers instead of HTML).
 function getMainTableExportValue(item, colDef){
+  if(colDef.id === "strike") return item.isOption ? item.strike : "—";
+  if(colDef.id === "expiry") return item.isOption ? (fmtDMY(item.expiry) || "") : "—";
+  if(item.isOption && !colDef.isCustom && colDef.id !== "name" && colDef.id !== "currentPrice") return "—";
   if(colDef.id === "stability") return item.stability;
   if(colDef.id === "calculatedUpside") return (item.calculatedUpside >= 0 ? "+" : "") + (item.calculatedUpside * 100).toFixed(1) + "%";
   if(colDef.id === "allocationWeight") return item.allocationWeight.toFixed(2) + "%";
@@ -7722,6 +7861,7 @@ function getMainTableExportValue(item, colDef){
 // Realized Gain, Unrealized Gain, Missed Gain %, Book Value), just using the print-legible export
 // palette instead of the live dark-theme hex values.
 function getMainTableExportColor(item, colDef){
+  if(item.isOption && !colDef.isCustom && colDef.id !== "currentPrice") return null;
   if(colDef.id === "calculatedUpside") return item.calculatedUpside >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red;
   if(colDef.id === "cashRunway") return (item.cashRunway < 99999 && item.cashRunway < 2) ? EXPORT_COLORS.red : null;
   if(colDef.id === "currentPrice"){
@@ -7764,7 +7904,7 @@ function buildMainTableExportTable(){
   const defsById = Object.fromEntries(getAllColumnDefs().map(d => [d.id, d]));
   const headers = ["Ticker", ...columnOrder.map(id => (defsById[id] ? defsById[id].label : id))];
   const rows = lastMainTableProcessedAssets.map(item => [
-    item.ticker,
+    item.isOption ? item.label : item.ticker,
     ...columnOrder.map(id => defsById[id] ? getMainTableExportValue(item, defsById[id]) : "")
   ]);
   const colors = lastMainTableProcessedAssets.map(item => [
@@ -8979,14 +9119,14 @@ function renderRowOrderList(){
   const container = document.getElementById("rowOrderList");
   if(!container) return;
   container.innerHTML = "";
-  const tickers = getWorkingData().map(a => a.ticker);
+  const tickers = getWorkingData(undefined, true).map(a => a.ticker);
   const order = applyRowOrder(tickers);
 
   order.forEach((ticker, idx) => {
     const row = document.createElement("div");
     row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
     row.innerHTML = `
-      <span style="flex:1;">${ticker}</span>
+      <span style="flex:1;">${ticker.indexOf("|") !== -1 ? ppKeyLabel(ticker) : ticker}</span>
       <button class="row-move-btn" data-ticker="${ticker}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move up" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↑</button>
       <button class="row-move-btn" data-ticker="${ticker}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move down" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↓</button>
     `;
@@ -9039,7 +9179,7 @@ function renderRemoveList(){
   const container = document.getElementById("removeList");
   if(!container) return;
   container.innerHTML = "";
-  const working = getWorkingData();
+  const working = getWorkingData(undefined, true);
   if(working.length === 0){
     container.innerHTML = `<span style="color:var(--text-secondary);">No assets in this list.</span>`;
     return;
@@ -9047,7 +9187,7 @@ function renderRemoveList(){
   working.forEach(asset => {
     const chip = document.createElement("div");
     chip.className = "remove-chip";
-    chip.innerHTML = `<span>${asset.ticker}</span><button data-ticker="${asset.ticker}" title="Remove ${asset.ticker}">&times;</button>`;
+    chip.innerHTML = `<span>${asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker}</span><button data-ticker="${asset.ticker}" title="Remove ${asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker}">&times;</button>`;
     chip.querySelector("button").addEventListener("click", (e) => {
       const t = e.target.getAttribute("data-ticker");
       if(confirm(`Remove the "${t}" row? This deletes the entire row.`)){
@@ -9069,6 +9209,14 @@ function escAttr(str){
 
 function renderCellHTML(colDef, item, badge){
   if(!colDef) return '<td></td>'; // defensive: a stale column id with no matching def
+
+  // v5.91: call options. Strike Price / Expiration Date show for options (a dash for stocks);
+  // an option has no fundamentals, score or weight, so those cells are a dash too.
+  if(colDef.id === 'strike') return item.isOption ? `<td>$${Number(item.strike).toFixed(2)}</td>` : `<td style="color:var(--text-secondary);">—</td>`;
+  if(colDef.id === 'expiry') return item.isOption ? `<td>${escHtml(fmtDMY(item.expiry) || "—")}</td>` : `<td style="color:var(--text-secondary);">—</td>`;
+  if(item.isOption && !colDef.isCustom && colDef.id !== 'name' && colDef.id !== 'currentPrice'){
+    return `<td style="color:var(--text-secondary);" title="Not applicable to a call option">—</td>`;
+  }
 
   if(colDef.id === 'name'){
     return `<td>
@@ -9257,16 +9405,23 @@ function runMatrixOptimization() {
   const tbody = document.querySelector('#resultsTable tbody');
   tbody.innerHTML = '';
 
-  const workingData = getWorkingData();
+  const workingData = getWorkingData(undefined, true);
 
   let processedAssets = workingData.map(asset => {
     const ov = asset._overrides || {};
-    const live = getMergedLiveData(asset.ticker);
+    // v5.91: a call-option row (list entry = contract key) is display-only: its own price, the
+    // contract's strike/expiration, the Units/Average-price style custom columns (x contract
+    // multiplier) -- no fundamentals, no live fetch, no score and no allocation weight.
+    const isOpt = String(asset.ticker).indexOf("|") !== -1;
+    const optInfo = isOpt ? ppParseKey(asset.ticker) : null;
+    const optMult = isOpt ? getOptionContractMultiplier() : 1;
+    const live = isOpt ? null : getMergedLiveData(asset.ticker);
 
     // Precedence for every editable field: manual override > live fetch (Finnhub,
     // or Alpha Vantage filling in whatever Finnhub didn't have) > static default.
     const name = ov.name !== undefined ? ov.name : asset.name;
-    const currentPrice = ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : asset.currentPrice);
+    const optionPrice = isOpt ? getOptionPriceForKey(asset.ticker) : null;
+    const currentPrice = isOpt ? (optionPrice !== null ? optionPrice : 0) : (ov.currentPrice !== undefined ? ov.currentPrice : ((live && live.price !== undefined) ? live.price : asset.currentPrice));
     const pe = ov.pe !== undefined ? ov.pe : ((live && live.pe !== undefined) ? live.pe : asset.pe);
     const roa = ov.roa !== undefined ? ov.roa : ((live && live.roa !== undefined) ? live.roa : asset.roa);
     const targetPrice = ov.targetPrice !== undefined ? ov.targetPrice : asset.targetPrice;
@@ -9295,10 +9450,12 @@ function runMatrixOptimization() {
     // Guarded against currentPrice === 0 (a brand-new, not-yet-fetched asset, or
     // any other zero/blank price) — without this, division by zero would show
     // "NaN%"/"Infinity%" in the Implied Upside column instead of a clean 0%.
-    let upsidePercentage = currentPrice !== 0 ? (targetPrice - currentPrice) / currentPrice : 0;
+    let upsidePercentage = (!isOpt && currentPrice !== 0) ? (targetPrice - currentPrice) / currentPrice : 0;
     let attributionScore = 0;
 
-    if (mandate === 'tactical') {
+    if (isOpt) {
+      attributionScore = 0; // options carry no score
+    } else if (mandate === 'tactical') {
       attributionScore = upsidePercentage * 100;
       // Tactical still leads with upside, but gives a modest nod to growth momentum
       // and to names already carrying volatility (beta) as tactical trades tend to.
@@ -9374,7 +9531,7 @@ function runMatrixOptimization() {
         const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam && sellParam) && units !== 0 && sell !== 0;
-        customValues[p.id] = ready ? units * (sell - avg) : 0;
+        customValues[p.id] = ready ? units * (sell - avg) * optMult : 0;
         customIsDefault[p.id] = !ready;
       } else if(p.computed && p.formula === "unrealizedGainPP"){
         // Same formula and "ready" logic as the Past Purchases table's own
@@ -9389,7 +9546,7 @@ function runMatrixOptimization() {
         const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0;
-        customValues[p.id] = ready ? units * (currentPrice - avg) : 0;
+        customValues[p.id] = ready ? units * (currentPrice - avg) * optMult : 0;
         customIsDefault[p.id] = !ready;
       } else if(p.computed && p.formula === "currentMarketValuePP"){
         // Same idea as Unrealized Gain above, just Units Purchased × Current Price
@@ -9403,7 +9560,7 @@ function runMatrixOptimization() {
         const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
         const sell = sellParam ? (Number(customValues[sellParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0 && sell === 0;
-        customValues[p.id] = ready ? units * currentPrice : 0;
+        customValues[p.id] = ready ? units * currentPrice * optMult : 0;
         customIsDefault[p.id] = !ready;
       } else if(p.computed && p.formula === "missedGainPct"){
         // (Current Price − Selling Price) ÷ Selling Price × 100, using the already-
@@ -9423,21 +9580,22 @@ function runMatrixOptimization() {
         const units = unitsParam ? (Number(customValues[unitsParam.id]) || 0) : 0;
         const avg = avgParam ? (Number(customValues[avgParam.id]) || 0) : 0;
         const ready = !!(unitsParam && avgParam) && units !== 0 && avg !== 0;
-        customValues[p.id] = ready ? units * avg : 0;
+        customValues[p.id] = ready ? units * avg * optMult : 0;
         customIsDefault[p.id] = !ready;
       }
     });
 
-    return { ticker: asset.ticker, name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
+    return { ticker: asset.ticker, isOption: isOpt, symbol: isOpt ? optInfo.symbol : asset.ticker, label: isOpt ? ppKeyLabel(asset.ticker) : asset.ticker,
+      strike: isOpt ? optInfo.strike : 0, expiry: isOpt ? optInfo.expiry : "", name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
       revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, operatingExpenses, cashRunway, beta, customValues, customIsDefault,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
-      finalScore: Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
+      finalScore: isOpt ? 0 : Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
 
   const netMatrixScore = processedAssets.reduce((accum, item) => accum + item.finalScore, 0);
 
   processedAssets = processedAssets.map(item => {
-    let targetAllocationWeight = (item.finalScore / netMatrixScore) * 100;
+    let targetAllocationWeight = item.isOption ? null : (item.finalScore / netMatrixScore) * 100;
     return { ...item, allocationWeight: targetAllocationWeight };
   });
 
@@ -9446,7 +9604,7 @@ function runMatrixOptimization() {
   function getSortValue(item, colId){
     if(colId === 'stability') return STABILITY_SORT_ORDER[item.stability] ?? -1;
     if(colId === 'calculatedUpside') return item.calculatedUpside;
-    if(colId === 'allocationWeight') return item.allocationWeight;
+    if(colId === 'allocationWeight') return item.allocationWeight === null ? -1 : item.allocationWeight;
     if(colId === 'name') return item.name.toLowerCase();
     if(item.customValues && colId in item.customValues){
       const v = item.customValues[colId];
@@ -9478,7 +9636,7 @@ function runMatrixOptimization() {
   } else if (mandate === 'tactical') {
     processedAssets.sort((a, b) => b.calculatedUpside - a.calculatedUpside);
   } else {
-    processedAssets.sort((a, b) => b.allocationWeight - a.allocationWeight);
+    processedAssets.sort((a, b) => (b.allocationWeight === null ? -1 : b.allocationWeight) - (a.allocationWeight === null ? -1 : a.allocationWeight));
   }
 
   lastMainTableProcessedAssets = processedAssets;
@@ -9490,7 +9648,7 @@ function runMatrixOptimization() {
   // from any source, this row stops appearing on its own, with no separate
   // flag to maintain — matching the user's own "does not appear when there
   // are numbers in the table" spec.
-  const isPendingNewUserData = processedAssets.length > 0 && processedAssets.every(item => Number(item.currentPrice) === 0);
+  const isPendingNewUserData = processedAssets.length > 0 && processedAssets.every(item => item.isOption || Number(item.currentPrice) === 0) && processedAssets.some(item => !item.isOption);
   if(isPendingNewUserData){
     const bannerColspan = getColumnOrder().length + 1; // +1 for the always-present Ticker column
     tbody.insertAdjacentHTML('beforeend', `<tr class="new-user-pending-row"><td colspan="${bannerColspan}" style="text-align:left; font-style:italic; color:var(--text-secondary); padding:0.75rem;">New User. Pending data when user activate live update.</td></tr>`);
@@ -9500,7 +9658,8 @@ function runMatrixOptimization() {
     const rowElement = document.createElement('tr');
 
     let badge;
-    if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${item.ticker}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
+    if(item.isOption) badge = item.currentPrice > 0 ? `<span style="color:#fbbf24; font-size:0.75rem; font-weight:600;" title="Option price stored for this contract (typed or fetched from Marketdata.app)">● option price</span>` : `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;" title="No price stored for this contract yet — type one in Current Price">○ no price</span>`;
+    else if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${item.ticker}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
     else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
     else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="The last live fetch attempt (Finnhub and/or Alpha Vantage) couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
@@ -9511,12 +9670,15 @@ function runMatrixOptimization() {
 
     const upDisabled = rowIdx === 0 ? 'disabled' : '';
     const downDisabled = rowIdx === processedAssets.length - 1 ? 'disabled' : '';
+    const tickerNameHtml = item.isOption
+      ? `<div style="font-weight:600;">${item.symbol}</div><div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>`
+      : `<input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">`;
     const tickerCell = `<td>
-        <input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">
+        ${tickerNameHtml}
         <div class="row-ctrl-controls">
           <button class="row-ctrl-btn" data-action="up" data-ticker="${item.ticker}" ${upDisabled} title="Move row up">&uarr;</button>
           <button class="row-ctrl-btn" data-action="down" data-ticker="${item.ticker}" ${downDisabled} title="Move row down">&darr;</button>
-          <button class="row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${item.ticker}" title="Remove ${item.ticker} from this list">&times;</button>
+          <button class="row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${item.ticker}" title="Remove ${item.label} from this list">&times;</button>
         </div>
       </td>`;
 
@@ -9607,8 +9769,11 @@ function wireUpEditableCells(){
       const unchanged = isNum ? (value === resolvedValue) : (String(value) === String(resolvedValue));
       if(unchanged) return; // change event fired but nothing actually changed — don't create a phantom override
 
-      setCellOverride(ticker, field, value);
+      // v5.91: an option's Current Price is the contract's stored price, shared with Past Purchases / Sales / Buy Strategy.
+      if(String(ticker).indexOf("|") !== -1 && field === 'currentPrice') setOptionPrice(ticker, value, "manual");
+      else setCellOverride(ticker, field, value);
       runMatrixOptimization();
+      if(typeof renderPastPurchasesTable === "function" && String(ticker).indexOf("|") !== -1 && field === 'currentPrice') renderPastPurchasesTable();
     });
     // Prevent Enter key in text inputs from doing anything unexpected (like submitting).
     el.addEventListener('keydown', (e) => {
@@ -9674,10 +9839,8 @@ try{
   if(deleteListBtn){
     deleteListBtn.addEventListener("click", async () => {
       const current = getActiveList();
-      const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
-      if(!confirmed) return;
       const statusEl = document.getElementById("listActionStatus");
-      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl);
+      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl, {title: `Delete "${current.name}"?`, message: "This cannot be undone.", confirmLabel: "Delete"});
       if(!verified) return;
       deleteActiveList();
       renderListSelector();
@@ -10021,9 +10184,7 @@ try{
   if(resetAccountDataBtn){
     resetAccountDataBtn.addEventListener("click", async () => {
       const syncStatusEl = document.getElementById("syncStatus");
-      if(!confirm("Reset this account's data? This permanently replaces everything currently saved for this account — locally and in the cloud — with the default starting Sample List. This cannot be undone. Continue?")) return;
-
-      const verified = await verifyAccountPasswordForDestructiveAction("the reset", syncStatusEl);
+      const verified = await verifyAccountPasswordForDestructiveAction("the reset", syncStatusEl, {title: "Reset this account's data?", message: "This permanently replaces everything currently saved for this account — locally and in the cloud — with the default starting Sample List. This cannot be undone.", confirmLabel: "Reset"});
       if(!verified) return;
 
       clearAllLocalAppData();
@@ -10111,10 +10272,8 @@ try{
   if(ppDeleteListBtn){
     ppDeleteListBtn.addEventListener("click", async () => {
       const current = getActivePastPurchasesList();
-      const confirmed = confirm(`Delete "${current.name}"? This cannot be undone.`);
-      if(!confirmed) return;
       const statusEl = document.getElementById("ppListActionStatus");
-      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl);
+      const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl, {title: `Delete "${current.name}"?`, message: "This cannot be undone.", confirmLabel: "Delete"});
       if(!verified) return;
       deleteActivePastPurchasesList();
       renderPPListSelector();
@@ -10424,6 +10583,8 @@ try{
 try{
   wireDateTextInputs();
   wireIntroDisclaimers();
+  wireGlossaryExpanders();
+  wirePasswordToggles();
   wireExpanders();
   wireUpSampleAndImportExcelButtons();
   wireBuyStrategyControls();
@@ -10524,7 +10685,7 @@ const NEW_USER_DEFAULT_CUSTOM_PARAMS = [
 // operatingExpenses (added alongside cashAndEquivalents as Cash Runway's other
 // input — see computeCashRunway) sits right next to it, matching that pairing.
 const NEW_USER_DEFAULT_COLUMN_ORDER = [
-  "name", "allocationWeight", "calculatedUpside",
+  "strike", "expiry", "name", "allocationWeight", "calculatedUpside",
   "custom_actual_upside_pct", "custom_units_purchased", "custom_avg_purchase_price",
   "currentPrice", "targetPrice", "custom_to_buy_price",
   "stability", "roa", "pe", "custom_forward_pe", "revenueGrowth", "pegRatio", "debtToEquity",
