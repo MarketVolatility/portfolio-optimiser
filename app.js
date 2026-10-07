@@ -1,4 +1,6 @@
-// APP.JS BUILD: v5.84 (ONE DATE FORMAT everywhere: DD/MM/YYYY -- on screen, in every date entry box (now text boxes, with a typed-date parser: DD/MM/YYYY, ISO and
+// APP.JS BUILD: v5.84 (Sales Strategy: new "Unrealised Capital Gain" column ((Current Price - avg cost of units still held) x units held, x100 for options; repeats on each row of a
+//   ticker/contract) and a first-row "Total Unrealised Gain" for this table only (each ticker/contract once; also first row of the exports).
+// ONE DATE FORMAT everywhere: DD/MM/YYYY -- on screen, in every date entry box (now text boxes, with a typed-date parser: DD/MM/YYYY, ISO and
 //   other forms accepted, junk reverted), status/dialog messages, monthly labels (MM/YYYY), Excel/Text/Word/PDF exports, sample Excel, and the "no sale date" marker 00/00/0000.
 //   Storage stays YYYY-MM-DD, so sorting/FIFO/sync are unchanged. Excel import reads an ambiguous 03/04/2026 DAY-first. Today's date now uses the LOCAL date, not UTC.)
 // Earlier v5.84 notes: Excel import: every click opens a FRESH file picker so an amended file with the same name can always be re-selected; Past Purchases gets an
@@ -503,7 +505,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.84 (DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.84 (Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -3423,6 +3425,32 @@ function isSalesStrategyRowExpired(row){
 // Sorting the table is still just a VIEW on top of this (applied below,
 // after this running total is computed in real storage order), so changing
 // the sort never changes these numbers, only their on-screen order.
+function ssUnrealisedGain(heldLots, currentPrice, mult){
+  const qty = (heldLots || []).reduce((a, l) => a + l.qty, 0);
+  if(!(qty > PP_EPS) || !(currentPrice > 0)) return null;
+  const cost = heldLots.reduce((a, l) => a + l.qty * l.price, 0);
+  return (currentPrice * qty - cost) * mult;
+}
+function fmtSignedMoney(n){
+  const v = Number(n) || 0;
+  return (v >= 0 ? "+" : "-") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Total Unrealised Gain for the Sales Strategy table ONLY: each ticker/contract counted
+// once (its rows repeat the same holding), over the rows the table is showing.
+function computeSalesStrategyTotalUnrealisedGain(resolvedRows){
+  const seen = new Set(); let total = 0, counted = 0, skipped = 0;
+  (resolvedRows || []).forEach(r => {
+    if(seen.has(r.key)) return;
+    seen.add(r.key);
+    if(r.unrealisedGain === null || r.unrealisedGain === undefined){
+      if(r.totalPurchased > PP_EPS) skipped++; // held but no price
+      return;
+    }
+    total += r.unrealisedGain; counted++;
+  });
+  return { total, counted, skipped };
+}
+
 function buildSalesStrategyRowsResolved(){
   const rows = getSalesStrategyRows();
   const statsByTicker = {};
@@ -3463,6 +3491,12 @@ function buildSalesStrategyRowsResolved(){
       totalSold: stats.totalSold,
       unitsLeft: remainingQty, // "Units Pending Plan" = totalHeld - cumulativeUnitsToSell, floored at 0 by fifoConsumeFromFront
       avgPurchasePriceOfUnitsLeft: avgPrice,
+      // v5.84: Unrealised Capital Gain = (Current Price - average cost of the units
+      // STILL HELD) x units held (x contract multiplier for an option). It is about
+      // what is held today, so a planned sale (Units to Sell) never changes it, and
+      // it repeats on every row of the same ticker/contract, like Total Units Holding.
+      // null when nothing is held or there is no usable current price.
+      unrealisedGain: ssUnrealisedGain(stats.heldLots, currentPrice, keyInfo.isOption ? getOptionContractMultiplier() : 1),
       overCommitted: cumulativeUnitsToSell > stats.totalHeld + PP_EPS,
       saleRealizedDate: row.saleRealizedDate,
       realizedSaleRowId: row.realizedSaleRowId,
@@ -6003,6 +6037,7 @@ const SALES_STRATEGY_COLUMNS = [
   { id: "unitsLeft", label: "Units Pending Plan" },
   { id: "avgPurchasePriceOfUnitsLeft", label: "Average Purchase Price of Units Left" },
   { id: "saleRealizedDate", label: "Sale Realized Date" },
+  { id: "unrealisedGain", label: "Unrealised Capital Gain" },
 ];
 const SALES_STRATEGY_NON_TICKER_COLUMN_IDS = SALES_STRATEGY_COLUMNS.filter(c => c.id !== "ticker").map(c => c.id);
 
@@ -6193,6 +6228,11 @@ function renderSalesStrategyCellHTML(colId, r){
       const unitsLeftColor = r.overCommitted ? "#ef4444" : "var(--text-primary)";
       return `<td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>`;
     }
+    case "unrealisedGain": {
+      if(r.unrealisedGain === null || r.unrealisedGain === undefined) return `<td style="color:var(--text-secondary);" title="Needs units held and a current price above 0.">—</td>`;
+      const color = r.unrealisedGain >= 0 ? "var(--emerald)" : "#ef4444";
+      return `<td style="color:${color}; font-weight:600;">${fmtSignedMoney(r.unrealisedGain)}</td>`;
+    }
     case "avgPurchasePriceOfUnitsLeft": {
       const avgPriceText = r.unitsLeft > PP_EPS ? `$${r.avgPurchasePriceOfUnitsLeft.toFixed(2)}` : "—";
       return `<td>${avgPriceText}</td>`;
@@ -6241,6 +6281,23 @@ function renderSalesStrategyRowHTML(r, idx, total){
   return `<tr>${tickerCell}${cellsHtml}</tr>`;
 }
 
+// v5.84: the first row of the table -- "Total Unrealised Gain" for THIS table only,
+// shown under the Unrealised Capital Gain column (or inside the label if that column is hidden).
+function buildSalesStrategyTotalRowHTML(resolvedRows, columns){
+  const { total, counted, skipped } = computeSalesStrategyTotalUnrealisedGain(resolvedRows);
+  const color = counted === 0 ? "var(--text-secondary)" : (total >= 0 ? "var(--emerald)" : "#ef4444");
+  const valueText = counted === 0 ? "—" : fmtSignedMoney(total);
+  const note = skipped ? ` (${skipped} held ticker/contract(s) without a current price are left out)` : "";
+  const title = `Sum of Unrealised Capital Gain over each ticker/contract shown in this table, counted once.${note}`;
+  const hasCol = columns.some(c => c.id === "unrealisedGain");
+  const base = "background:rgba(250,204,21,0.08); font-weight:700;";
+  const cells = columns.map(c => c.id === "unrealisedGain"
+    ? `<td style="${base} color:${color};" title="${escAttr(title)}">${valueText}${skipped ? " *" : ""}</td>`
+    : `<td style="${base}"></td>`).join("");
+  const label = hasCol ? "Total Unrealised Gain" : `Total Unrealised Gain: <span style="color:${color};">${valueText}</span>`;
+  return `<tr class="ss-total-row"><td style="${base} color:#facc15; white-space:nowrap;" title="${escAttr(title)}">${label}</td>${cells}</tr>`;
+}
+
 function renderSalesStrategyTable(){
   const container = document.getElementById("ssTableContent");
   if(!container) return; // section not present in this build/test harness
@@ -6261,7 +6318,8 @@ function renderSalesStrategyTable(){
     ? `<tr><td colspan="${colCount}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No draft sales yet — one is auto-added the moment you hold a ticker on the Past Purchases list above.</td></tr>`
     : resolvedRows.map((r, idx) => renderSalesStrategyRowHTML(r, idx, resolvedRows.length)).join("");
 
-  container.innerHTML = `<div class="table-container"><table><thead><tr>${buildSalesStrategyHeaderRow()}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+  const totalRowHtml = resolvedRows.length === 0 ? "" : buildSalesStrategyTotalRowHTML(resolvedRows, columns);
+  container.innerHTML = `<div class="table-container"><table><thead><tr>${buildSalesStrategyHeaderRow()}</tr></thead><tbody>${totalRowHtml}${bodyHtml}</tbody></table></div>`;
   wireSalesStrategyEditing(container);
   wireSalesStrategyHeaderButtons(container.querySelector("thead"));
   renderSsHiddenColumnsNotice();
@@ -6976,14 +7034,24 @@ function buildSalesStrategyExportTable(){
       unitsLeft: r.unitsLeft,
       avgPurchasePriceOfUnitsLeft: avgPriceText,
       saleRealizedDate: saleText,
+      unrealisedGain: (r.unrealisedGain === null || r.unrealisedGain === undefined) ? "—" : fmtSignedMoney(r.unrealisedGain),
     };
     const colorById = {
+      unrealisedGain: (r.unrealisedGain === null || r.unrealisedGain === undefined) ? null : (r.unrealisedGain >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red),
       unitsLeft: r.overCommitted ? EXPORT_COLORS.red : null,
       saleRealizedDate: r.saleRealizedDate ? EXPORT_COLORS.emerald : null,
     };
     rows.push([r.ticker, ...columns.map(c => valueById[c.id])]);
     colors.push([null, ...columns.map(c => colorById[c.id] || null)]);
   });
+  // v5.84: the "Total Unrealised Gain" row sits at the TOP, same as on screen.
+  if(rows.length){
+    const { total, counted } = computeSalesStrategyTotalUnrealisedGain(resolvedRows);
+    const totalText = counted === 0 ? "—" : fmtSignedMoney(total);
+    const hasCol = columns.some(c => c.id === "unrealisedGain");
+    rows.unshift([hasCol ? "Total Unrealised Gain" : `Total Unrealised Gain: ${totalText}`, ...columns.map(c => c.id === "unrealisedGain" ? totalText : "")]);
+    colors.unshift([null, ...columns.map(c => (c.id === "unrealisedGain" && counted) ? (total >= 0 ? EXPORT_COLORS.emerald : EXPORT_COLORS.red) : null)]);
+  }
   return { headers, rows, colors };
 }
 
