@@ -259,8 +259,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.84 — Sales Strategy gain per row after Expiration Date; Total Units Sold removed; notes fold; DD/MM/YYYY.
-    </div>
+      Version v5.86 — Sales Strategy gain now calculated when the last units are planned for sale.</div>
   </header>
   <div class="nav-btn-row">
     <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
@@ -590,6 +589,44 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   <div id="ssHiddenColumnsNotice" style="margin-bottom:0.75rem;"></div>
   <div style="margin-bottom:2rem;">
     <div id="ssTableContent"></div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Buy Strategy</h2>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
+    <button id="bsSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft Buy Strategy row (Ticker, Strike Price, Expiration Date, Units to Buy, Buying Price) so you can add rows offline and re-import them.">⬇ Sample Excel for Data Entry</button>
+    <button id="bsImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Buy Strategy table. Each line becomes its own new draft row; a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
+    <input id="bsImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="bsExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <button id="bsExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="bsExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="bsExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="bsExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+  </div>
+  <div class="disclaimer">
+    Plan buys of any ticker or call option — one you already hold, one you don't, or one you're watching in Sales Strategy — without touching your real holdings. Use the bar below to add a row: pick a known ticker/contract from the list (everything on Past Purchases, Sales Strategy and this table) or type a <strong>Ticker</strong>; for a call option also give its <strong>Strike</strong> and <strong>Expiration</strong> (DD/MM/YYYY). Then enter <strong>Units to Buy</strong> and your <strong>Buying Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder, <strong>Save</strong> to commit typed numbers, <strong>Dup</strong> to plan another batch of the same ticker at a different price, and <strong>×</strong> to remove a draft. Column headers work as in Sales Strategy: <strong>⇅</strong> sort, <strong>&lt; &gt;</strong> move, <strong>×</strong> hide ("Show all columns" brings it back). <strong>Current Price</strong>, <strong>Total Units Holding</strong> and <strong>Current Average Purchase Price</strong> come from Past Purchases (FIFO, units still held). <strong>Units Planned to Sell</strong> is the total of that ticker's still-draft Sales Strategy rows. <strong>Units Holding After Plan</strong> = Total Units Holding − Units Planned to Sell + the buys in this row and every row above it for that ticker, and <strong>New Average Purchase Price</strong> is the blended cost of those units (the lots left after the planned sells, oldest first, plus the planned buys). <strong>Planned Cost</strong> = Units to Buy × Buying Price (× the contract multiplier for an option), and the first row totals it for this table only. <strong>Buying Price vs Current (%)</strong> is negative when you plan to buy below the current price. Nothing here is real until you click <strong>Confirm Buy</strong> and pick the date — that adds a real purchase row to the Lot Matching table above (with the strike/expiration for an option) and updates every table that depends on it. A confirmed row is locked green and drops off this table (not off the real record) after the "Display" window has passed.
+  </div>
+  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <select id="bsKnownSelect" style="padding:0.4rem 0.6rem; font-size:0.85rem; max-width:260px;" title="Pick any ticker or call-option contract already on Past Purchases, Sales Strategy or this table to fill the boxes beside it."></select>
+    <input id="bsAddTicker" class="form-input" placeholder="Ticker" maxlength="12" style="width:100px;" autocomplete="off">
+    <input id="bsAddStrike" class="form-input" placeholder="Strike (option)" type="number" step="0.01" style="width:120px;">
+    <input id="bsAddExpiry" class="form-input" type="text" inputmode="numeric" maxlength="10" autocomplete="off" data-datefmt="1" data-iso="" placeholder="Expiry DD/MM/YYYY" style="width:150px;">
+    <button id="bsAddRowBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;">+ Add Row</button>
+    <span id="bsAddStatus" style="font-size:0.85rem;"></span>
+  </div>
+  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="How long a confirmed buy stays visible in this table after its date before dropping off — the real purchase on Past Purchases/Lot Matching is never affected. &quot;Default&quot; is 28 days; &quot;All&quot; never hides one.">Display
+      <select id="bsDisplayRangeSelect" style="padding:0.4rem 0.8rem; font-size:0.85rem;"></select>
+    </label>
+    <button id="bsRefreshBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Re-pull Current Price, holdings, average cost and planned sells from Past Purchases and Sales Strategy right now.">⟳ Refresh</button>
+    <span id="bsRefreshStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+  </div>
+  <div id="bsHiddenColumnsNotice" style="margin-bottom:0.75rem;"></div>
+  <div style="margin-bottom:2rem;">
+    <div id="bsTableContent"></div>
   </div>
 
   </div>
