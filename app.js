@@ -1,3 +1,4 @@
+// APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
 // APP.JS BUILD: v5.93 (Portfolio: a call option is not scored; its underlying stock is shown in the row directly below it (added for display if not on the list) and carries the score; the option and its stock count as ONE asset in 'Portfolio viewing (N assets)'; the option's Units Purchased and Average Purchase Price are pulled from Sales Strategy figures (units held, FIFO average). v5.92 option-scored-as-stock was reverted.)
@@ -525,7 +526,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.95 (Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.96 (AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1905,7 +1906,7 @@ function buildQuickPasteUpdatePrompt(tickers){
   }
   const fieldLabels = QPU_FIELDS.map(f => f.label).join(", ");
   const lines = tickers.map(t => `${t}: ${fieldLabels}`);
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${QPU_FIELDS.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * QPU_FIELDS.length} numbers total).`;
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${QPU_FIELDS.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nNotes: Current Price is the latest closing price and Consensus Target Price is the analyst mean target, both split-adjusted and on the same basis.${DATA_RULES_BLOCK}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * QPU_FIELDS.length} numbers total).`;
 }
 
 function renderQuickPasteUpdatePrompt(){
@@ -2094,6 +2095,28 @@ function getDetailedUpdateFields(){
 // that turns out to need this treatment.
 const DETAILED_UPDATE_FIELD_HINTS = {};
 
+// v5.96: definitions that remove the ambiguity AI assistants kept tripping over (trailing vs quarterly,
+// strict cash vs cash + investments, opex with or without cost of revenue, percentages as ratios...).
+// Keyed by lower-cased column label so they follow the column wherever it sits.
+const DETAILED_UPDATE_LABEL_HINTS = {
+  "roa (%)": "trailing-12-month net income ÷ total assets × 100 (negative for a loss).",
+  "p/e multiple": "trailing-12-month price ÷ GAAP EPS. Use 0 if the company is loss-making or the ratio is not meaningful.",
+  "current price": "the latest closing price, split-adjusted.",
+  "consensus target price": "the analyst MEAN target (not median, high or low), on the same split-adjusted basis as the price.",
+  "rev growth (yoy%)": "the latest reported QUARTER versus the same quarter a year earlier (not trailing-12-month, not a forecast).",
+  "net margin (%)": "trailing-12-month net income ÷ trailing-12-month revenue × 100 (negative for a loss).",
+  "peg ratio": "use 0 if earnings are negative or the ratio is not available.",
+  "d/e ratio": "total debt ÷ shareholders' equity as a plain ratio (1.5, not 150). Use 0 if equity is zero or negative.",
+  "fcf ($m)": "trailing-12-month operating cash flow minus capital expenditure, in millions (negative if cash is burned).",
+  "cash & equivalents ($m)": "the latest balance sheet's cash and cash equivalents ONLY (leave out short-term investments), in millions.",
+  "operating expenses ($m)": "trailing-12-month total operating expenses EXCLUDING cost of revenue (R&D + SG&A + other operating costs), in millions; for a bank use non-interest expense.",
+  "beta": "5-year beta versus the market.",
+  "dividend yield (%)": "annual dividend ÷ price × 100. Use 0 if no dividend is paid.",
+  "market cap ($b)": "shares outstanding × price, in billions of USD.",
+  "forward p/e": "price ÷ consensus EPS for the next 12 months / current fiscal year. Use 0 if EPS is not positive or the ratio is not meaningful.",
+};
+const DATA_RULES_BLOCK = "\n\nData rules: use the most recent filings and quotes; cross-check at least two sources and, if they disagree, use the most recent consistent figure; for a newly listed company use its latest filing (10-Q, 6-K or prospectus); never invent a number — use 0 only when a value is genuinely unavailable or not meaningful; write plain numbers only — no $, %, units, or thousands separators (a comma separates values).";
+
 function buildDetailedUpdatePrompt(assets){
   if(assets.length === 0){
     return "No requested assets yet — add at least one ticker above first.";
@@ -2105,10 +2128,11 @@ function buildDetailedUpdatePrompt(assets){
   const fieldLabels = fields.map(f => f.label).join(", ");
   const lines = assets.map(a => `${a.ticker}: ${fieldLabels}`);
   const hints = fields
-    .filter(f => DETAILED_UPDATE_FIELD_HINTS[f.id])
-    .map(f => `- ${f.label}: ${DETAILED_UPDATE_FIELD_HINTS[f.id]}`);
+    .map(f => ({ f, hint: DETAILED_UPDATE_FIELD_HINTS[f.id] || DETAILED_UPDATE_LABEL_HINTS[String(f.label).trim().toLowerCase()] }))
+    .filter(x => x.hint)
+    .map(x => `- ${x.f.label}: ${x.hint}`);
   const hintBlock = hints.length ? `\n\nNotes on specific fields — read before answering:\n${hints.join("\n")}` : "";
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}${DATA_RULES_BLOCK}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
 }
 
 // Selected-state colors for the ✕ / ✓ checklist buttons below. Grey/undecided
