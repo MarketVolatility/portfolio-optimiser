@@ -1,4 +1,6 @@
-// APP.JS BUILD: v5.88 (Portfolio auto lists: "Current Holding" now follows Sales Strategy (still-held tickers shown there); new "Current and Potential Holding" (every ticker in Sales Strategy + Buy Strategy);
+// APP.JS BUILD: v5.90 ("Current and Potential Holding" = the Current Holding set (held, shown in Sales Strategy) + every Buy Strategy ticker; fully-sold tickers no longer linger in it. New Portfolio list "All Past Purchases": every ticker on any of your Past Purchases lists (stocks), whatever is held or sold.)
+// v5.89 (Fix: the Portfolio auto lists now follow the ACTIVE Past Purchases list's tables only (Current Holding = tickers shown in Sales Strategy with Total Units Holding > 0; no more tickers held on other Past Purchases lists or removed from Sales Strategy).)
+// v5.88 (Portfolio auto lists: "Current Holding" now follows Sales Strategy (still-held tickers shown there); new "Current and Potential Holding" (every ticker in Sales Strategy + Buy Strategy);
 //   new "Purchases to Date", "Purchases Last 3 Months", "Purchases Last 6 Months", "Purchases Last 1 Year" (tickers with a purchase in that window, by Date Purchased). Stocks only; all update automatically.)
 // v5.87 (Layout: "Past Purchases" section renamed "Past Purchases and Planning" and now sits ABOVE Portfolio (accordion order follows); "Existing assets / Existing rows (click x to remove)" lists are now expandable (▶ / ◀, default heading only);
 //   Parameter glossary: shared A-Z table plus a separate definitions table for each of Portfolio, Past Purchases, Sales Strategy and Buy Strategy wherever the meaning differs by table.)
@@ -518,7 +520,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.88 (Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.90 (All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2783,36 +2785,47 @@ const PURCHASES_LISTS = [
   { id: "list-purchases-6m", name: "Purchases Last 6 Months", months: 6 },
   { id: "list-purchases-1y", name: "Purchases Last 1 Year", months: 12 },
 ];
-const AUTO_PORTFOLIO_LIST_IDS = [CURRENT_HOLDINGS_LIST_ID, POTENTIAL_HOLDINGS_LIST_ID, ...PURCHASES_LISTS.map(l => l.id)];
+const ALL_PAST_PURCHASES_LIST_ID = "list-all-past-purchases";
+const AUTO_PORTFOLIO_LIST_IDS = [CURRENT_HOLDINGS_LIST_ID, POTENTIAL_HOLDINGS_LIST_ID, ...PURCHASES_LISTS.map(l => l.id), ALL_PAST_PURCHASES_LIST_ID];
+// v5.90: "All Past Purchases" -- every plain ticker on ANY of your Past Purchases lists (bought, sold
+// or both), regardless of dates or what is still held.
+function computeAllPastPurchasesTickers(){
+  const optP = ppOptionParams(getPastPurchasesParams());
+  const out = new Set();
+  Object.values(getAllPastPurchasesLists()).forEach(list => {
+    (list.rows || []).forEach(r => { const k = ppRowKey(r, optP); if(k && k.indexOf("|") === -1) out.add(k); });
+  });
+  return Array.from(out).sort();
+}
 
-// Current Holding, "according to Sales Strategy": per Past Purchases list, a ticker counts when
-// it is still held (FIFO) AND it is shown in that list's Sales Strategy table -- or has never
-// been given a Sales Strategy row yet (a list that hasn't been opened since the ticker was
-// bought). A ticker whose Sales Strategy row you deliberately removed drops out, and a ticker
-// that is fully sold drops out even while its confirmed-sale row is still displayed.
+// Current Holding, "according to Sales Strategy": exactly the tickers you can see in the
+// Sales Strategy table (the ACTIVE Past Purchases list's) whose Total Units Holding is above 0.
+// A ticker you've fully sold, one held only on a different Past Purchases list, or one whose
+// Sales Strategy row you removed does not count. Stocks only.
+function ppActiveListsForAutoPortfolio(){
+  return [getActivePastPurchasesList()];
+}
 function computeCurrentHoldingTickersPerSalesStrategy(){
   const params = getPastPurchasesParams();
   const held = new Set();
-  Object.values(getAllPastPurchasesLists()).forEach(list => {
+  ppActiveListsForAutoPortfolio().forEach(list => {
     const breakdown = computePastPurchasesFifoLotBreakdown(list.rows || [], params);
     const inSS = new Set((list.salesStrategy || []).map(r => r.ticker));
-    const seeded = new Set(list.salesStrategySeededTickers || []);
     Object.keys(breakdown).forEach(t => {
-      if(t.indexOf("|") !== -1) return;
-      if(!breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS)) return;
-      if(inSS.has(t) || !seeded.has(t)) held.add(t);
+      if(t.indexOf("|") !== -1 || !inSS.has(t)) return;
+      if(breakdown[t].unmatched.some(u => (u.qty || 0) > PP_EPS)) held.add(t);
     });
   });
   return Array.from(held).sort();
 }
-// Every plain ticker appearing in any Sales Strategy or Buy Strategy table.
+// Current and Potential Holding (active Past Purchases list): what you hold now according to Sales
+// Strategy (same set as Current Holding) PLUS every ticker planned in the Buy Strategy table. A
+// ticker that is fully sold and only lingers as a confirmed-sale row in Sales Strategy is not included.
 function computePotentialHoldingTickers(){
-  const out = new Set();
-  Object.values(getAllPastPurchasesLists()).forEach(list => {
-    (list.salesStrategy || []).forEach(r => { if(r.ticker && r.ticker.indexOf("|") === -1) out.add(r.ticker); });
+  const out = new Set(computeCurrentHoldingTickersPerSalesStrategy());
+  ppActiveListsForAutoPortfolio().forEach(list => {
     (list.buyStrategy || []).forEach(r => { if(r.ticker && r.ticker.indexOf("|") === -1) out.add(r.ticker); });
   });
-  computeCurrentHoldingTickersPerSalesStrategy().forEach(t => out.add(t));
   return Array.from(out).sort();
 }
 function ppSubtractMonthsIso(iso, months){
@@ -2832,7 +2845,7 @@ function computePurchasedTickers(months){
   const today = ppToday();
   const from = months ? ppSubtractMonthsIso(today, months) : null;
   const out = new Set();
-  Object.values(getAllPastPurchasesLists()).forEach(list => {
+  ppActiveListsForAutoPortfolio().forEach(list => {
     (list.rows || []).forEach(r => {
       const v = r.values || {};
       const units = unitsP ? (Number(v[unitsP.id] !== undefined ? v[unitsP.id] : unitsP.defaultValue) || 0) : 0;
@@ -2858,6 +2871,7 @@ function syncCurrentHoldingsList(){
     { id: CURRENT_HOLDINGS_LIST_ID, name: CURRENT_HOLDINGS_LIST_NAME, tickers: computeCurrentHoldingTickersPerSalesStrategy() },
     { id: POTENTIAL_HOLDINGS_LIST_ID, name: "Current and Potential Holding", tickers: computePotentialHoldingTickers() },
     ...PURCHASES_LISTS.map(l => ({ id: l.id, name: l.name, tickers: computePurchasedTickers(l.months) })),
+    { id: ALL_PAST_PURCHASES_LIST_ID, name: "All Past Purchases", tickers: computeAllPastPurchasesTickers() },
   ];
   let changed = false, activeChanged = false;
   const activeId = getActiveListId();
