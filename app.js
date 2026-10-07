@@ -1,4 +1,7 @@
-// APP.JS BUILD: v5.84 (Sales Strategy: new "Unrealised Capital Gain" column ((Current Price - avg cost of units still held) x units held, x100 for options; repeats on each row of a
+// APP.JS BUILD: v5.84 (Sales Strategy: Unrealised Capital Gain is now per row = (Selling Price - Average Purchase Price of Units Left) x Units to Sell (x100 for options; dash for confirmed/empty rows), total = sum of rows;
+//   column moved to right after Expiration Date; "Total Units Sold" column removed.
+// All explanation / disclaimer notes now fold behind a small "Introduction / Disclaimer ▶" label (◀ folds back); the Financial Disclaimer and Copyright stay visible.
+// Sales Strategy: new "Unrealised Capital Gain" column ((Current Price - avg cost of units still held) x units held, x100 for options; repeats on each row of a
 //   ticker/contract) and a first-row "Total Unrealised Gain" for this table only (each ticker/contract once; also first row of the exports).
 // ONE DATE FORMAT everywhere: DD/MM/YYYY -- on screen, in every date entry box (now text boxes, with a typed-date parser: DD/MM/YYYY, ISO and
 //   other forms accepted, junk reverted), status/dialog messages, monthly labels (MM/YYYY), Excel/Text/Word/PDF exports, sample Excel, and the "no sale date" marker 00/00/0000.
@@ -505,7 +508,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.84 (Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.84 (Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -528,7 +531,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -3425,30 +3428,23 @@ function isSalesStrategyRowExpired(row){
 // Sorting the table is still just a VIEW on top of this (applied below,
 // after this running total is computed in real storage order), so changing
 // the sort never changes these numbers, only their on-screen order.
-function ssUnrealisedGain(heldLots, currentPrice, mult){
-  const qty = (heldLots || []).reduce((a, l) => a + l.qty, 0);
-  if(!(qty > PP_EPS) || !(currentPrice > 0)) return null;
-  const cost = heldLots.reduce((a, l) => a + l.qty * l.price, 0);
-  return (currentPrice * qty - cost) * mult;
+function ssRowUnrealisedGain(sellingPrice, avgCost, unitsToSell, unitsLeft, isRealized, mult){
+  if(isRealized || !(unitsToSell > 0) || !(sellingPrice > 0) || !(unitsLeft > PP_EPS)) return null;
+  return (sellingPrice - avgCost) * unitsToSell * mult;
 }
 function fmtSignedMoney(n){
   const v = Number(n) || 0;
   return (v >= 0 ? "+" : "-") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-// Total Unrealised Gain for the Sales Strategy table ONLY: each ticker/contract counted
-// once (its rows repeat the same holding), over the rows the table is showing.
+// Total Unrealised Gain for the Sales Strategy table ONLY: the sum of every row's
+// Unrealised Capital Gain (rows showing "—" add nothing).
 function computeSalesStrategyTotalUnrealisedGain(resolvedRows){
-  const seen = new Set(); let total = 0, counted = 0, skipped = 0;
+  let total = 0, counted = 0;
   (resolvedRows || []).forEach(r => {
-    if(seen.has(r.key)) return;
-    seen.add(r.key);
-    if(r.unrealisedGain === null || r.unrealisedGain === undefined){
-      if(r.totalPurchased > PP_EPS) skipped++; // held but no price
-      return;
-    }
+    if(r.unrealisedGain === null || r.unrealisedGain === undefined) return;
     total += r.unrealisedGain; counted++;
   });
-  return { total, counted, skipped };
+  return { total, counted, skipped: 0 };
 }
 
 function buildSalesStrategyRowsResolved(){
@@ -3491,12 +3487,12 @@ function buildSalesStrategyRowsResolved(){
       totalSold: stats.totalSold,
       unitsLeft: remainingQty, // "Units Pending Plan" = totalHeld - cumulativeUnitsToSell, floored at 0 by fifoConsumeFromFront
       avgPurchasePriceOfUnitsLeft: avgPrice,
-      // v5.84: Unrealised Capital Gain = (Current Price - average cost of the units
-      // STILL HELD) x units held (x contract multiplier for an option). It is about
-      // what is held today, so a planned sale (Units to Sell) never changes it, and
-      // it repeats on every row of the same ticker/contract, like Total Units Holding.
-      // null when nothing is held or there is no usable current price.
-      unrealisedGain: ssUnrealisedGain(stats.heldLots, currentPrice, keyInfo.isOption ? getOptionContractMultiplier() : 1),
+      // v5.84: Unrealised Capital Gain, from THIS row's own figures:
+      //   (Selling Price - Average Purchase Price of Units Left) x Units to Sell
+      // (x contract multiplier for an option). "—" (null) when the row has nothing to
+      // sell, no selling price, no units left to take a cost from, or when the sale is
+      // already confirmed (that gain is then realized, not unrealised).
+      unrealisedGain: ssRowUnrealisedGain(sellingPriceNum, avgPrice, Number(row.unitsToSell) || 0, remainingQty, !!row.saleRealizedDate, keyInfo.isOption ? getOptionContractMultiplier() : 1),
       overCommitted: cumulativeUnitsToSell > stats.totalHeld + PP_EPS,
       saleRealizedDate: row.saleRealizedDate,
       realizedSaleRowId: row.realizedSaleRowId,
@@ -4753,6 +4749,38 @@ function readDateTextBox(el){
   if(!el) return "";
   return parseDateTextToIso(el.value);
 }
+// v5.84: collapses every explanation / disclaimer note behind a single small
+// "Introduction / Disclaimer ▶" label (▶ opens it, ◀ folds it back). The Financial
+// Disclaimer (top) and the Copyright line carry data-keep-open and are left alone.
+// The original elements are MOVED (not copied), so any ids / buttons inside keep working.
+function wireIntroDisclaimers(){
+  const nodes = Array.from(document.querySelectorAll(".disclaimer:not([data-keep-open]), [data-intro]"));
+  nodes.forEach(node => {
+    if(node.closest(".intro-body") || node.getAttribute("data-intro-wrapped")) return;
+    node.setAttribute("data-intro-wrapped", "1");
+    const wrap = document.createElement("div");
+    wrap.className = "intro-wrap";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "intro-toggle";
+    const body = document.createElement("div");
+    body.className = "intro-body";
+    body.style.display = "none";
+    const render = (open) => {
+      btn.textContent = open ? "Introduction / Disclaimer ◀" : "Introduction / Disclaimer ▶";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.title = open ? "Fold this note back" : "Show this note";
+      body.style.display = open ? "block" : "none";
+    };
+    btn.addEventListener("click", () => render(body.style.display === "none"));
+    node.parentNode.insertBefore(wrap, node);
+    wrap.appendChild(btn);
+    wrap.appendChild(body);
+    body.appendChild(node);
+    render(false);
+  });
+}
+
 function wireDateTextInputs(){
   if(window.__dateTextWired) return;
   window.__dateTextWired = true;
@@ -6029,15 +6057,14 @@ const SALES_STRATEGY_COLUMNS = [
   { id: "ticker", label: "Ticker" },
   { id: "strike", label: "Strike Price" },
   { id: "expiry", label: "Expiration Date" },
+  { id: "unrealisedGain", label: "Unrealised Capital Gain" },
   { id: "currentPrice", label: "Current Price" },
   { id: "unitsToSell", label: "Units to Sell" },
   { id: "sellingPrice", label: "Selling Price" },
   { id: "totalPurchased", label: "Total Units Holding" },
-  { id: "totalSold", label: "Total Units Sold" },
   { id: "unitsLeft", label: "Units Pending Plan" },
   { id: "avgPurchasePriceOfUnitsLeft", label: "Average Purchase Price of Units Left" },
   { id: "saleRealizedDate", label: "Sale Realized Date" },
-  { id: "unrealisedGain", label: "Unrealised Capital Gain" },
 ];
 const SALES_STRATEGY_NON_TICKER_COLUMN_IDS = SALES_STRATEGY_COLUMNS.filter(c => c.id !== "ticker").map(c => c.id);
 
@@ -6056,6 +6083,20 @@ function getSsColumnOrder(){
   // after that they're in the saved order and the user's own moves stick).
   const frontIds = ["strike", "expiry"].filter(id => !hidden.has(id) && !order.includes(id));
   if(frontIds.length) order.unshift(...frontIds);
+  // v5.84: Unrealised Capital Gain belongs right after Expiration Date. One-time move for
+  // an account whose saved order already had it elsewhere (after that the user's own
+  // moves stick).
+  let gainMoved = false;
+  try{ gainMoved = localStorage.getItem("ssGainAfterExpiry") === "1"; }catch(e){ gainMoved = true; }
+  if(!gainMoved){
+    try{ localStorage.setItem("ssGainAfterExpiry", "1"); }catch(e){ /* unavailable */ }
+    if(!hidden.has("unrealisedGain")){
+      const without = order.filter(id => id !== "unrealisedGain");
+      const at = without.indexOf("expiry");
+      without.splice(at === -1 ? 0 : at + 1, 0, "unrealisedGain");
+      order = without;
+    }
+  }
   SALES_STRATEGY_NON_TICKER_COLUMN_IDS.forEach(id => { if(!hidden.has(id) && !order.includes(id)) order.push(id); });
   return order;
 }
@@ -6219,8 +6260,6 @@ function renderSalesStrategyCellHTML(colId, r){
     }
     case "totalPurchased":
       return `<td>${ppFmtNum(r.totalPurchased)}</td>`;
-    case "totalSold":
-      return `<td>${ppFmtNum(r.totalSold)}</td>`;
     case "unitsLeft": {
       const overCommittedTitle = r.overCommitted
         ? ` title="This row and every row before it for ${escAttr(r.ticker)} already plan to sell more than is held — this is over-committed."`
@@ -6229,7 +6268,7 @@ function renderSalesStrategyCellHTML(colId, r){
       return `<td style="color:${unitsLeftColor}; font-weight:600;"${overCommittedTitle}>${ppFmtNum(r.unitsLeft)}</td>`;
     }
     case "unrealisedGain": {
-      if(r.unrealisedGain === null || r.unrealisedGain === undefined) return `<td style="color:var(--text-secondary);" title="Needs units held and a current price above 0.">—</td>`;
+      if(r.unrealisedGain === null || r.unrealisedGain === undefined) return `<td style="color:var(--text-secondary);" title="Needs Units to Sell, a Selling Price and units left to take a cost from; a confirmed sale is realized, not unrealised.">—</td>`;
       const color = r.unrealisedGain >= 0 ? "var(--emerald)" : "#ef4444";
       return `<td style="color:${color}; font-weight:600;">${fmtSignedMoney(r.unrealisedGain)}</td>`;
     }
@@ -6287,12 +6326,11 @@ function buildSalesStrategyTotalRowHTML(resolvedRows, columns){
   const { total, counted, skipped } = computeSalesStrategyTotalUnrealisedGain(resolvedRows);
   const color = counted === 0 ? "var(--text-secondary)" : (total >= 0 ? "var(--emerald)" : "#ef4444");
   const valueText = counted === 0 ? "—" : fmtSignedMoney(total);
-  const note = skipped ? ` (${skipped} held ticker/contract(s) without a current price are left out)` : "";
-  const title = `Sum of Unrealised Capital Gain over each ticker/contract shown in this table, counted once.${note}`;
+  const title = "Sum of every row's Unrealised Capital Gain in this table: (Selling Price - Average Purchase Price of Units Left) x Units to Sell. Rows showing a dash add nothing.";
   const hasCol = columns.some(c => c.id === "unrealisedGain");
   const base = "background:rgba(250,204,21,0.08); font-weight:700;";
   const cells = columns.map(c => c.id === "unrealisedGain"
-    ? `<td style="${base} color:${color};" title="${escAttr(title)}">${valueText}${skipped ? " *" : ""}</td>`
+    ? `<td style="${base} color:${color};" title="${escAttr(title)}">${valueText}</td>`
     : `<td style="${base}"></td>`).join("");
   const label = hasCol ? "Total Unrealised Gain" : `Total Unrealised Gain: <span style="color:${color};">${valueText}</span>`;
   return `<tr class="ss-total-row"><td style="${base} color:#facc15; white-space:nowrap;" title="${escAttr(title)}">${label}</td>${cells}</tr>`;
@@ -7030,7 +7068,6 @@ function buildSalesStrategyExportTable(){
       unitsToSell: r.unitsToSell,
       sellingPrice: r.sellingPrice,
       totalPurchased: r.totalPurchased,
-      totalSold: r.totalSold,
       unitsLeft: r.unitsLeft,
       avgPurchasePriceOfUnitsLeft: avgPriceText,
       saleRealizedDate: saleText,
@@ -9534,6 +9571,7 @@ try{
 
 try{
   wireDateTextInputs();
+  wireIntroDisclaimers();
   wireUpSampleAndImportExcelButtons();
 }catch(err){
   console.error("Failed to wire up Sample Excel / Import Excel buttons:", err);
