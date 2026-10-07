@@ -1,4 +1,6 @@
-// APP.JS BUILD: v5.86 (Sales Strategy: Unrealised Capital Gain now also shows on the row that sells the last units (Units Pending Plan = 0), using the average purchase price of the units it sells.)
+// APP.JS BUILD: v5.87 (Layout: "Past Purchases" section renamed "Past Purchases and Planning" and now sits ABOVE Portfolio (accordion order follows); "Existing assets / Existing rows (click x to remove)" lists are now expandable (▶ / ◀, default heading only);
+//   Parameter glossary: shared A-Z table plus a separate definitions table for each of Portfolio, Past Purchases, Sales Strategy and Buy Strategy wherever the meaning differs by table.)
+// v5.86 (Sales Strategy: Unrealised Capital Gain now also shows on the row that sells the last units (Units Pending Plan = 0), using the average purchase price of the units it sells.)
 // v5.85 (BUY STRATEGY: new section below Sales Strategy for planning buys of stocks and call options. Columns: Ticker, Strike Price,
 //   Expiration Date, Current Price, Units to Buy, Buying Price, Buying Price vs Current (%), Planned Cost, Total Units Holding, Current Average Purchase Price,
 //   Units Planned to Sell (from Sales Strategy), Units Holding After Plan, New Average Purchase Price, Buy Realized Date. Same row buttons, column sort/move/hide,
@@ -514,7 +516,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.86 (Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.87 (Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -642,8 +644,8 @@ function applyUiViewMode(){
 // ever one of these is expanded at a time, in this fixed order. Portfolio is the
 // default landing section the very first time the page is ever loaded.
 const ACCORDION_SECTIONS = [
-  { id: "portfolioSectionBody", toggleBtn: "portfolioToggleBtn" },
   { id: "pastPurchasesSectionBody", toggleBtn: "pastPurchasesToggleBtn" },
+  { id: "portfolioSectionBody", toggleBtn: "portfolioToggleBtn" },
   { id: "fetchLiveDataSectionBody", toggleBtn: "fetchLiveDataToggleBtn", navBtn: "navFetchLiveDataBtn" },
   { id: "detailedUpdateSectionBody", toggleBtn: "detailedUpdateToggleBtn", navBtn: "navDetailedUpdateBtn" },
   { id: "quickPriceUpdateSectionBody", toggleBtn: "quickPriceUpdateToggleBtn", navBtn: "navQuickPriceUpdateBtn" },
@@ -4800,6 +4802,26 @@ function wireIntroDisclaimers(){
     wrap.appendChild(btn);
     wrap.appendChild(body);
     body.appendChild(node);
+    render(false);
+  });
+}
+
+// v5.87: "Existing assets / rows (click x to remove)" lists fold behind a heading button
+// (▶ opens, ◀ folds back); default is just the heading.
+function wireExpanders(){
+  document.querySelectorAll("[data-expander]").forEach(btn => {
+    if(btn.getAttribute("data-expander-wired")) return;
+    btn.setAttribute("data-expander-wired", "1");
+    const target = document.getElementById(btn.getAttribute("data-expander"));
+    const label = btn.getAttribute("data-label") || btn.textContent.replace(/[▶◀]\s*$/, "").trim();
+    if(!target) return;
+    const render = (open) => {
+      target.style.display = open ? "flex" : "none";
+      btn.textContent = label + (open ? " ◀" : " ▶");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.title = open ? "Fold this list back" : "Show this list";
+    };
+    btn.addEventListener("click", () => render(target.style.display === "none"));
     render(false);
   });
 }
@@ -10299,6 +10321,7 @@ try{
 try{
   wireDateTextInputs();
   wireIntroDisclaimers();
+  wireExpanders();
   wireUpSampleAndImportExcelButtons();
   wireBuyStrategyControls();
 }catch(err){
