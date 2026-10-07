@@ -1,3 +1,5 @@
+// APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
+// APP.JS BUILD: v5.93 (Portfolio: a call option is not scored; its underlying stock is shown in the row directly below it (added for display if not on the list) and carries the score; the option and its stock count as ONE asset in 'Portfolio viewing (N assets)'; the option's Units Purchased and Average Purchase Price are pulled from Sales Strategy figures (units held, FIFO average). v5.92 option-scored-as-stock was reverted.)
 // APP.JS BUILD: v5.91 (Portfolio table shows call options: Strike Price + Expiration Date columns, option rows in Current Holding and the other auto lists; Methodology and Glossary headings are expanders; all expanders and section toggles share one look (▶ open, ◀ fold); deleting a list or resetting is ONE pop-up with the password; password boxes are masked with a Show/Hide button.)
 // (full history below)
 // APP.JS BUILD: v5.90 ("Current and Potential Holding" = the Current Holding set (held, shown in Sales Strategy) + every Buy Strategy ticker; fully-sold tickers no longer linger in it. New Portfolio list "All Past Purchases": every ticker on any of your Past Purchases lists (stocks), whatever is held or sold.)
@@ -522,7 +524,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.91 (Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.94 (AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -1898,7 +1900,7 @@ function buildQuickPasteUpdatePrompt(tickers){
   }
   const fieldLabels = QPU_FIELDS.map(f => f.label).join(", ");
   const lines = tickers.map(t => `${t}: ${fieldLabels}`);
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${QPU_FIELDS.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * QPU_FIELDS.length} numbers total).`;
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${QPU_FIELDS.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${tickers.length * QPU_FIELDS.length} numbers total).`;
 }
 
 function renderQuickPasteUpdatePrompt(){
@@ -2101,7 +2103,7 @@ function buildDetailedUpdatePrompt(assets){
     .filter(f => DETAILED_UPDATE_FIELD_HINTS[f.id])
     .map(f => `- ${f.label}: ${DETAILED_UPDATE_FIELD_HINTS[f.id]}`);
   const hintBlock = hints.length ? `\n\nNotes on specific fields — read before answering:\n${hints.join("\n")}` : "";
-  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
+  return `Generate the latest values, in numbers only, in the following order, separated by commas — ${fields.length} numbers per ticker (${fieldLabels}), no ticker symbols, no labels, no extra text:\n\n${lines.join("\n")}${hintBlock}\n\nCurrency: report every price and dollar amount in USD. If a ticker trades or reports in another currency (for example 000660 in KRW), convert it to USD using the latest exchange rate available.\n\nReply with only the numbers, comma-separated, in that exact order (${assets.length * fields.length} numbers total).`;
 }
 
 // Selected-state colors for the ✕ / ✓ checklist buttons below. Grey/undecided
@@ -2963,6 +2965,7 @@ function syncCurrentHoldingsList(){
   }
 }
 
+function ppNormLabel(s){ return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
 function getWorkingData(explicitList, includeOptions){
   const list = explicitList || getActiveList();
   const removed = list.removedTickers || [];
@@ -8985,7 +8988,7 @@ function renderListSelector(){
 
   if(heading){
     const activeName = lists[activeId] ? lists[activeId].name : "—";
-    const count = getWorkingData().length;
+    const count = new Set(getWorkingData(undefined, true).map(a => String(a.ticker).indexOf("|") !== -1 ? ppParseKey(a.ticker).symbol : a.ticker)).size; // v5.93: an option and its stock count as one
     heading.textContent = `Portfolio viewing: ${activeName} (${count} assets)`;
   }
 
@@ -9406,6 +9409,21 @@ function runMatrixOptimization() {
   tbody.innerHTML = '';
 
   const workingData = getWorkingData(undefined, true);
+  // v5.93: every call option is shown with its UNDERLYING STOCK in the row directly below it. If the
+  // stock isn't on the list itself it is added here for display only (nothing is saved to the list).
+  {
+    const have = new Set(workingData.map(a => a.ticker));
+    workingData.filter(a => String(a.ticker).indexOf("|") !== -1).forEach(a => {
+      const sym = ppParseKey(a.ticker).symbol;
+      if(!sym || have.has(sym)) return;
+      have.add(sym);
+      const baseAsset = marketData.find(m => m.ticker === sym);
+      const shell = baseAsset ? { ...baseAsset }
+        : { ticker: sym, name: sym, roa: 0, pe: 0, currentPrice: 1, targetPrice: 0, stability: "Med", stabilityNotes: "",
+            revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, cashAndEquivalents: 0, operatingExpenses: 0, beta: 1.0 };
+      workingData.push({ ...shell, _overrides: getGlobalOverrides()[sym] || {} });
+    });
+  }
 
   let processedAssets = workingData.map(asset => {
     const ov = asset._overrides || {};
@@ -9499,7 +9517,14 @@ function runMatrixOptimization() {
 
     // Pass 1: values that don't depend on other custom params.
     allCustomParams.forEach(p => {
-      if(p.computed && p.formula === "currentToTargetPct"){
+      if(isOpt && !p.computed && (ppNormLabel(p.label) === "units purchased" || ppNormLabel(p.label) === "average purchase price ($)" || ppNormLabel(p.label) === "average purchase price")){
+        // v5.93: an option's Units Purchased / Average Purchase Price come from the Sales Strategy figures
+        // (units held now, and their FIFO average purchase price).
+        const ss = getSalesStrategyTickerStats(asset.ticker);
+        const held = ss.heldLots.reduce((s, l) => s + l.qty * (Number(l.price) || 0), 0);
+        customValues[p.id] = ppNormLabel(p.label) === "units purchased" ? ss.totalHeld : (ss.totalHeld > 0 ? held / ss.totalHeld : 0);
+        customIsDefault[p.id] = !(ss.totalHeld > 0);
+      } else if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
       } else if(p.computed && (p.formula === "actualUpsidePct" || p.formula === "salesProfitPP" || p.formula === "unrealizedGainPP" || p.formula === "currentMarketValuePP" || p.formula === "missedGainPct" || p.formula === "bookValuePP")){
@@ -9637,6 +9662,22 @@ function runMatrixOptimization() {
     processedAssets.sort((a, b) => b.calculatedUpside - a.calculatedUpside);
   } else {
     processedAssets.sort((a, b) => (b.allocationWeight === null ? -1 : b.allocationWeight) - (a.allocationWeight === null ? -1 : a.allocationWeight));
+  }
+
+  // v5.93: group each option's rows with its stock right below (stock follows the last option of that symbol).
+  {
+    const optsBySym = {};
+    processedAssets.forEach(i => { if(i.isOption) (optsBySym[i.symbol] = optsBySym[i.symbol] || []).push(i); });
+    const out = [], placed = new Set();
+    processedAssets.forEach(i => {
+      if(placed.has(i)) return;
+      if(i.isOption){
+        optsBySym[i.symbol].forEach(o => { out.push(o); placed.add(o); });
+        const st = processedAssets.find(x => !x.isOption && x.ticker === i.symbol);
+        if(st){ out.push(st); placed.add(st); }
+      } else if(!optsBySym[i.ticker]){ out.push(i); placed.add(i); }
+    });
+    processedAssets = out;
   }
 
   lastMainTableProcessedAssets = processedAssets;
