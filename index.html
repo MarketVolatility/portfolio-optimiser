@@ -23,6 +23,8 @@ body { background-color: var(--bg-main); color: var(--text-primary); padding: 2r
 .intro-wrap { margin: 0 0 0.75rem 0; }
 .intro-toggle { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.3rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
 .intro-toggle:hover { color: var(--text-primary); }
+.expander-toggle { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.3rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+.expander-toggle:hover { color: var(--text-primary); }
 .intro-body { margin-top: 0.5rem; }
 .disclaimer li { margin-bottom: 0.3rem; }
 .disclaimer li:last-child { margin-bottom: 0; }
@@ -259,7 +261,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.86 — Sales Strategy gain now calculated when the last units are planned for sale.</div>
+      Version v5.87 — Portfolio moved below Past Purchases and Planning; expandable lists; per-table glossary.</div>
   </header>
   <div class="nav-btn-row">
     <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
@@ -267,150 +269,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <button id="navQuickPriceUpdateBtn" type="button" class="nav-btn" title="Jump to Update Current Price and Consensus Target Price">Update Current Price and Consensus Target Price</button>
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
-    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▼</button>
-  </div>
-  <div id="portfolioSectionBody">
-
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="listSelector" style="color:#facc15; font-size:1.3rem;">Portfolio List:</label>
-    <select id="listSelector" class="form-input" style="min-width:180px;"></select>
-    <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
-    <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
-    <button id="deleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
-  </div>
-
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="importListSelect">Import list:</label>
-    <select id="importListSelect" class="form-input" style="min-width:180px;"></select>
-    <button id="importListBtn">Import into current list</button>
-    <span id="importListStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-
-  <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
-    <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
-      <button id="tabAddBtn" class="tab-btn active-tab">+/- Asset</button>
-      <button id="tabAddParamBtn" class="tab-btn">+/- Parameter</button>
-      <button id="tabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
-      <button id="tabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
-    </div>
-
-    <div id="addPanel">
-      <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
-        <input id="newTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" style="width:140px;">
-        <input id="newName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
-        <input id="newTarget" type="number" step="0.01" placeholder="Consensus Target Price" class="form-input" style="width:140px;">
-        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Stability
-          <select id="newStability" class="form-input" style="width:140px;">
-            <option value="Ultra-high">Ultra-high</option>
-            <option value="High">High</option>
-            <option value="Med" selected>Med</option>
-            <option value="Low">Low</option>
-          </select>
-        </label>
-      </div>
-      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:1rem;">
-        <button id="addAssetBtn">Add to table</button>
-        <span id="addStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-      </div>
-      <div class="chart-note" style="margin-top:0.75rem;">Existing assets (click × to remove):</div>
-      <div id="removeList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
-      <div style="margin-top:0.75rem;">
-        <button id="resetAssetsBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Reset to default list</button>
-        <button id="restoreBaseBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Restore missing base tickers</button>
-      </div>
-    </div>
-
-    <div id="addParamPanel" style="display:none;">
-      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Adds a new column to the table for every ticker in every list. Note: custom parameters are display/editable only — they don't automatically factor into the mandate scoring formulas (except the computed presets below, which are).</div>
-      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:0.75rem; max-width:400px;">Choose from common parameters (A–Z, includes the Past Purchases-only ones too), or pick Custom to type your own
-        <select id="newParamPreset" class="form-input"></select>
-      </label>
-      <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
-        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Parameter name
-          <input id="newParamLabel" placeholder="e.g. Dividend Yield (%)" class="form-input" style="width:220px;">
-        </label>
-        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Type
-          <select id="newParamType" class="form-input" style="width:120px;">
-            <option value="number">Number</option>
-            <option value="text">Text</option>
-            <option value="date">Date</option>
-          </select>
-        </label>
-        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Default value
-          <input id="newParamDefault" placeholder="e.g. 0" class="form-input" style="width:140px;">
-        </label>
-        <button id="addParamBtn">Add column</button>
-      </div>
-      <div id="addParamStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
-      <div class="chart-note" style="margin-top:0.75rem;">Existing custom parameters (click × to remove):</div>
-      <div id="customParamList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
-
-      <div class="chart-note" style="margin-top:1.25rem;">Fixed columns from the Sample List (click × to hide — this keeps the underlying data and any scoring use, and can be undone below):</div>
-      <div id="builtinColumnList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
-
-      <div id="hiddenBuiltinColumnSection" style="display:none;">
-        <div class="chart-note" style="margin-top:1.25rem;">Hidden Sample List columns (click + to restore):</div>
-        <div id="hiddenBuiltinColumnList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
-      </div>
-    </div>
-
-    <div id="columnsPanel" style="display:none;">
-      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Reorder columns with the arrows. Ticker (always first) and Remove (always last) aren't included here.</div>
-      <div id="columnOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
-    </div>
-
-    <div id="rowsPanel" style="display:none;">
-      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Reorder tickers with the arrows. This automatically switches "Sort by" to "Custom order" so your arrangement actually shows in the table.</div>
-      <div id="rowOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
-    </div>
-  </div>
-
-  <div class="control-panel">
-    <label for="sortMode" style="display:block; margin-bottom:4px;">Sort by:</label>
-    <select id="sortMode">
-      <option value="default">Optimized Weight (default)</option>
-      <option value="alpha">Alphabetical (Ticker)</option>
-      <option value="date-new">Date Added (newest first)</option>
-      <option value="date-old">Date Added (oldest first)</option>
-      <option value="custom">Custom order (drag with ↑ ↓)</option>
-    </select>
-    <label for="riskProfile" style="display:block; margin-bottom:4px;">Optimized Weight</label>
-    <select id="riskProfile">
-      <option value="tactical">Tactical Buying Urgency (Highest Upside Target Rank)</option>
-      <option value="conservative">Conservative Profile (Moat Stability & High Yield Focus)</option>
-      <option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
-      <option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
-    </select>
-    <button id="optimizeBtn">Execute Allocation Logic</button>
-  </div>
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
-    <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Portfolio viewing: —</h2>
-    <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
-    <button id="sampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template listing every ticker across ALL your Portfolio Lists, with every fillable parameter as a column, so you can research/complete missing data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
-    <button id="importExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload a filled-in Excel file (matching the Sample Excel's column headers) to pull its values into the currently open Portfolio List — adding any ticker that isn't in it yet.">⬆ Import Excel</button>
-    <input id="importExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
-    <span id="excelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-    <button id="exportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-    <button id="exportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-    <button id="exportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="exportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
-  </div>
-  <div class="table-container">
-    <table id="resultsTable">
-      <thead id="resultsTableHead"></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  </div>
-  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases</h2>
-    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▼</button>
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
+    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▼</button>
   </div>
   <div id="pastPurchasesSectionBody">
 
@@ -471,8 +331,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         </label>
         <span id="ppAddOptionStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
       </div>
-      <div class="chart-note" style="margin-top:0.75rem;">Existing rows (click × to remove):</div>
-      <div id="ppTickerList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
+      <button type="button" class="expander-toggle" data-expander="ppTickerList" data-label="Existing rows (click × to remove):" style="margin-top:0.75rem;">Existing rows (click × to remove): ▶</button>
+      <div id="ppTickerList" style="display:none; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
     </div>
 
     <div id="ppParamPanel" style="display:none;">
@@ -631,6 +491,148 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
   </div>
 
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
+    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▼</button>
+  </div>
+  <div id="portfolioSectionBody">
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="listSelector" style="color:#facc15; font-size:1.3rem;">Portfolio List:</label>
+    <select id="listSelector" class="form-input" style="min-width:180px;"></select>
+    <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
+    <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
+    <button id="deleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="importListSelect">Import list:</label>
+    <select id="importListSelect" class="form-input" style="min-width:180px;"></select>
+    <button id="importListBtn">Import into current list</button>
+    <span id="importListStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
+  <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+    <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
+      <button id="tabAddBtn" class="tab-btn active-tab">+/- Asset</button>
+      <button id="tabAddParamBtn" class="tab-btn">+/- Parameter</button>
+      <button id="tabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
+      <button id="tabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
+    </div>
+
+    <div id="addPanel">
+      <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+        <input id="newTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" style="width:140px;">
+        <input id="newName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
+        <input id="newTarget" type="number" step="0.01" placeholder="Consensus Target Price" class="form-input" style="width:140px;">
+        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Stability
+          <select id="newStability" class="form-input" style="width:140px;">
+            <option value="Ultra-high">Ultra-high</option>
+            <option value="High">High</option>
+            <option value="Med" selected>Med</option>
+            <option value="Low">Low</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:1rem;">
+        <button id="addAssetBtn">Add to table</button>
+        <span id="addStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+      </div>
+      <button type="button" class="expander-toggle" data-expander="removeList" data-label="Existing assets (click × to remove):" style="margin-top:0.75rem;">Existing assets (click × to remove): ▶</button>
+      <div id="removeList" style="display:none; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
+      <div style="margin-top:0.75rem;">
+        <button id="resetAssetsBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Reset to default list</button>
+        <button id="restoreBaseBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Restore missing base tickers</button>
+      </div>
+    </div>
+
+    <div id="addParamPanel" style="display:none;">
+      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Adds a new column to the table for every ticker in every list. Note: custom parameters are display/editable only — they don't automatically factor into the mandate scoring formulas (except the computed presets below, which are).</div>
+      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:0.75rem; max-width:400px;">Choose from common parameters (A–Z, includes the Past Purchases-only ones too), or pick Custom to type your own
+        <select id="newParamPreset" class="form-input"></select>
+      </label>
+      <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Parameter name
+          <input id="newParamLabel" placeholder="e.g. Dividend Yield (%)" class="form-input" style="width:220px;">
+        </label>
+        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Type
+          <select id="newParamType" class="form-input" style="width:120px;">
+            <option value="number">Number</option>
+            <option value="text">Text</option>
+            <option value="date">Date</option>
+          </select>
+        </label>
+        <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px;">Default value
+          <input id="newParamDefault" placeholder="e.g. 0" class="form-input" style="width:140px;">
+        </label>
+        <button id="addParamBtn">Add column</button>
+      </div>
+      <div id="addParamStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
+      <div class="chart-note" style="margin-top:0.75rem;">Existing custom parameters (click × to remove):</div>
+      <div id="customParamList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
+
+      <div class="chart-note" style="margin-top:1.25rem;">Fixed columns from the Sample List (click × to hide — this keeps the underlying data and any scoring use, and can be undone below):</div>
+      <div id="builtinColumnList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
+
+      <div id="hiddenBuiltinColumnSection" style="display:none;">
+        <div class="chart-note" style="margin-top:1.25rem;">Hidden Sample List columns (click + to restore):</div>
+        <div id="hiddenBuiltinColumnList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
+    <div id="columnsPanel" style="display:none;">
+      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Reorder columns with the arrows. Ticker (always first) and Remove (always last) aren't included here.</div>
+      <div id="columnOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+    </div>
+
+    <div id="rowsPanel" style="display:none;">
+      <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Reorder tickers with the arrows. This automatically switches "Sort by" to "Custom order" so your arrangement actually shows in the table.</div>
+      <div id="rowOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+    </div>
+  </div>
+
+  <div class="control-panel">
+    <label for="sortMode" style="display:block; margin-bottom:4px;">Sort by:</label>
+    <select id="sortMode">
+      <option value="default">Optimized Weight (default)</option>
+      <option value="alpha">Alphabetical (Ticker)</option>
+      <option value="date-new">Date Added (newest first)</option>
+      <option value="date-old">Date Added (oldest first)</option>
+      <option value="custom">Custom order (drag with ↑ ↓)</option>
+    </select>
+    <label for="riskProfile" style="display:block; margin-bottom:4px;">Optimized Weight</label>
+    <select id="riskProfile">
+      <option value="tactical">Tactical Buying Urgency (Highest Upside Target Rank)</option>
+      <option value="conservative">Conservative Profile (Moat Stability & High Yield Focus)</option>
+      <option value="balanced">Balanced Matrix Profile (ROA Efficiency & Upside Optimizer)</option>
+      <option value="aggressive">Aggressive Capture Matrix (EPS Trajectory Acceleration)</option>
+    </select>
+    <button id="optimizeBtn">Execute Allocation Logic</button>
+  </div>
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+    <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Portfolio viewing: —</h2>
+    <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
+    <button id="sampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template listing every ticker across ALL your Portfolio Lists, with every fillable parameter as a column, so you can research/complete missing data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="importExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload a filled-in Excel file (matching the Sample Excel's column headers) to pull its values into the currently open Portfolio List — adding any ticker that isn't in it yet.">⬆ Import Excel</button>
+    <input id="importExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="excelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+    <button id="exportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="exportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="exportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="exportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+  </div>
+  <div class="table-container">
+    <table id="resultsTable">
+      <thead id="resultsTableHead"></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
     <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" onclick="toggleCollapsibleSection('fetchLiveDataSectionBody','fetchLiveDataToggleBtn')">▼</button>
@@ -793,8 +795,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem; margin-bottom:2rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Parameter glossary (A–Z)</h2>
-    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Definitions for every parameter available across the Portfolio Lists and Past Purchases tables, A–Z.</p>
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Parameter glossary (A–Z) — shared definitions</h2>
+    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Definitions for every parameter whose meaning is the same wherever it appears, A–Z. A parameter whose meaning differs between tables is NOT listed here — look it up in that table's own glossary further down (Portfolio, Past Purchases, Sales Strategy, Buy Strategy).</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
         <tr>
@@ -809,22 +811,16 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Actual Upside (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): (Current Price − your Average Purchase Price) ÷ Average Purchase Price × 100 — your real gain/loss on the position. Requires the "Average Purchase Price ($)" column to be added and filled in; shows 0% until then.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Analyst Rating (Consensus)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average or most common recommendation (e.g. Buy, Hold, Sell) among equity analysts covering the stock.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Asset Turnover</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Total revenue divided by total assets; measures how efficiently a company uses its assets to generate sales.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the average price per share you actually paid, for your own cost-basis tracking. Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Volume (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of shares (in millions) traded per day over a recent period.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Beta</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A measure of the stock’s price volatility relative to the overall market — 1.0 moves with the market, above 1.0 is more volatile, below 1.0 is less.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Book Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × Average Purchase Price — the cost of what you still own from that FIFO-matched lot (fully sold = no Book Value; a sold lot's own value is tracked as Realized Gain instead). Requires "Units Purchased" and "Average Purchase Price ($)" columns. Shown in light blue while units are still held. The "Total current market and book value" summary row below the Past Purchases table sums this across every held lot, in its own column.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Cash & Equivalents ($M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Cash and cash-equivalent balance-sheet holdings, in millions of dollars — one of Cash Runway (yr)'s two inputs. Live-fetchable via "Fetch live data" (SEC EDGAR first, Alpha Vantage as a fallback).</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Cash Runway (yr)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Cash & Equivalents ($M) ÷ Operating Expenses ($M) — a "zero revenue" runway, i.e. how many years current cash would cover total annual operating expenses alone, regardless of revenue. Shows "N/A" until both inputs are on file.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Company Name</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The company's full name.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Consensus Target Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The analyst or your own price target for the asset, used to compute Current/Consensus Target Price (%) and Implied Upside.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Country / Region</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The primary country or geographic region where the company is headquartered or listed.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Market Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × Current Price — what your remaining position in that FIFO-matched lot is worth right now, at today's price (fully sold = no Current Market Value; a sold lot's value converts into Realized Gain instead). Requires "Units Purchased" and "Average Purchase Price ($)" columns and Current Price data for the asset. Sits between Unrealized Gain and Book Value: Book Value (what it cost) + Unrealized Gain (paper gain/loss since purchase) = Current Market Value (what it's worth today) — e.g. buy 5 units @ $5 (Book Value $25); price now $7 (Unrealized Gain +$10) → Current Market Value $35. The "Total current market and book value" summary row below the Past Purchases table sums this across every held lot, in its own column.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The asset’s most recent trading price. On the main table this is live-fetchable via Finnhub or Alpha Vantage (two independent sources — see the Live data panel above); in Past Purchases it’s a manual entry, useful for recording the price at the time you’re logging the row.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Current assets divided by current liabilities; measures ability to cover short-term obligations.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current/Consensus Target Price (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): Current Price ÷ Consensus Target Price × 100. Below 100% implies upside remaining; above 100% means the stock has passed its target.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">D/E Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Debt-to-equity: total debt divided by shareholder equity; higher values indicate more leverage.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the date you bought the position, via a calendar picker. Starts blank — it's never assumed to be today — until you pick a date. Not fetched from any source.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Sale</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The date you sold the position, via a calendar picker. On Past Purchases, it also groups rows into the "Realized Gain for month of X of Y" subtotals in that table’s footer, sorted most-recent month first; on Portfolio Lists it is a plain manual field (no monthly grouping there).</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Days Sales Outstanding</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The average number of days a company takes to collect payment after a sale; lower is generally better.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Payout Ratio (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of net income paid out to shareholders as dividends.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Dividend Yield (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Annual dividend per share divided by current share price. Live-fetchable via Finnhub where available.</td></tr>
@@ -834,6 +830,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EPS Growth (YoY%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Year-over-year percentage change in diluted earnings per share.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EV/EBITDA</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Enterprise Value ÷ EBITDA; a valuation multiple that adjusts for capital structure and non-cash expenses.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">EV/Revenue</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Enterprise Value ÷ annual revenue; useful for comparing companies with different profitability levels.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Expiration Date</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Call options only (also used on Past Purchases, Sales Strategy and Buy Strategy): the day the option contract expires, shown as DD/MM/YYYY. It is part of the contract's identity (ticker + strike + expiration), so two contracts on the same ticker with different expirations are tracked separately. An unsold option past this date is automatically recorded as a $0 sale on it.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">FCF ($M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Free cash flow in millions of dollars — operating cash flow minus capital expenditures.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Float (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of total shares outstanding that are freely tradable by the public.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Forward P/E</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Price ÷ projected (estimated) earnings per share for the next fiscal year, rather than trailing actual earnings.</td></tr>
@@ -859,24 +856,122 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Price to Sales (P/S)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Market cap divided by revenue; a valuation multiple often used for early-stage or low-margin companies.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Quick Ratio</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">(Current assets minus inventory) ÷ current liabilities; a stricter liquidity measure than the Current Ratio.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">R&D Spend (% of Revenue)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Research and development expenditure as a percentage of total revenue.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Realized Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only) per FIFO-matched lot: qty sold × (Selling Price − that lot's Average Purchase Price), always oldest-purchase-first (independent of the "Cost basis" setting, which only affects sorting/exports, not this table). Example: buy 10 @ $2, sell 5 @ $3 (+$5), sell 5 @ $5 (+$15) = $20. The monthly "Realized Gain for month of X of Y" subtotals and the "Total Realized Gain to date" summary row below the table total this across every matched lot.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Equity (ROE %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net income divided by shareholder equity; profitability relative to shareholders' investment.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Return on Invested Capital (ROIC %)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Net operating profit after tax divided by invested capital; efficiency of returns on deployed capital.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Rev Growth (YoY%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Year-over-year percentage change in revenue.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">ROA (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Return on assets: net income divided by total assets.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">RSI (14-day)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Relative Strength Index over 14 days (0–100); above 70 suggests overbought, below 30 suggests oversold.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Sector</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The broad economic sector the company operates in (e.g. Technology, Healthcare, Financials).</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Selling Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the price per share/unit you sold at. Not fetched from any source.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Shares Outstanding (M)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The total number of shares (in millions) currently issued and held by all shareholders.</td></tr>
         <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Short Interest (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The percentage of outstanding shares that have been sold short by investors betting on a price decline.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Stability</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A qualitative rating of business durability (Ultra-high, High, Med, or Low) used in the scoring formulas above. On the main table it’s a dropdown; in Past Purchases it’s free text, since custom parameters there don’t support the dropdown-style rating.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">To Buy Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: a user-defined price threshold at which the buyer will consider purchasing the stock. Not fetched from any source. When this column is present alongside a "Current Price" column, Current Price is highlighted in emerald on that row once it falls to or below this target.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the number of shares/units you actually hold, for your own position tracking. Not fetched from any source.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Sold</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry (Past Purchases): the number of shares/units sold in that sale. On a separate sale row (no Units Purchased) it says how many units to match against that ticker's purchase rows; on a row that also has Units Purchased, it lets you record a partial sale of that row (blank = the whole row was sold). Not fetched from any source.</td></tr>
-        <tr><td style="padding:0.6rem 1rem; color:#fff; font-weight:600;">Unrealized Gain</td><td style="padding:0.6rem 1rem;">Computed automatically (read-only): the row's full Units Purchased × (Current Price − Average Purchase Price). Requires "Units Purchased" and "Average Purchase Price ($)" columns, a non-zero Average Purchase Price, and Current Price data for the asset. For units still held, this is the real current gain/loss. For units that have already been sold (in whole or in part), it becomes hypothetical — "what would this be worth today, at its original buy price, had it never been sold" — shown alongside, not instead of, Realized Gain, so you can compare what you actually made against what holding on would have been worth.</td></tr>
+      
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Strike Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Call options only (also used on Past Purchases, Sales Strategy and Buy Strategy): the price at which the option lets you buy the underlying shares. A row with a Strike Price above 0 is a call option; blank or 0 means an ordinary stock row. Option units are contracts, and money values (cost, value, gain) are multiplied by the contract multiplier (default 100 shares per contract, editable on Past Purchases).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Ticker</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The asset's trading symbol. For a call option, the contract is identified by the ticker together with its Strike Price and Expiration Date.</td></tr>
+</tbody>
+    </table>
+  </div>
+
+  <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Portfolio table — definitions</h2>
+    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Where a parameter means something different here than in Past Purchases, Sales Strategy or Buy Strategy, this table gives the Portfolio meaning.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase; width:220px;">Parameter</th>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Definition in this table</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.88rem; color:var(--text-secondary);">
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the average price per share you paid for your whole position in this asset, for cost-basis tracking. Feeds Actual Upside (%). Not fetched from any source.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The asset's most recent trading price. Live-fetchable via Finnhub or Alpha Vantage (two independent sources — see Fetch Live Data), or typed as a manual override. Drives Implied Upside, Actual Upside (%), To Buy Price highlighting and the scoring formulas.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the date you bought the position, as DD/MM/YYYY. A plain note on this table — it does not drive any calculation here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Sale</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the date you sold, as DD/MM/YYYY. A plain field on this table — no monthly grouping happens here (that is Past Purchases only).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Selling Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the price per share you sold at. Used only for Missed Gain %. Not fetched from any source.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Stability</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">A rating of business durability chosen from a dropdown (Ultra-high, High, Med, Low); it feeds the Conservative scoring formula above.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">To Buy Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the price at which you would consider buying. When present beside Current Price, Current Price turns emerald on that row once it falls to or below this target. Not fetched from any source.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the total number of shares/units you hold in this asset, for your own position tracking. Not fetched from any source.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Sold</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: how many units you have sold. A plain number on this table; no FIFO matching happens here.</td></tr>
       </tbody>
     </table>
   </div>
+
+  <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Past Purchases (Lot Matching) table — definitions</h2>
+    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">The Past Purchases and Planning section's Lot Matching table. Purchases and sales are matched oldest-first (FIFO), separately for each ticker or option contract.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase; width:220px;">Parameter</th>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Definition in this table</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.88rem; color:var(--text-secondary);">
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price ($)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry on a purchase row: the price per unit you paid for THAT lot (per contract for an option). Each lot keeps its own price — the FIFO engine matches sales against lots oldest-first, and Book Value, Realized Gain and Unrealized Gain all use it. Not fetched from any source.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Book Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × that lot's Average Purchase Price — the cost of what you still own from that FIFO-matched lot (fully sold = no Book Value; a sold lot's value is tracked as Realized Gain instead). Options are × the contract multiplier. Shown in light blue while units are still held. The "Total current market and book value" row below the table sums it across every held lot.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Market Value</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): units still held × Current Price — what that FIFO-matched lot is worth right now (fully sold = none; its value becomes Realized Gain). Options are × the contract multiplier. Book Value (what it cost) + Unrealized Gain (paper gain/loss) = Current Market Value.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Stocks: the live or overridden price for the ticker (same source as the Portfolio table). Call options: one price per contract, typed in or fetched from Marketdata.app, and stored for that contract. Every row of the same ticker/contract shows the same price, and Sales Strategy and Buy Strategy read it from here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: the date of that purchase, typed as DD/MM/YYYY. Starts blank (never assumed to be today). It sets the oldest-first order in which FIFO matches sales, and the default newest-first sort of the table.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Date Sale</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">The date of that sale (DD/MM/YYYY; 00/00/0000 = no sale date). It groups rows into the "Realized Gain for month of X of Y" subtotals in the table footer, most recent month first. An unsold call option past its Expiration Date is recorded automatically as a $0 sale on that date.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Realized Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only) per FIFO-matched lot: units sold × (Selling Price − that lot's Average Purchase Price), always oldest-purchase-first. Options are × the contract multiplier. Example: buy 10 @ $2, sell 5 @ $3 (+$5), sell 5 @ $5 (+$15) = $20. The monthly subtotals and the "Total Realized Gain to date" row total it.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Selling Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry on a sale row: the price per unit you actually sold at (per contract for an option). Feeds Realized Gain and Missed Gain %. A confirmed Sales Strategy row writes its planned Selling Price here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Stability</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Free text on this table (custom columns here have no dropdown). It is a plain note and does not feed any scoring.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">To Buy Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry: a price threshold you set for the asset. When present beside Current Price, Current Price turns emerald on that row once it falls to or below it. Not used by Buy Strategy, which has its own Buying Price.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Purchased</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry on a purchase row: how many units that purchase added (contracts for an option). Total Units Holding in Sales Strategy and Buy Strategy is built from these minus what FIFO has matched to sales. A confirmed Buy Strategy row writes its Units to Buy here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Sold</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Manual entry on a sale row: how many units that sale takes from this ticker's purchases, matched oldest-first. On a row that also has Units Purchased it records a partial sale of that row (blank = the whole row was sold). A confirmed Sales Strategy row writes its Units to Sell here.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Unrealized Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed automatically (read-only): the row's full Units Purchased × (Current Price − Average Purchase Price); options are × the contract multiplier. For units still held it is the real paper gain/loss. For units already sold it is hypothetical — what they would be worth today at the original buy price had you kept them — shown alongside Realized Gain for comparison. Not the same as Sales Strategy's Unrealised Capital Gain.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Sales Strategy table — definitions</h2>
+    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Planned (draft) sales. Nothing here is real until you click Confirm Sale.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase; width:220px;">Parameter</th>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Definition in this table</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.88rem; color:var(--text-secondary);">
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Average Purchase Price of Units Left</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed (read-only): the FIFO blended cost per unit of the lots that would still be held after this row AND every row above it for the same ticker/contract take their Units to Sell (oldest lots go first). "—" when nothing would be left.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Read-only: the ticker's (or option contract's) current price as held on Past Purchases/Portfolio — it cannot be edited here. "—" if no price is known yet.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Sale Realized Date</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Holds the "Confirm Sale" button. Confirming asks for the sale date, adds a real sale row (Units Sold, Selling Price, Date Sale) to Past Purchases, and locks the row green with that date. Confirmed rows drop off after the Display window (default 28 days); the real sale stays on Past Purchases.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Selling Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Typed: the price per unit you plan to sell THIS batch at. Nothing is real until Confirm Sale, which writes it to Past Purchases as the sale's Selling Price. Feeds Unrealised Capital Gain.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Total Units Holding</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed from Past Purchases: the units of this ticker/contract you really hold right now. It falls when a sale is confirmed (here or on Past Purchases) and rises when more is bought, including through Buy Strategy's Confirm Buy.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Pending Plan</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed: Total Units Holding − the Units to Sell in this row and every row above it for the same ticker/contract (a running total down the table, floored at 0, in the table's own order). Red = over-committed (you plan to sell more than you hold).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units to Sell</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Typed: how many units you plan to sell in this batch (contracts for an option). Becomes the sale's Units Sold on Confirm Sale.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Unrealised Capital Gain</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed per row: (Selling Price − Average Purchase Price of Units Left) × Units to Sell, × the contract multiplier for an option. On the row that sells the LAST units (Units Pending Plan = 0) it uses the average purchase price of the units pending just before that row — the units it sells. "—" when the row has no Units to Sell or Selling Price, or is already confirmed (then the gain is realized). The first row of the table totals it for this table only.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
+    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Buy Strategy table — definitions</h2>
+    <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Planned (draft) buys. Nothing here is real until you click Confirm Buy.</p>
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase; width:220px;">Parameter</th>
+          <th style="text-align:left; padding:0.6rem 1rem; background:#1e293b; color:#fff; font-size:0.8rem; text-transform:uppercase;">Definition in this table</th>
+        </tr>
+      </thead>
+      <tbody style="font-size:0.88rem; color:var(--text-secondary);">
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Buy Realized Date</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Holds the "Confirm Buy" button. Confirming asks for the purchase date and adds a real purchase row (Units Purchased, Average Purchase Price, Date Purchased — plus strike/expiration for an option) to Past Purchases, then locks the row green with that date. Confirmed rows drop off after the Display window (default 28 days); the real purchase stays on Past Purchases.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Buying Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Typed: the price per unit you plan to pay in this batch (per contract for an option). Becomes the purchase's Average Purchase Price on Confirm Buy.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Buying Price vs Current (%)</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed: (Buying Price ÷ Current Price − 1) × 100. Negative (emerald) = you plan to buy below the current price; positive = above it. "—" without both prices.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Average Purchase Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed from Past Purchases: the FIFO blended cost per unit of the units you hold right now, before any plan. "—" if you hold none.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Current Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Read-only: the ticker's (or option contract's) current price as held on Past Purchases/Portfolio. "—" if none is known yet (common for a ticker you don't hold).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">New Average Purchase Price</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed: the blended cost per unit after the plan — the lots left once Sales Strategy's planned sells are taken (oldest first), plus this row's buys and every buy row above it for the same ticker/contract. "—" until Units to Buy is entered.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Planned Cost</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed: Units to Buy × Buying Price, × the contract multiplier for an option. The first row of the table totals every still-draft row.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Total Units Holding</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed from Past Purchases: the units of this ticker/contract you really hold right now (0 for a ticker you don't hold yet).</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Holding After Plan</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed: Total Units Holding − Units Planned to Sell + the Units to Buy in this row and every row above it for the same ticker/contract (a running total down the table). "—" once the row is confirmed, because it is then part of Total Units Holding.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units Planned to Sell</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Computed from Sales Strategy: the total Units to Sell across that ticker/contract's still-draft (unconfirmed) Sales Strategy rows.</td></tr>
+        <tr><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color:#fff; font-weight:600;">Units to Buy</td><td style="padding:0.6rem 1rem; border-bottom:1px solid var(--border-color);">Typed: how many units you plan to buy in this batch (contracts for an option). Becomes the purchase's Units Purchased on Confirm Buy.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
 
   </div>
 
