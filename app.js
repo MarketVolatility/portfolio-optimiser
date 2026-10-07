@@ -1,3 +1,4 @@
+// APP.JS BUILD: v5.97 (Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -526,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.96 (AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.97 (Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -6971,18 +6972,26 @@ function getBuyStrategyDisplayColumns(){
   BUY_STRATEGY_COLUMNS.forEach(c => { byId[c.id] = c; });
   return { ticker: byId.ticker, columns: getBsColumnOrder().map(id => byId[id]).filter(Boolean) };
 }
+// v5.97: Buy Strategy's Display choices = Sales Strategy's list plus "Uncompleted Buys" (hides every
+// completed buy; shows only the draft rows still to be bought).
+const BUY_STRATEGY_DISPLAY_RANGE_OPTIONS = [
+  SALES_STRATEGY_DISPLAY_RANGE_OPTIONS[0],
+  { id: "uncompleted", label: "Uncompleted Buys", days: 0 },
+  ...SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.slice(1),
+];
 function getBsDisplayRangeId(){
   let id = "default";
   try{ id = localStorage.getItem("bsDisplayRange") || "default"; }catch(e){ /* unavailable */ }
-  return SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+  return BUY_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
 }
 function saveBsDisplayRangeId(id){
-  const valid = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+  const valid = BUY_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
   try{ localStorage.setItem("bsDisplayRange", valid); }catch(e){ /* unavailable */ }
 }
 function isBuyStrategyRowExpired(row){
   if(!row || !row.buyRealizedDate) return false;
-  const opt = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.find(o => o.id === getBsDisplayRangeId());
+  if(getBsDisplayRangeId() === "uncompleted") return true; // every completed buy is hidden
+  const opt = BUY_STRATEGY_DISPLAY_RANGE_OPTIONS.find(o => o.id === getBsDisplayRangeId());
   const windowDays = opt ? opt.days : SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS;
   if(windowDays === null) return false;
   const ms = new Date(row.buyRealizedDate).getTime();
@@ -7210,7 +7219,7 @@ function renderBuyStrategyRowHTML(r, idx, total){
     ? "Remove this completed buy record from this table — the real purchase on Past Purchases/Lot Matching is not affected"
     : "Remove this draft row — it was never a real purchase";
   const tickerCell = `<td>
-        <div style="font-weight:600;">${escHtml(r.ticker)}</div>${r.isOption ? `<div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>` : ""}
+        <div style="font-weight:600; color:${r.buyRealizedDate ? DUS_EXCLUDED_COLOR : 'var(--emerald)'};" title="${r.buyRealizedDate ? 'Completed buy' : 'Uncompleted buy'}">${escHtml(r.ticker)}</div>${r.isOption ? `<div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>` : ""}
         <div class="row-ctrl-controls">
           ${move}${draftBtns}
           <button type="button" class="bs-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.label)}" ${r.buyRealizedDate ? 'data-realized="1"' : ""} title="${escAttr(removeTitle)}">&times;</button>
@@ -7472,7 +7481,7 @@ function wireBuyStrategyControls(){
   const rangeSel = byId("bsDisplayRangeSelect");
   if(rangeSel){
     if(rangeSel.options.length === 0){
-      SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.forEach(opt => {
+      BUY_STRATEGY_DISPLAY_RANGE_OPTIONS.forEach(opt => {
         const o = document.createElement("option"); o.value = opt.id; o.textContent = opt.label; rangeSel.appendChild(o);
       });
     }
