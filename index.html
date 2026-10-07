@@ -80,7 +80,13 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .cell-input-ticker { font-weight: 700; color: #fff; background: #1e293b; border-radius: 4px; font-size: 0.85rem; width: 90px; text-transform: uppercase; }
 .cell-input-ticker:hover, .cell-input-ticker:focus { border-color: var(--accent-blue); }
 .section-toggle-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); width: 32px; height: 32px; border-radius: 6px; font-size: 0.9rem; line-height: 1; cursor: pointer; flex-shrink: 0; }
-.section-toggle-btn:hover { border-color: var(--accent-blue); color: #fff; }
+.section-toggle-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+.section-toggle-btn, .expander-toggle { font-size: 0.8rem; border-radius: 8px; }
+.expander-heading { color: #facc15; font-size: 1.1rem; font-weight: 600; padding: 0.4rem 1rem; }
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; box-sizing: border-box; padding-right: 4.2rem; }
+.pw-toggle-btn { position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 6px; font-size: 0.75rem; padding: 0.15rem 0.5rem; cursor: pointer; }
+.pw-toggle-btn:hover { color: var(--text-primary); }
 .nav-btn-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.5rem; }
 .nav-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.6rem 1.1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
 .nav-btn:hover { border-color: #facc15; color: #fde68a; }
@@ -261,7 +267,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.90 — Portfolio gains an "All Past Purchases" list; Current Holding matches Sales Strategy.</div>
+      Version v5.91 — Portfolio shows call options; expandable glossary; one-pop-up delete; password Show/Hide.</div>
   </header>
   <div class="nav-btn-row">
     <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
@@ -270,7 +276,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
-    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▼</button>
+    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▶</button>
   </div>
   <div id="pastPurchasesSectionBody">
 
@@ -493,7 +499,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
-    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▼</button>
+    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▶</button>
   </div>
   <div id="portfolioSectionBody">
 
@@ -635,7 +641,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
-    <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" onclick="toggleCollapsibleSection('fetchLiveDataSectionBody','fetchLiveDataToggleBtn')">▼</button>
+    <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" onclick="toggleCollapsibleSection('fetchLiveDataSectionBody','fetchLiveDataToggleBtn')">▶</button>
   </div>
   <div id="fetchLiveDataSectionBody">
 
@@ -676,7 +682,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Detailed Update for Selected Assets</h2>
-    <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" onclick="toggleCollapsibleSection('detailedUpdateSectionBody','detailedUpdateToggleBtn')">▼</button>
+    <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" onclick="toggleCollapsibleSection('detailedUpdateSectionBody','detailedUpdateToggleBtn')">▶</button>
   </div>
   <div id="detailedUpdateSectionBody">
 
@@ -725,7 +731,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Update Current Price and Consensus Target Price</h2>
-    <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" onclick="toggleCollapsibleSection('quickPriceUpdateSectionBody','quickPriceUpdateToggleBtn')">▼</button>
+    <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" onclick="toggleCollapsibleSection('quickPriceUpdateSectionBody','quickPriceUpdateToggleBtn')">▶</button>
   </div>
   <div id="quickPriceUpdateSectionBody">
 
@@ -758,7 +764,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Methodology and Glossary</h2>
-    <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" onclick="toggleCollapsibleSection('methodologyGlossarySectionBody','methodologyGlossaryToggleBtn')">▼</button>
+    <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" onclick="toggleCollapsibleSection('methodologyGlossarySectionBody','methodologyGlossaryToggleBtn')">▶</button>
   </div>
   <div id="methodologyGlossarySectionBody">
 
