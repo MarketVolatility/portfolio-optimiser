@@ -1,4 +1,10 @@
-// APP.JS BUILD: v5.84 (Sales Strategy: Unrealised Capital Gain is now per row = (Selling Price - Average Purchase Price of Units Left) x Units to Sell (x100 for options; dash for confirmed/empty rows), total = sum of rows;
+// APP.JS BUILD: v5.86 (Sales Strategy: Unrealised Capital Gain now also shows on the row that sells the last units (Units Pending Plan = 0), using the average purchase price of the units it sells.)
+// v5.85 (BUY STRATEGY: new section below Sales Strategy for planning buys of stocks and call options. Columns: Ticker, Strike Price,
+//   Expiration Date, Current Price, Units to Buy, Buying Price, Buying Price vs Current (%), Planned Cost, Total Units Holding, Current Average Purchase Price,
+//   Units Planned to Sell (from Sales Strategy), Units Holding After Plan, New Average Purchase Price, Buy Realized Date. Same row buttons, column sort/move/hide,
+//   Display window, Sample/Import Excel, exports and folded note as Sales Strategy; first row = Total Planned Cost. "Confirm Buy" adds a real purchase row to Past
+//   Purchases. Syncs with Past Purchases (holdings, cost, prices) and Sales Strategy (planned sells); editing a contract's strike/expiry re-keys its buy rows too.)
+// v5.84 (Sales Strategy: Unrealised Capital Gain is now per row = (Selling Price - Average Purchase Price of Units Left) x Units to Sell (x100 for options; dash for confirmed/empty rows), total = sum of rows;
 //   column moved to right after Expiration Date; "Total Units Sold" column removed.
 // All explanation / disclaimer notes now fold behind a small "Introduction / Disclaimer ▶" label (◀ folds back); the Financial Disclaimer and Copyright stay visible.
 // Sales Strategy: new "Unrealised Capital Gain" column ((Current Price - avg cost of units still held) x units held, x100 for options; repeats on each row of a
@@ -508,7 +514,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.84 (Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.86 (Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -531,7 +537,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -3145,6 +3151,8 @@ function getAllPastPurchasesLists(){
     // sale rows (same list, own array) — defaults to [] for every pre-existing
     // list/account, same self-healing convention as `rows` above.
     if(!Array.isArray(l.salesStrategy)){ l.salesStrategy = []; changed = true; }
+    // v5.85: Buy Strategy draft rows live on the same list, same self-healing default.
+    if(!Array.isArray(l.buyStrategy)){ l.buyStrategy = []; changed = true; }
     // v5.70: tracks which held tickers have already been auto-seeded into Sales
     // Strategy, so the table starts populated on first use but a row the user
     // deliberately removes is never silently re-added on the next render.
@@ -3492,7 +3500,18 @@ function buildSalesStrategyRowsResolved(){
       // (x contract multiplier for an option). "—" (null) when the row has nothing to
       // sell, no selling price, no units left to take a cost from, or when the sale is
       // already confirmed (that gain is then realized, not unrealised).
-      unrealisedGain: ssRowUnrealisedGain(sellingPriceNum, avgPrice, Number(row.unitsToSell) || 0, remainingQty, !!row.saleRealizedDate, keyInfo.isOption ? getOptionContractMultiplier() : 1),
+      // v5.86: when this row sells the LAST of the holding (Units Pending Plan = 0) there are no
+      // units left to take a cost from, so the gain used to show a dash. It now uses the average
+      // purchase price of the units pending just BEFORE this row (i.e. the very units it sells).
+      unrealisedGain: (() => {
+        const u = Number(row.unitsToSell) || 0;
+        let cost = avgPrice, pool = remainingQty;
+        if(!(remainingQty > PP_EPS)){
+          const prior = fifoConsumeFromFront(stats.heldLots, Math.max(0, cumulativeUnitsToSell - u));
+          cost = prior.avgPrice; pool = prior.remainingQty;
+        }
+        return ssRowUnrealisedGain(sellingPriceNum, cost, u, pool, !!row.saleRealizedDate, keyInfo.isOption ? getOptionContractMultiplier() : 1);
+      })(),
       overCommitted: cumulativeUnitsToSell > stats.totalHeld + PP_EPS,
       saleRealizedDate: row.saleRealizedDate,
       realizedSaleRowId: row.realizedSaleRowId,
@@ -4239,6 +4258,10 @@ function ppRekeyContract(oldKey, newKey){
   let ssChanged = false;
   ss.forEach(r => { if(r.ticker === oldKey){ r.ticker = newKey; ssChanged = true; } });
   if(ssChanged) saveSalesStrategyRows(ss);
+  const bs = getBuyStrategyRows();
+  let bsChanged = false;
+  bs.forEach(r => { if(r.ticker === oldKey){ r.ticker = newKey; bsChanged = true; } });
+  if(bsChanged) saveBuyStrategyRows(bs);
   const seeded = getSalesStrategySeededTickers();
   if(seeded.includes(oldKey)) saveSalesStrategySeededTickers(Array.from(new Set(seeded.map(t => t === oldKey ? newKey : t))));
   const prices = getOptionPrices();
@@ -6361,6 +6384,8 @@ function renderSalesStrategyTable(){
   wireSalesStrategyEditing(container);
   wireSalesStrategyHeaderButtons(container.querySelector("thead"));
   renderSsHiddenColumnsNotice();
+  // v5.85: Buy Strategy reads Sales Strategy's planned sells, so it redraws whenever this table does.
+  if(typeof renderBuyStrategyTable === "function") renderBuyStrategyTable();
 }
 
 // Small modal (same self-built overlay pattern as
@@ -6496,6 +6521,708 @@ function wireSalesStrategyEditing(container){
 // their own follow-up row, with no manual "add a row" step needed anymore.
 // addSalesStrategyRow(ticker) itself is KEPT — it's still used internally by
 // the sync/import/duplicate functions above (and their tests).
+
+// =====================================================================
+// --- Buy Strategy (v5.85): draft, not-yet-real planned BUYS. ---
+// Same shape as Sales Strategy above (draft rows, per-row Save/Dup/x/up/down,
+// column sort/move/hide, a Display window for completed rows, Sample/Import
+// Excel, exports, a first-row total, a "Confirm" button that makes the real
+// record), but a buy can be planned for ANY ticker or call-option contract --
+// held or not -- so rows are added with the "Add" bar above the table instead of
+// being auto-seeded from holdings. Rows live on the SAME active Past Purchases
+// list as `buyStrategy` (rides along on the existing pastPurchasesLists sync).
+//
+// Sync with Past Purchases: Current Price, Total Units Holding and the current
+// average cost all come from the same FIFO engine as Lot Matching; "Confirm Buy"
+// adds a real purchase row there.
+// Sync with Sales Strategy: "Units Planned to Sell" is the total of that contract's
+// still-draft Sales Strategy rows; "Units Holding After Plan" and "New Average
+// Purchase Price" = what's held after those planned sells (FIFO, oldest first),
+// plus this row's buys and every buy row above it for the same contract.
+// =====================================================================
+let bsColumnSortState = null;
+
+const BUY_STRATEGY_COLUMNS = [
+  { id: "ticker", label: "Ticker" },
+  { id: "strike", label: "Strike Price" },
+  { id: "expiry", label: "Expiration Date" },
+  { id: "currentPrice", label: "Current Price" },
+  { id: "unitsToBuy", label: "Units to Buy" },
+  { id: "buyingPrice", label: "Buying Price" },
+  { id: "vsCurrent", label: "Buying Price vs Current (%)" },
+  { id: "plannedCost", label: "Planned Cost" },
+  { id: "totalHeld", label: "Total Units Holding" },
+  { id: "avgNow", label: "Current Average Purchase Price" },
+  { id: "plannedSells", label: "Units Planned to Sell" },
+  { id: "unitsAfter", label: "Units Holding After Plan" },
+  { id: "avgAfter", label: "New Average Purchase Price" },
+  { id: "buyRealizedDate", label: "Buy Realized Date" },
+];
+const BUY_STRATEGY_NON_TICKER_COLUMN_IDS = BUY_STRATEGY_COLUMNS.filter(c => c.id !== "ticker").map(c => c.id);
+
+function getBuyStrategyRows(){
+  return getActivePastPurchasesList().buyStrategy || [];
+}
+function saveBuyStrategyRows(rows){
+  updateActivePastPurchasesList(list => { list.buyStrategy = rows; });
+}
+function newBuyStrategyRowId(){
+  return "bs_row_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+}
+// `key` is a contract key (plain TICKER, or TICKER|strike|YYYY-MM-DD for a call option).
+function addBuyStrategyRow(key, unitsToBuy, buyingPrice){
+  const k = String(key || "").trim();
+  if(!k) return null;
+  const parsed = ppParseKey(k);
+  const normKey = parsed.isOption ? ppMakeKey(parsed.symbol, parsed.strike, parsed.expiry) : parsed.symbol.toUpperCase();
+  if(!normKey) return null;
+  const rows = getBuyStrategyRows();
+  const id = newBuyStrategyRowId();
+  rows.push({ id, ticker: normKey, unitsToBuy: Number(unitsToBuy) || 0, buyingPrice: Number(buyingPrice) || 0, dateAdded: Date.now(), buyRealizedDate: null, realizedPurchaseRowId: null });
+  saveBuyStrategyRows(rows);
+  return id;
+}
+function duplicateBuyStrategyRow(id){
+  const rows = getBuyStrategyRows();
+  const idx = rows.findIndex(r => r.id === id);
+  if(idx === -1) return null;
+  const newId = newBuyStrategyRowId();
+  rows.splice(idx + 1, 0, { id: newId, ticker: rows[idx].ticker, unitsToBuy: 0, buyingPrice: 0, dateAdded: Date.now(), buyRealizedDate: null, realizedPurchaseRowId: null });
+  saveBuyStrategyRows(rows);
+  return newId;
+}
+function removeBuyStrategyRow(id){
+  saveBuyStrategyRows(getBuyStrategyRows().filter(r => r.id !== id));
+}
+function moveBuyStrategyRow(id, direction){
+  bsColumnSortState = null;
+  const rows = getBuyStrategyRows();
+  const idx = rows.findIndex(r => r.id === id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= rows.length) return;
+  [rows[idx], rows[newIdx]] = [rows[newIdx], rows[idx]];
+  saveBuyStrategyRows(rows);
+}
+function setBuyStrategyValue(id, field, value){
+  const rows = getBuyStrategyRows();
+  const row = rows.find(r => r.id === id);
+  if(!row || row.buyRealizedDate) return; // locked once realized
+  row[field] = value;
+  saveBuyStrategyRows(rows);
+}
+
+// --- column order / hidden / display window (same self-healing convention as Sales Strategy's) ---
+function getBsHiddenColumns(){
+  try{ return JSON.parse(localStorage.getItem("bsHiddenColumns") || "[]"); }
+  catch(e){ return []; }
+}
+function saveBsHiddenColumns(ids){
+  try{ localStorage.setItem("bsHiddenColumns", JSON.stringify(ids)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function getBsColumnOrder(){
+  let order;
+  try{ order = JSON.parse(localStorage.getItem("bsColumnOrder") || "null"); }
+  catch(e){ order = null; }
+  if(!Array.isArray(order)) order = BUY_STRATEGY_NON_TICKER_COLUMN_IDS.slice();
+  const hidden = new Set(getBsHiddenColumns());
+  order = order.filter(id => BUY_STRATEGY_NON_TICKER_COLUMN_IDS.includes(id) && !hidden.has(id));
+  BUY_STRATEGY_NON_TICKER_COLUMN_IDS.forEach(id => { if(!hidden.has(id) && !order.includes(id)) order.push(id); });
+  return order;
+}
+function saveBsColumnOrder(order){
+  try{ localStorage.setItem("bsColumnOrder", JSON.stringify(order)); }
+  catch(e){ /* localStorage unavailable */ }
+}
+function moveBsColumn(id, direction){
+  if(id === "ticker") return;
+  bsColumnSortState = null;
+  const order = getBsColumnOrder();
+  const idx = order.indexOf(id);
+  if(idx === -1) return;
+  const newIdx = idx + direction;
+  if(newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  saveBsColumnOrder(order);
+}
+function hideBsColumn(id){
+  if(id === "ticker") return;
+  saveBsColumnOrder(getBsColumnOrder().filter(cid => cid !== id));
+  const hidden = getBsHiddenColumns();
+  if(!hidden.includes(id)) saveBsHiddenColumns([...hidden, id]);
+  if(bsColumnSortState && bsColumnSortState.colId === id) bsColumnSortState = null;
+}
+function showAllBsColumns(){
+  const hidden = getBsHiddenColumns();
+  if(hidden.length === 0) return;
+  saveBsColumnOrder([...getBsColumnOrder(), ...hidden]);
+  saveBsHiddenColumns([]);
+}
+function getBuyStrategyDisplayColumns(){
+  const byId = {};
+  BUY_STRATEGY_COLUMNS.forEach(c => { byId[c.id] = c; });
+  return { ticker: byId.ticker, columns: getBsColumnOrder().map(id => byId[id]).filter(Boolean) };
+}
+function getBsDisplayRangeId(){
+  let id = "default";
+  try{ id = localStorage.getItem("bsDisplayRange") || "default"; }catch(e){ /* unavailable */ }
+  return SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+}
+function saveBsDisplayRangeId(id){
+  const valid = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.some(o => o.id === id) ? id : "default";
+  try{ localStorage.setItem("bsDisplayRange", valid); }catch(e){ /* unavailable */ }
+}
+function isBuyStrategyRowExpired(row){
+  if(!row || !row.buyRealizedDate) return false;
+  const opt = SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.find(o => o.id === getBsDisplayRangeId());
+  const windowDays = opt ? opt.days : SALES_STRATEGY_COMPLETED_SALE_DISPLAY_DAYS;
+  if(windowDays === null) return false;
+  const ms = new Date(row.buyRealizedDate).getTime();
+  if(isNaN(ms)) return false;
+  return (Date.now() - ms) / 86400000 > windowDays;
+}
+
+// --- resolve: everything the table shows, without touching the DOM (what the tests call) ---
+function computeBuyStrategyTotalPlannedCost(resolvedRows){
+  let total = 0, counted = 0;
+  (resolvedRows || []).forEach(r => {
+    if(r.buyRealizedDate || !(r.plannedCost > 0)) return;
+    total += r.plannedCost; counted++;
+  });
+  return { total, counted };
+}
+function buildBuyStrategyRowsResolved(){
+  const rows = getBuyStrategyRows();
+  const ssRows = getSalesStrategyRows();
+  const info = {};
+  rows.forEach(r => {
+    if(info[r.ticker]) return;
+    const stats = getSalesStrategyTickerStats(r.ticker);
+    const plannedSells = ssRows.reduce((s, x) => (x.ticker === r.ticker && !x.saleRealizedDate) ? s + (Number(x.unitsToSell) || 0) : s, 0);
+    const after = fifoConsumeFromFront(stats.heldLots, plannedSells);
+    const heldCost = stats.heldLots.reduce((s, l) => s + l.qty * l.price, 0);
+    info[r.ticker] = { stats, plannedSells, after, avgNow: stats.totalHeld > PP_EPS ? heldCost / stats.totalHeld : 0 };
+  });
+  const cum = {};
+  const resolved = rows.map(row => {
+    const i = info[row.ticker];
+    const keyInfo = ppParseKey(row.ticker);
+    const mult = keyInfo.isOption ? getOptionContractMultiplier() : 1;
+    const units = Number(row.unitsToBuy) || 0;
+    const price = Number(row.buyingPrice) || 0;
+    if(!cum[row.ticker]) cum[row.ticker] = { units: 0, cost: 0 };
+    if(!row.buyRealizedDate){ cum[row.ticker].units += units; cum[row.ticker].cost += units * price; }
+    const c = cum[row.ticker];
+    const unitsAfter = i.after.remainingQty + c.units;
+    const avgAfter = unitsAfter > PP_EPS ? (i.after.remainingQty * i.after.avgPrice + c.cost) / unitsAfter : 0;
+    const builtin = ppResolveBuiltinForKey(row.ticker);
+    const currentPrice = builtin ? (Number(builtin.currentPrice) || 0) : null;
+    return {
+      id: row.id,
+      ticker: keyInfo.symbol,
+      key: row.ticker,
+      label: ppKeyLabel(row.ticker),
+      isOption: keyInfo.isOption,
+      strike: keyInfo.isOption ? keyInfo.strike : 0,
+      expiry: keyInfo.isOption ? keyInfo.expiry : "",
+      mult,
+      currentPrice,
+      unitsToBuy: units,
+      buyingPrice: price,
+      vsCurrent: (currentPrice > 0 && price > 0) ? (price / currentPrice - 1) * 100 : null,
+      plannedCost: units * price * mult,
+      totalHeld: i.stats.totalHeld,
+      avgNow: i.avgNow,
+      plannedSells: i.plannedSells,
+      unitsAfter,
+      avgAfter,
+      buyRealizedDate: row.buyRealizedDate,
+      realizedPurchaseRowId: row.realizedPurchaseRowId,
+    };
+  });
+  if(bsColumnSortState){
+    const { colId, direction } = bsColumnSortState;
+    resolved.sort((a, b) => {
+      const va = a[colId], vb = b[colId];
+      let cmp;
+      if(typeof va === "string" || typeof vb === "string") cmp = String(va || "").localeCompare(String(vb || ""));
+      else cmp = (Number(va) || 0) - (Number(vb) || 0);
+      return direction === "asc" ? cmp : -cmp;
+    });
+  }
+  return resolved.filter(r => !isBuyStrategyRowExpired(r));
+}
+
+// "Confirm Buy": makes the draft a REAL purchase row on the active Past Purchases list
+// (a call option gets its strike/expiration too), fills Units Purchased / Average
+// Purchase Price / Date Purchased, then locks the draft.
+function realizeBuyStrategyRow(id, dateStr){
+  const rows = getBuyStrategyRows();
+  const row = rows.find(r => r.id === id);
+  if(!row || row.buyRealizedDate) return false;
+  const units = Number(row.unitsToBuy) || 0;
+  if(units <= 0) return false;
+  const price = Number(row.buyingPrice) || 0;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateStr || "") ? dateStr : ppToday();
+  const k = ppParseKey(row.ticker);
+  const newRowId = k.isOption ? addPastPurchaseOptionRow(k.symbol, k.strike, k.expiry) : addPastPurchaseRow(k.symbol);
+  if(!newRowId) return false;
+  const params = getPastPurchasesParams();
+  const unitsP = ppFindParamByLabel(params, "units purchased");
+  const avgP = ppFindParamByLabel(params, ["average purchase price ($)", "average purchase price"]);
+  const dateP = ppFindParamByLabel(params, "date purchased");
+  if(unitsP) setPastPurchaseValue(newRowId, unitsP.id, units);
+  if(avgP) setPastPurchaseValue(newRowId, avgP.id, price);
+  if(dateP) setPastPurchaseValue(newRowId, dateP.id, date);
+  row.buyRealizedDate = date;
+  row.realizedPurchaseRowId = newRowId;
+  saveBuyStrategyRows(rows);
+  return true;
+}
+
+// Every ticker/contract already known to the app (Past Purchases, Sales Strategy, this table),
+// for the "pick a known one" list above the table.
+function getBuyStrategyKnownKeys(){
+  const keys = new Set();
+  const optP = ppOptionParams(getPastPurchasesParams());
+  getPastPurchasesRows().forEach(r => { const k = ppRowKey(r, optP); if(k) keys.add(k); });
+  getSalesStrategyRows().forEach(r => { if(r.ticker) keys.add(r.ticker); });
+  getBuyStrategyRows().forEach(r => { if(r.ticker) keys.add(r.ticker); });
+  return Array.from(keys).sort((a, b) => ppKeyLabel(a).localeCompare(ppKeyLabel(b)));
+}
+
+// --- rendering ---
+function buildBuyStrategyHeaderRow(){
+  const { ticker, columns } = getBuyStrategyDisplayColumns();
+  const sortIcon = (id) => (bsColumnSortState && bsColumnSortState.colId === id) ? (bsColumnSortState.direction === "asc" ? "▲" : "▼") : "⇅";
+  const isSorted = (id) => bsColumnSortState && bsColumnSortState.colId === id;
+  let html = `<th>
+    <div><span class="ss-th-label">${escHtml(ticker.label)}</span></div>
+    <div class="col-header-controls">
+      <button type="button" class="bs-col-btn col-ctrl-btn ${isSorted(ticker.id) ? "col-ctrl-sort-active" : ""}" data-action="sort" data-col-id="${ticker.id}" title="Sort by ${escAttr(ticker.label)}">${sortIcon(ticker.id)}</button>
+    </div>
+  </th>`;
+  columns.forEach((c, idx) => {
+    html += `<th>
+      <div><span class="ss-th-label">${escHtml(c.label)}</span></div>
+      <div class="col-header-controls">
+        <button type="button" class="bs-col-btn col-ctrl-btn ${isSorted(c.id) ? "col-ctrl-sort-active" : ""}" data-action="sort" data-col-id="${c.id}" title="Sort by ${escAttr(c.label)}">${sortIcon(c.id)}</button>
+        <button type="button" class="bs-col-btn col-ctrl-btn" data-action="move" data-col-id="${c.id}" data-dir="-1" ${idx === 0 ? "disabled" : ""} title="Move left">&lt;</button>
+        <button type="button" class="bs-col-btn col-ctrl-btn" data-action="move" data-col-id="${c.id}" data-dir="1" ${idx === columns.length - 1 ? "disabled" : ""} title="Move right">&gt;</button>
+        <button type="button" class="bs-col-btn col-ctrl-btn col-ctrl-remove" data-action="remove" data-col-id="${c.id}" title="Hide this column (use “Show all columns” below the table to bring it back)">&times;</button>
+      </div>
+    </th>`;
+  });
+  return html;
+}
+function wireBuyStrategyHeaderButtons(theadEl){
+  if(!theadEl) return;
+  theadEl.querySelectorAll(".bs-col-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const colId = btn.getAttribute("data-col-id");
+      const action = btn.getAttribute("data-action");
+      if(action === "sort"){
+        if(!bsColumnSortState || bsColumnSortState.colId !== colId) bsColumnSortState = { colId, direction: "asc" };
+        else if(bsColumnSortState.direction === "asc") bsColumnSortState = { colId, direction: "desc" };
+        else bsColumnSortState = null;
+      } else if(action === "move"){
+        moveBsColumn(colId, parseInt(btn.getAttribute("data-dir"), 10));
+      } else if(action === "remove"){
+        hideBsColumn(colId);
+      }
+      renderBuyStrategyTable();
+    });
+  });
+}
+function renderBsHiddenColumnsNotice(){
+  const el = document.getElementById("bsHiddenColumnsNotice");
+  if(!el) return;
+  const hidden = getBsHiddenColumns();
+  if(hidden.length === 0){ el.innerHTML = ""; return; }
+  const labelById = {};
+  BUY_STRATEGY_COLUMNS.forEach(c => { labelById[c.id] = c.label; });
+  const names = hidden.map(id => labelById[id] || id).join(", ");
+  el.innerHTML = `<span style="color:var(--text-secondary); font-size:0.85rem;">${hidden.length} column${hidden.length === 1 ? "" : "s"} hidden (${escHtml(names)}) — </span> <button type="button" id="bsShowAllColumnsBtn" class="tab-btn" style="padding:0.3rem 0.8rem; font-size:0.8rem;">Show all columns</button>`;
+  const btn = el.querySelector("#bsShowAllColumnsBtn");
+  if(btn) btn.addEventListener("click", () => { showAllBsColumns(); renderBuyStrategyTable(); });
+}
+
+const bsDash = (title) => `<td style="color:var(--text-secondary);"${title ? ` title="${escAttr(title)}"` : ""}>—</td>`;
+function fmtBsMoney(n){
+  return "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function renderBuyStrategyCellHTML(colId, r){
+  const locked = r.buyRealizedDate ? "disabled" : "";
+  switch(colId){
+    case "strike":
+      return r.isOption ? `<td>$${Number(r.strike).toFixed(2)}</td>` : bsDash();
+    case "expiry":
+      return r.isOption ? `<td>${escHtml(fmtDMY(r.expiry) || "—")}</td>` : bsDash();
+    case "currentPrice":
+      return r.currentPrice === null ? bsDash("No current price known yet for this ticker/contract.") : `<td>$${r.currentPrice.toFixed(2)}</td>`;
+    case "unitsToBuy":
+      return `<td><input class="cell-input cell-input-num bs-input" data-row-id="${r.id}" data-field="unitsToBuy" type="number" step="1" value="${r.unitsToBuy}" ${locked}></td>`;
+    case "buyingPrice":
+      return `<td><input class="cell-input cell-input-num bs-input" data-row-id="${r.id}" data-field="buyingPrice" type="number" step="0.01" value="${r.buyingPrice}" ${locked}></td>`;
+    case "vsCurrent": {
+      if(r.vsCurrent === null) return bsDash("Needs a Buying Price and a known Current Price.");
+      const color = r.vsCurrent <= 0 ? "var(--emerald)" : "#fbbf24";
+      return `<td style="color:${color}; font-weight:600;" title="Negative = you plan to buy below the current price.">${r.vsCurrent >= 0 ? "+" : ""}${r.vsCurrent.toFixed(2)}%</td>`;
+    }
+    case "plannedCost":
+      return r.plannedCost > 0 ? `<td style="font-weight:600;">${fmtBsMoney(r.plannedCost)}</td>` : bsDash("Units to Buy x Buying Price (x contract multiplier for an option).");
+    case "totalHeld":
+      return `<td>${ppFmtNum(r.totalHeld)}</td>`;
+    case "avgNow":
+      return r.totalHeld > PP_EPS ? `<td>$${r.avgNow.toFixed(2)}</td>` : bsDash();
+    case "plannedSells":
+      return `<td>${ppFmtNum(r.plannedSells)}</td>`;
+    case "unitsAfter":
+      return r.buyRealizedDate ? bsDash("Already part of Total Units Holding.") : `<td style="font-weight:600;">${ppFmtNum(r.unitsAfter)}</td>`;
+    case "avgAfter":
+      return (!r.buyRealizedDate && r.unitsAfter > PP_EPS && r.unitsToBuy > 0) ? `<td>$${r.avgAfter.toFixed(2)}</td>` : bsDash("Needs Units to Buy and a Buying Price.");
+    case "buyRealizedDate":
+      return r.buyRealizedDate
+        ? `<td><span style="color:var(--emerald); font-weight:600;" title="This draft became a real purchase row on the Lot Matching table above.">&#10003; ${escHtml(fmtDMY(r.buyRealizedDate) || r.buyRealizedDate)}</span></td>`
+        : `<td><button type="button" class="bs-confirm-btn tab-btn" data-row-id="${r.id}" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Confirm Buy</button></td>`;
+    default:
+      return "<td></td>";
+  }
+}
+function renderBuyStrategyRowHTML(r, idx, total){
+  const upDisabled = idx === 0 ? "disabled" : "";
+  const downDisabled = idx === total - 1 ? "disabled" : "";
+  const move = `<button type="button" class="bs-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="-1" ${upDisabled} title="Move this row up">&uarr;</button>
+          <button type="button" class="bs-move-btn row-ctrl-btn" data-row-id="${r.id}" data-dir="1" ${downDisabled} title="Move this row down">&darr;</button>`;
+  const draftBtns = r.buyRealizedDate ? "" : `
+          <button type="button" class="bs-save-btn row-ctrl-btn" data-row-id="${r.id}" title="Save this row's Units to Buy / Buying Price" style="width:auto; padding:0 0.5rem; font-size:0.7rem; color:#34d399;">Save</button>
+          <button type="button" class="bs-dup-btn row-ctrl-btn" data-row-id="${r.id}" title="Duplicate this row below, same ticker — plan another batch at a different price" style="width:auto; padding:0 0.5rem; font-size:0.7rem;">Dup</button>`;
+  const removeTitle = r.buyRealizedDate
+    ? "Remove this completed buy record from this table — the real purchase on Past Purchases/Lot Matching is not affected"
+    : "Remove this draft row — it was never a real purchase";
+  const tickerCell = `<td>
+        <div style="font-weight:600;">${escHtml(r.ticker)}</div>${r.isOption ? `<div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>` : ""}
+        <div class="row-ctrl-controls">
+          ${move}${draftBtns}
+          <button type="button" class="bs-remove-btn row-ctrl-btn row-ctrl-remove" data-row-id="${r.id}" data-ticker="${escAttr(r.label)}" ${r.buyRealizedDate ? 'data-realized="1"' : ""} title="${escAttr(removeTitle)}">&times;</button>
+        </div>
+      </td>`;
+  const { columns } = getBuyStrategyDisplayColumns();
+  return `<tr>${tickerCell}${columns.map(c => renderBuyStrategyCellHTML(c.id, r)).join("")}</tr>`;
+}
+function buildBuyStrategyTotalRowHTML(resolvedRows, columns){
+  const { total, counted } = computeBuyStrategyTotalPlannedCost(resolvedRows);
+  const valueText = counted === 0 ? "—" : fmtBsMoney(total);
+  const title = "Sum of every still-draft row's Planned Cost (Units to Buy x Buying Price, x contract multiplier for an option).";
+  const hasCol = columns.some(c => c.id === "plannedCost");
+  const base = "background:rgba(250,204,21,0.08); font-weight:700;";
+  const cells = columns.map(c => c.id === "plannedCost"
+    ? `<td style="${base} color:#facc15;" title="${escAttr(title)}">${valueText}</td>`
+    : `<td style="${base}"></td>`).join("");
+  const label = hasCol ? "Total Planned Cost" : `Total Planned Cost: <span style="color:#facc15;">${valueText}</span>`;
+  return `<tr class="bs-total-row"><td style="${base} color:#facc15; white-space:nowrap;" title="${escAttr(title)}">${label}</td>${cells}</tr>`;
+}
+let lastBuyStrategyResolvedRows = [];
+function renderBuyStrategyTable(){
+  const container = document.getElementById("bsTableContent");
+  if(!container) return;
+  const rangeSel = document.getElementById("bsDisplayRangeSelect");
+  if(rangeSel) rangeSel.value = getBsDisplayRangeId();
+  refreshBuyStrategyKnownList();
+  const resolvedRows = buildBuyStrategyRowsResolved();
+  lastBuyStrategyResolvedRows = resolvedRows;
+  const { columns } = getBuyStrategyDisplayColumns();
+  const bodyHtml = resolvedRows.length === 0
+    ? `<tr><td colspan="${1 + columns.length}" style="color:var(--text-secondary); padding:1.25rem 1rem;">No planned buys yet — pick or type a ticker in the bar above and click “+ Add Row”.</td></tr>`
+    : resolvedRows.map((r, idx) => renderBuyStrategyRowHTML(r, idx, resolvedRows.length)).join("");
+  const totalRowHtml = resolvedRows.length === 0 ? "" : buildBuyStrategyTotalRowHTML(resolvedRows, columns);
+  container.innerHTML = `<div class="table-container"><table><thead><tr>${buildBuyStrategyHeaderRow()}</tr></thead><tbody>${totalRowHtml}${bodyHtml}</tbody></table></div>`;
+  wireBuyStrategyEditing(container);
+  wireBuyStrategyHeaderButtons(container.querySelector("thead"));
+  renderBsHiddenColumnsNotice();
+}
+function refreshBuyStrategyKnownList(){
+  const sel = document.getElementById("bsKnownSelect");
+  if(!sel) return;
+  const keep = sel.value;
+  const keys = getBuyStrategyKnownKeys();
+  sel.innerHTML = `<option value="">— pick a known ticker / contract —</option>` + keys.map(k => `<option value="${escAttr(k)}">${escHtml(ppKeyLabel(k))}</option>`).join("");
+  if(keep && keys.includes(keep)) sel.value = keep;
+}
+
+function showBuyRealizedConfirmDialog(r){
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; padding:16px;";
+    const panel = document.createElement("div");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.style.cssText = "background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; width:100%; max-width:420px; color:var(--text-primary);";
+    const today = ppToday();
+    panel.innerHTML = `
+      <h3 style="margin:0 0 0.5rem; color:#facc15; font-size:1.1rem;">Confirm buy of ${escHtml(r.label || r.ticker)}</h3>
+      <div style="color:var(--text-secondary); font-size:0.9rem; line-height:1.5; margin-bottom:0.9rem;">
+        This adds a real purchase row to the Lot Matching table above: <strong>${ppFmtNum(r.unitsToBuy)}</strong> unit(s) of <strong>${escHtml(r.label || r.ticker)}</strong> at <strong>$${Number(r.buyingPrice).toFixed(2)}</strong>. Pick the date this purchase actually happened.
+      </div>
+      <label style="display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:1rem;">Purchase date
+        <input id="bsConfirmDateInput" class="form-input" ${dateTextInputAttrs(today)}>
+      </label>
+      <div style="display:flex; gap:0.6rem; justify-content:flex-end;">
+        <button type="button" class="tab-btn" data-final="cancel">Cancel</button>
+        <button type="button" data-final="confirm" style="padding:0.6rem 1.4rem;">Confirm Buy</button>
+      </div>`;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const dateInput = panel.querySelector("#bsConfirmDateInput");
+    const finish = (value) => { document.removeEventListener("keydown", onKey); overlay.remove(); resolve(value); };
+    const onKey = (e) => { if(e.key === "Escape") finish(null); };
+    document.addEventListener("keydown", onKey);
+    panel.querySelector('[data-final="cancel"]').addEventListener("click", () => finish(null));
+    panel.querySelector('[data-final="confirm"]').addEventListener("click", () => {
+      const iso = parseDateTextToIso(dateInput.value);
+      if(iso === null){ dateInput.style.outline = "1px solid #ef4444"; dateInput.title = "Use DD/MM/YYYY, e.g. 31/12/2026."; return; }
+      finish(iso || today);
+    });
+  });
+}
+
+function wireBuyStrategyEditing(container){
+  if(!container) return;
+  container.querySelectorAll(".bs-input").forEach(el => {
+    el.addEventListener("change", (e) => {
+      let value = parseFloat(e.target.value);
+      if(isNaN(value)) value = 0;
+      setBuyStrategyValue(e.target.getAttribute("data-row-id"), e.target.getAttribute("data-field"), value);
+      renderBuyStrategyTable();
+    });
+    el.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); el.blur(); } });
+  });
+  container.querySelectorAll(".bs-move-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      moveBuyStrategyRow(btn.getAttribute("data-row-id"), parseInt(btn.getAttribute("data-dir"), 10));
+      renderBuyStrategyTable();
+    });
+  });
+  container.querySelectorAll(".bs-save-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-row-id");
+      const tr = btn.closest("tr");
+      const u = tr ? parseFloat((tr.querySelector("input[data-field='unitsToBuy']") || {}).value) : 0;
+      const p = tr ? parseFloat((tr.querySelector("input[data-field='buyingPrice']") || {}).value) : 0;
+      setBuyStrategyValue(id, "unitsToBuy", isNaN(u) ? 0 : u);
+      setBuyStrategyValue(id, "buyingPrice", isNaN(p) ? 0 : p);
+      renderBuyStrategyTable();
+    });
+  });
+  container.querySelectorAll(".bs-dup-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      duplicateBuyStrategyRow(btn.getAttribute("data-row-id"));
+      renderBuyStrategyTable();
+    });
+  });
+  container.querySelectorAll(".bs-remove-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ticker = btn.getAttribute("data-ticker");
+      const message = btn.getAttribute("data-realized") === "1"
+        ? `Remove this completed "${ticker}" buy record from the Buy Strategy table? The real purchase it created on Past Purchases/Lot Matching is NOT affected — this only removes it from this display.`
+        : `Remove this draft "${ticker}" buy plan row? This only removes the plan — it was never a real purchase.`;
+      if(confirm(message)){
+        removeBuyStrategyRow(btn.getAttribute("data-row-id"));
+        renderBuyStrategyTable();
+      }
+    });
+  });
+  container.querySelectorAll(".bs-confirm-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-row-id");
+      const r = buildBuyStrategyRowsResolved().find(x => x.id === id);
+      if(!r) return;
+      if(r.unitsToBuy <= 0){ alert("Enter how many units to buy (greater than 0) before confirming the buy."); return; }
+      const dateStr = await showBuyRealizedConfirmDialog(r);
+      if(!dateStr) return;
+      realizeBuyStrategyRow(id, dateStr);
+      renderPastPurchasesTable(); // new real purchase row -> Lot Matching, totals, Sales Strategy, and this table
+    });
+  });
+}
+
+// --- exports / sample / import ---
+function buildBuyStrategyExportTable(){
+  const resolvedRows = buildBuyStrategyRowsResolved();
+  const { ticker, columns } = getBuyStrategyDisplayColumns();
+  const headers = [ticker.label, ...columns.map(c => c.label)];
+  const rows = [], colors = [];
+  resolvedRows.forEach(r => {
+    const valueById = {
+      strike: r.isOption ? r.strike : "—",
+      expiry: r.isOption ? (fmtDMY(r.expiry) || "") : "—",
+      currentPrice: r.currentPrice === null ? "—" : `$${r.currentPrice.toFixed(2)}`,
+      unitsToBuy: r.unitsToBuy,
+      buyingPrice: r.buyingPrice,
+      vsCurrent: r.vsCurrent === null ? "—" : `${r.vsCurrent >= 0 ? "+" : ""}${r.vsCurrent.toFixed(2)}%`,
+      plannedCost: r.plannedCost > 0 ? fmtBsMoney(r.plannedCost) : "—",
+      totalHeld: r.totalHeld,
+      avgNow: r.totalHeld > PP_EPS ? `$${r.avgNow.toFixed(2)}` : "—",
+      plannedSells: r.plannedSells,
+      unitsAfter: r.buyRealizedDate ? "—" : r.unitsAfter,
+      avgAfter: (!r.buyRealizedDate && r.unitsAfter > PP_EPS && r.unitsToBuy > 0) ? `$${r.avgAfter.toFixed(2)}` : "—",
+      buyRealizedDate: r.buyRealizedDate ? `Confirmed ${fmtDMY(r.buyRealizedDate) || r.buyRealizedDate}` : "Pending",
+    };
+    const colorById = {
+      vsCurrent: r.vsCurrent === null ? null : (r.vsCurrent <= 0 ? EXPORT_COLORS.emerald : null),
+      buyRealizedDate: r.buyRealizedDate ? EXPORT_COLORS.emerald : null,
+    };
+    rows.push([r.ticker, ...columns.map(c => valueById[c.id])]);
+    colors.push([null, ...columns.map(c => colorById[c.id] || null)]);
+  });
+  if(rows.length){
+    const { total, counted } = computeBuyStrategyTotalPlannedCost(resolvedRows);
+    const totalText = counted === 0 ? "—" : fmtBsMoney(total);
+    const hasCol = columns.some(c => c.id === "plannedCost");
+    rows.unshift([hasCol ? "Total Planned Cost" : `Total Planned Cost: ${totalText}`, ...columns.map(c => c.id === "plannedCost" ? totalText : "")]);
+    colors.unshift([null, ...columns.map(() => null)]);
+  }
+  return { headers, rows, colors };
+}
+function buildSampleExcelForDataEntry_BuyStrategy(){
+  const headers = ["Ticker", "Strike Price", "Expiration Date", "Units to Buy", "Buying Price"];
+  const rows = getBuyStrategyRows().filter(r => !r.buyRealizedDate).map(r => {
+    const k = ppParseKey(r.ticker);
+    return [k.symbol, k.isOption ? k.strike : "", k.isOption ? fmtDMY(k.expiry) : "", r.unitsToBuy || "", r.buyingPrice || ""];
+  });
+  return { headers, rows };
+}
+function importBuyStrategyFromRows(rowsAoA){
+  if(!rowsAoA || rowsAoA.length < 2) return { added: 0, identical: 0, unmatchedHeaders: [] };
+  const header = rowsAoA[0].map(h => String(h || "").trim().toLowerCase());
+  const tickerIdx = header.indexOf("ticker");
+  const unitsIdx = header.indexOf("units to buy");
+  const priceIdx = header.indexOf("buying price");
+  const strikeIdx = header.findIndex(h => h === "strike price" || h === "strike");
+  const expiryIdx = header.findIndex(h => h === "expiration date" || h === "expiry date" || h === "expiration" || h === "expiry");
+  const recognized = new Set([tickerIdx, unitsIdx, priceIdx, strikeIdx, expiryIdx].filter(i => i >= 0));
+  const unmatchedHeaders = rowsAoA[0].filter((h, i) => !recognized.has(i) && String(h || "").trim() !== "");
+  const seen = getBuyStrategyRows().filter(r => !r.buyRealizedDate)
+    .map(r => ({ ticker: r.ticker, u: Number(r.unitsToBuy) || 0, p: Number(r.buyingPrice) || 0 }));
+  let added = 0, identical = 0;
+  if(tickerIdx >= 0){
+    for(let i = 1; i < rowsAoA.length; i++){
+      const raw = rowsAoA[i];
+      const rawTicker = parseImportedCellValue(raw[tickerIdx]);
+      if(!rawTicker) continue;
+      const symbol = String(rawTicker).trim().toUpperCase();
+      const strike = strikeIdx >= 0 ? (parseImportedCellValue(raw[strikeIdx], "number") || 0) : 0;
+      const expiryVal = expiryIdx >= 0 ? parseImportedCellValue(raw[expiryIdx], "date", { date1904: !!rowsAoA.date1904 }) : "";
+      const key = ppMakeKey(symbol, strike, expiryVal);
+      const u = unitsIdx >= 0 ? (parseImportedCellValue(raw[unitsIdx], "number") || 0) : 0;
+      const p = priceIdx >= 0 ? (parseImportedCellValue(raw[priceIdx], "number") || 0) : 0;
+      if(seen.some(s => s.ticker === key && s.u === u && s.p === p)){ identical++; continue; }
+      addBuyStrategyRow(key, u, p);
+      seen.push({ ticker: key, u, p });
+      added++;
+    }
+  }
+  return { added, identical, unmatchedHeaders };
+}
+
+// One-time wiring of everything above the table: add bar, Display, Refresh, exports, Sample/Import Excel.
+function wireBuyStrategyControls(){
+  const byId = (id) => document.getElementById(id);
+  const knownSel = byId("bsKnownSelect"), symInput = byId("bsAddTicker"), strikeInput = byId("bsAddStrike"),
+        expInput = byId("bsAddExpiry"), addBtn = byId("bsAddRowBtn"), addStatus = byId("bsAddStatus");
+  if(knownSel) knownSel.addEventListener("change", () => {
+    if(!knownSel.value) return;
+    const k = ppParseKey(knownSel.value);
+    if(symInput) symInput.value = k.symbol;
+    if(strikeInput) strikeInput.value = k.isOption ? k.strike : "";
+    if(expInput){ expInput.value = k.isOption ? fmtDMY(k.expiry) : ""; if(k.isOption) expInput.setAttribute("data-iso", k.expiry); else expInput.removeAttribute("data-iso"); }
+  });
+  if(addBtn) addBtn.addEventListener("click", () => {
+    const sym = String(symInput ? symInput.value : "").trim().toUpperCase();
+    const say = (msg, ok) => { if(addStatus){ addStatus.textContent = msg; addStatus.style.color = ok ? "var(--emerald)" : "#ef4444"; } };
+    if(!sym){ say("Enter a ticker first.", false); return; }
+    const strike = parseFloat(strikeInput ? strikeInput.value : "") || 0;
+    let expiry = "";
+    if(strike > 0){
+      const iso = parseDateTextToIso(expInput ? expInput.value : "");
+      if(!iso){ say("A call option needs an Expiration Date as DD/MM/YYYY.", false); return; }
+      expiry = iso;
+    }
+    const id = addBuyStrategyRow(ppMakeKey(sym, strike, expiry));
+    if(!id){ say("Could not add that row.", false); return; }
+    if(symInput) symInput.value = "";
+    if(strikeInput) strikeInput.value = "";
+    if(expInput){ expInput.value = ""; expInput.removeAttribute("data-iso"); }
+    if(knownSel) knownSel.value = "";
+    say(`Added ${ppKeyLabel(ppMakeKey(sym, strike, expiry))}.`, true);
+    renderBuyStrategyTable();
+  });
+
+  const rangeSel = byId("bsDisplayRangeSelect");
+  if(rangeSel){
+    if(rangeSel.options.length === 0){
+      SALES_STRATEGY_DISPLAY_RANGE_OPTIONS.forEach(opt => {
+        const o = document.createElement("option"); o.value = opt.id; o.textContent = opt.label; rangeSel.appendChild(o);
+      });
+    }
+    rangeSel.value = getBsDisplayRangeId();
+    rangeSel.addEventListener("change", () => { saveBsDisplayRangeId(rangeSel.value); renderBuyStrategyTable(); });
+  }
+  const refreshBtn = byId("bsRefreshBtn"), refreshStatus = byId("bsRefreshStatus");
+  if(refreshBtn) refreshBtn.addEventListener("click", () => {
+    renderPastPurchasesTable(); // re-pulls Past Purchases + Sales Strategy, then redraws this table
+    if(refreshStatus){ refreshStatus.textContent = `Refreshed from Past Purchases and Sales Strategy at ${new Date().toLocaleTimeString()}.`; refreshStatus.style.color = "var(--emerald)"; }
+  });
+
+  const exp = (id, fn) => { const b = byId(id); if(b) b.addEventListener("click", fn); };
+  exp("bsExportExcelBtn", () => { const t = buildBuyStrategyExportTable(); exportTableAsExcel("Buy_Strategy.xlsx", "Buy Strategy", t.headers, t.rows); });
+  exp("bsExportTextBtn", () => { const t = buildBuyStrategyExportTable(); exportTableAsText("Buy_Strategy.txt", t.headers, t.rows); });
+  exp("bsExportWordBtn", () => { const t = buildBuyStrategyExportTable(); exportTableAsWord("Buy_Strategy.doc", "Buy Strategy", t.headers, t.rows, t.colors); });
+  exp("bsExportPdfBtn", () => { const t = buildBuyStrategyExportTable(); exportTableAsPdf("Buy_Strategy.pdf", "Buy Strategy", t.headers, t.rows, t.colors); });
+
+  const sampleBtn = byId("bsSampleExcelBtn"), importBtn = byId("bsImportExcelBtn"),
+        importInput = byId("bsImportExcelFileInput"), statusEl = byId("bsExcelDataEntryStatus");
+  if(sampleBtn) sampleBtn.addEventListener("click", () => {
+    const { headers, rows } = buildSampleExcelForDataEntry_BuyStrategy();
+    exportTableAsExcel("Buy_Strategy_Sample_Data_Entry.xlsx", "Data Entry", headers, rows);
+    if(statusEl){
+      statusEl.textContent = rows.length === 0
+        ? "No draft rows yet — the template has just the header row; fill in your own rows and import it."
+        : `Downloaded a template with all ${rows.length} draft row(s).`;
+      statusEl.style.color = rows.length === 0 ? "var(--amber)" : "var(--emerald)";
+    }
+  });
+  if(importBtn && importInput){
+    importBtn.addEventListener("click", () => openFreshExcelPicker(importInput));
+    importInput.addEventListener("change", async () => {
+      const file = importInput.files && importInput.files[0];
+      importInput.value = "";
+      if(!file) return;
+      if(statusEl){ statusEl.textContent = "Reading file…"; statusEl.style.color = "var(--text-secondary)"; }
+      try{
+        const rowsAoA = await readWorkbookFirstSheetRows(file);
+        const result = importBuyStrategyFromRows(rowsAoA);
+        if(result.added + result.identical === 0){
+          if(statusEl){ statusEl.textContent = "No rows with a Ticker were found in that file."; statusEl.style.color = "var(--amber)"; }
+          return;
+        }
+        renderBuyStrategyTable();
+        if(statusEl){
+          const note = result.unmatchedHeaders.length ? ` ${result.unmatchedHeaders.length} column(s) weren't recognized and were skipped: ${result.unmatchedHeaders.join(", ")}.` : "";
+          statusEl.textContent = result.added === 0
+            ? `Nothing new — all ${result.identical} row(s) in the file are already planned.${note}`
+            : `Imported ${result.added} new draft row(s), ${result.identical} already-planned row(s) ignored.${note}`;
+          statusEl.style.color = "var(--emerald)";
+        }
+      }catch(err){
+        console.error("Buy Strategy Excel import failed:", err);
+        if(statusEl){ statusEl.textContent = err.message || "Could not read that file — make sure it's a .xlsx/.xls file exported from this tool (or matching its column headers)."; statusEl.style.color = "#ef4444"; }
+      }
+    });
+  }
+}
 
 // --- Export: Excel / Text / PDF, for both tables ---
 // Both builders read from the snapshots kept up to date by
@@ -9573,12 +10300,13 @@ try{
   wireDateTextInputs();
   wireIntroDisclaimers();
   wireUpSampleAndImportExcelButtons();
+  wireBuyStrategyControls();
 }catch(err){
   console.error("Failed to wire up Sample Excel / Import Excel buttons:", err);
 }
 
 try{
-  renderSalesStrategyTable();
+  renderSalesStrategyTable(); // also redraws Buy Strategy
 }catch(err){
   console.error("Failed to wire up the Sales Strategy table:", err);
 }
