@@ -1,3 +1,4 @@
+// APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
 // APP.JS BUILD: v5.93 (Portfolio: a call option is not scored; its underlying stock is shown in the row directly below it (added for display if not on the list) and carries the score; the option and its stock count as ONE asset in 'Portfolio viewing (N assets)'; the option's Units Purchased and Average Purchase Price are pulled from Sales Strategy figures (units held, FIFO average). v5.92 option-scored-as-stock was reverted.)
 // APP.JS BUILD: v5.91 (Portfolio table shows call options: Strike Price + Expiration Date columns, option rows in Current Holding and the other auto lists; Methodology and Glossary headings are expanders; all expanders and section toggles share one look (▶ open, ◀ fold); deleting a list or resetting is ONE pop-up with the password; password boxes are masked with a Show/Hide button.)
@@ -524,7 +525,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.94 (AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.95 (Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -547,7 +548,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront"];
+const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront", "toBuyPriceRemoved"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -914,6 +915,10 @@ async function openDashboard(user){
   // reach the cloud on the next 8-second auto-sync tick, or not at all if the tab
   // closes before then, letting it "un-rename" itself again on the next pull.
   if(renameBuyPriceParamsIfNeeded()){
+    pushSnapshotToCloud();
+  }
+  // v5.95: same pattern for the one-time removal of the Portfolio "To Buy Price" column.
+  if(removePortfolioToBuyPriceIfNeeded()){
     pushSnapshotToCloud();
   }
 
@@ -4027,6 +4032,22 @@ function renameBuyPriceParamsIfNeeded(){
   return anyChanged;
 }
 renameBuyPriceParamsIfNeeded();
+
+// v5.95: "To Buy Price" is removed from the Portfolio table (one time per account; Past Purchases keeps
+// its own preset). Deleting the column definition drops it from the column order too. A flag stops it
+// from ever deleting a "To Buy Price" column the user deliberately adds again later.
+function removePortfolioToBuyPriceIfNeeded(){
+  try{
+    if(localStorage.getItem("toBuyPriceRemoved") === "1") return false;
+    const params = getCustomParams();
+    const kept = params.filter(p => p.computed || !/^(to )?buy price$/i.test(String(p.label).trim()));
+    const changed = kept.length !== params.length;
+    if(changed) saveCustomParams(kept);
+    localStorage.setItem("toBuyPriceRemoved", "1");
+    return changed;
+  }catch(e){ return false; }
+}
+removePortfolioToBuyPriceIfNeeded();
 
 // Shared by both tables: is `currentPrice` at or below the "To Buy Price" target
 // (a user-added custom column, on either table), signaling "this hit my buy
@@ -9257,6 +9278,12 @@ function renderCellHTML(colDef, item, badge){
       : `Computed: Cash & Equivalents (${item.cashAndEquivalents}) ÷ Operating Expenses (${item.operatingExpenses}) = ${item.cashRunway.toFixed(2)} years of runway covering current spending alone, regardless of revenue.`;
     return `<td style="color:${color}; font-weight:600;" title="${escAttr(title)}">${display}</td>`;
   }
+  if(colDef.isCustom && item.customPulled && item.customPulled[colDef.id]){
+    const v = Number(item.customValues[colDef.id]) || 0;
+    const isDef = item.customIsDefault && item.customIsDefault[colDef.id];
+    const isUnits = ppNormLabel(colDef.label) === "units purchased";
+    return `<td class="${isDef ? 'cell-input-unconfirmed' : ''}" title="Pulled from Past Purchases (units held now, FIFO average price) — edit it there.">${isUnits ? ppFmtNum(v) : '$' + v.toFixed(2)}</td>`;
+  }
   if(colDef.isCustom){
     const val = item.customValues[colDef.id];
     const isDefault = item.customIsDefault && item.customIsDefault[colDef.id];
@@ -9513,17 +9540,22 @@ function runMatrixOptimization() {
     // otherwise override value if set, else the param's default.
     const customValues = {};
     const customIsDefault = {};
+    const customPulled = {};
     const allCustomParams = getCustomParams();
 
     // Pass 1: values that don't depend on other custom params.
     allCustomParams.forEach(p => {
-      if(isOpt && !p.computed && (ppNormLabel(p.label) === "units purchased" || ppNormLabel(p.label) === "average purchase price ($)" || ppNormLabel(p.label) === "average purchase price")){
-        // v5.93: an option's Units Purchased / Average Purchase Price come from the Sales Strategy figures
-        // (units held now, and their FIFO average purchase price).
-        const ss = getSalesStrategyTickerStats(asset.ticker);
-        const held = ss.heldLots.reduce((s, l) => s + l.qty * (Number(l.price) || 0), 0);
-        customValues[p.id] = ppNormLabel(p.label) === "units purchased" ? ss.totalHeld : (ss.totalHeld > 0 ? held / ss.totalHeld : 0);
-        customIsDefault[p.id] = !(ss.totalHeld > 0);
+      const ppPullKind = (!p.computed && ppNormLabel(p.label) === "units purchased") ? "units"
+        : (!p.computed && (ppNormLabel(p.label) === "average purchase price ($)" || ppNormLabel(p.label) === "average purchase price")) ? "avg" : null;
+      const ppStats = ppPullKind ? getSalesStrategyTickerStats(asset.ticker) : null;
+      if(ppPullKind && (isOpt || ppStats.totalPurchased > 0)){
+        // v5.95: Units Purchased / Average Purchase Price are PULLED from Past Purchases (FIFO: the units
+        // you hold now and their average purchase price). An option always uses these; a stock uses them
+        // whenever it has any Past Purchases history (otherwise a manually typed value is kept).
+        const held = ppStats.heldLots.reduce((s, l) => s + l.qty * (Number(l.price) || 0), 0);
+        customValues[p.id] = ppPullKind === "units" ? ppStats.totalHeld : (ppStats.totalHeld > 0 ? held / ppStats.totalHeld : 0);
+        customIsDefault[p.id] = !(ppStats.totalHeld > 0);
+        customPulled[p.id] = true;
       } else if(p.computed && p.formula === "currentToTargetPct"){
         customValues[p.id] = targetPrice !== 0 ? (currentPrice / targetPrice) * 100 : 0;
         customIsDefault[p.id] = false; // a computed value is always "real", never a placeholder
@@ -9612,7 +9644,7 @@ function runMatrixOptimization() {
 
     return { ticker: asset.ticker, isOption: isOpt, symbol: isOpt ? optInfo.symbol : asset.ticker, label: isOpt ? ppKeyLabel(asset.ticker) : asset.ticker,
       strike: isOpt ? optInfo.strike : 0, expiry: isOpt ? optInfo.expiry : "", name, currentPrice, pe, roa, targetPrice, stability, stabilityNotes,
-      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, operatingExpenses, cashRunway, beta, customValues, customIsDefault,
+      revenueGrowth, netMargin, pegRatio, debtToEquity, freeCashFlow, cashAndEquivalents, operatingExpenses, cashRunway, beta, customValues, customIsDefault, customPulled,
       isLive, isEdited, fetchFailed, dateAdded: (ov.dateAdded !== undefined ? ov.dateAdded : 0),
       finalScore: isOpt ? 0 : Math.max(0.1, attributionScore), calculatedUpside: upsidePercentage };
   });
@@ -10713,7 +10745,6 @@ const NEW_USER_DEFAULT_CUSTOM_PARAMS = [
   { id: "custom_actual_upside_pct", label: "Actual Upside (%)", type: "number", defaultValue: 0, computed: true, formula: "actualUpsidePct" },
   { id: "custom_units_purchased", label: "Units Purchased", type: "number", defaultValue: 0 },
   { id: "custom_avg_purchase_price", label: "Average Purchase Price ($)", type: "number", defaultValue: 0 },
-  { id: "custom_to_buy_price", label: "To Buy Price", type: "number", defaultValue: 0 },
   { id: "custom_dividend_yield_pct", label: "Dividend Yield (%)", type: "number", defaultValue: 0, finnhubField: ["dividendYieldIndicatedAnnual", "currentDividendYieldTTM"] },
   { id: "custom_market_cap_b", label: "Market Cap ($B)", type: "number", defaultValue: 0, finnhubField: ["marketCapitalization"], finnhubUnitDivisor: 1000 },
   { id: "custom_forward_pe", label: "Forward P/E", type: "number", defaultValue: 0, finnhubField: ["peForward", "forwardPE"] },
@@ -10728,7 +10759,7 @@ const NEW_USER_DEFAULT_CUSTOM_PARAMS = [
 const NEW_USER_DEFAULT_COLUMN_ORDER = [
   "strike", "expiry", "name", "allocationWeight", "calculatedUpside",
   "custom_actual_upside_pct", "custom_units_purchased", "custom_avg_purchase_price",
-  "currentPrice", "targetPrice", "custom_to_buy_price",
+  "currentPrice", "targetPrice",
   "stability", "roa", "pe", "custom_forward_pe", "revenueGrowth", "pegRatio", "debtToEquity",
   "freeCashFlow", "cashAndEquivalents", "operatingExpenses", "cashRunway", "beta", "netMargin",
   "custom_dividend_yield_pct", "custom_market_cap_b",
