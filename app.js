@@ -2168,9 +2168,10 @@ function renderDusRequestList(){
     const state = states[a.ticker]; // "included" | "excluded" | undefined (undecided)
     const row = document.createElement("div");
     row.className = "remove-chip";
-    row.innerHTML = `<span>${a.ticker} — ${a.name || a.ticker}</span>` +
-      `<button data-ticker="${a.ticker}" data-state="excluded" title="Exclude ${a.ticker} from the request" style="color:${state === 'excluded' ? DUS_EXCLUDED_COLOR : 'var(--text-secondary)'};">&#10007;</button>` +
-      `<button data-ticker="${a.ticker}" data-state="included" title="Include ${a.ticker} in the request" style="color:${state === 'included' ? DUS_INCLUDED_COLOR : 'var(--text-secondary)'};">&#10003;</button>`;
+    const tk = escHtml(a.ticker);
+    row.innerHTML = `<span>${tk} — ${escHtml(a.name || a.ticker)}</span>` +
+      `<button data-ticker="${tk}" data-state="excluded" title="Exclude ${tk} from the request" style="color:${state === 'excluded' ? DUS_EXCLUDED_COLOR : 'var(--text-secondary)'};">&#10007;</button>` +
+      `<button data-ticker="${tk}" data-state="included" title="Include ${tk} in the request" style="color:${state === 'included' ? DUS_INCLUDED_COLOR : 'var(--text-secondary)'};">&#10003;</button>`;
     row.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
         const newState = btn.getAttribute("data-state");
@@ -4842,7 +4843,7 @@ function renderPastPurchasesParamList(){
   params.forEach(p => {
     const chip = document.createElement("div");
     chip.className = "remove-chip";
-    chip.innerHTML = `<span>${p.label} (${p.computed ? 'computed' : p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+    chip.innerHTML = `<span>${escHtml(p.label)} (${p.computed ? 'computed' : p.type})</span><button data-id="${escHtml(p.id)}" title="Remove ${escHtml(p.label)}">&times;</button>`;
     chip.querySelector("button").addEventListener("click", (e) => {
       const id = e.target.getAttribute("data-id");
       if(confirm(`Remove the "${p.label}" column? This deletes its values for every row.`)){
@@ -4869,7 +4870,7 @@ function renderPastPurchasesColumnOrderList(){
     const row = document.createElement("div");
     row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
     row.innerHTML = `
-      <span style="flex:1;">${p.label}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
+      <span style="flex:1;">${escHtml(p.label)}${p.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
       <button class="pp-col-order-btn" data-id="${p.id}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&larr;</button>
       <button class="pp-col-order-btn" data-id="${p.id}" data-dir="1" ${idx === params.length-1 ? 'disabled' : ''} title="Move right" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">&rarr;</button>
     `;
@@ -9105,7 +9106,7 @@ function renderCustomParamList(){
     params.forEach(p => {
       const chip = document.createElement("div");
       chip.className = "remove-chip";
-      chip.innerHTML = `<span>${p.label} (${p.type})</span><button data-id="${p.id}" title="Remove ${p.label}">&times;</button>`;
+      chip.innerHTML = `<span>${escHtml(p.label)} (${p.type})</span><button data-id="${escHtml(p.id)}" title="Remove ${escHtml(p.label)}">&times;</button>`;
       chip.querySelector("button").addEventListener("click", (e) => {
         const id = e.target.getAttribute("data-id");
         if(confirm(`Remove the "${p.label}" column? This deletes its values for every ticker.`)){
@@ -9138,7 +9139,7 @@ function renderBuiltinColumnLists(){
       visible.forEach(c => {
         const chip = document.createElement("div");
         chip.className = "remove-chip";
-        chip.innerHTML = `<span>${c.label}</span><button data-id="${c.id}" title="Hide ${c.label}">&times;</button>`;
+        chip.innerHTML = `<span>${escHtml(c.label)}</span><button data-id="${escHtml(c.id)}" title="Hide ${escHtml(c.label)}">&times;</button>`;
         chip.querySelector("button").addEventListener("click", (e) => {
           const id = e.target.getAttribute("data-id");
           if(confirm(`Hide the "${c.label}" column? Its data is kept (and still used in scoring, if applicable) — restore it any time from here.`)){
@@ -9160,7 +9161,7 @@ function renderBuiltinColumnLists(){
       if(!c) return;
       const chip = document.createElement("div");
       chip.className = "remove-chip";
-      chip.innerHTML = `<span>${c.label}</span><button data-id="${c.id}" title="Restore ${c.label}" style="color:var(--emerald);">+</button>`;
+      chip.innerHTML = `<span>${escHtml(c.label)}</span><button data-id="${escHtml(c.id)}" title="Restore ${escHtml(c.label)}" style="color:var(--emerald);">+</button>`;
       chip.querySelector("button").addEventListener("click", (e) => {
         const restoreId = e.target.getAttribute("data-id");
         restoreBuiltinColumn(restoreId);
@@ -9183,9 +9184,9 @@ function renderRowOrderList(){
     const row = document.createElement("div");
     row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
     row.innerHTML = `
-      <span style="flex:1;">${ticker.indexOf("|") !== -1 ? ppKeyLabel(ticker) : ticker}</span>
-      <button class="row-move-btn" data-ticker="${ticker}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move up" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↑</button>
-      <button class="row-move-btn" data-ticker="${ticker}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move down" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↓</button>
+      <span style="flex:1;">${escHtml(ticker.indexOf("|") !== -1 ? ppKeyLabel(ticker) : ticker)}</span>
+      <button class="row-move-btn" data-ticker="${escHtml(ticker)}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move up" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↑</button>
+      <button class="row-move-btn" data-ticker="${escHtml(ticker)}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move down" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">↓</button>
     `;
     container.appendChild(row);
   });
@@ -9214,7 +9215,7 @@ function renderColumnOrderList(){
     const row = document.createElement("div");
     row.style.cssText = "display:flex; align-items:center; gap:0.75rem; background:var(--bg-main); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem 0.75rem;";
     row.innerHTML = `
-      <span style="flex:1;">${def.label}${def.isCustom ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(custom)</span>' : ''}${def.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
+      <span style="flex:1;">${escHtml(def.label)}${def.isCustom ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(custom)</span>' : ''}${def.computed ? ' <span style="color:var(--text-secondary); font-size:0.75rem;">(computed)</span>' : ''}</span>
       <button class="col-move-btn" data-id="${colId}" data-dir="-1" ${idx === 0 ? 'disabled' : ''} title="Move left" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">←</button>
       <button class="col-move-btn" data-id="${colId}" data-dir="1" ${idx === order.length-1 ? 'disabled' : ''} title="Move right" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer;">→</button>
     `;
@@ -9244,7 +9245,7 @@ function renderRemoveList(){
   working.forEach(asset => {
     const chip = document.createElement("div");
     chip.className = "remove-chip";
-    chip.innerHTML = `<span>${asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker}</span><button data-ticker="${asset.ticker}" title="Remove ${asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker}">&times;</button>`;
+    chip.innerHTML = `<span>${escHtml(asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker)}</span><button data-ticker="${escHtml(asset.ticker)}" title="Remove ${escHtml(asset.ticker.indexOf("|") !== -1 ? ppKeyLabel(asset.ticker) : asset.ticker)}">&times;</button>`;
     chip.querySelector("button").addEventListener("click", (e) => {
       const t = e.target.getAttribute("data-ticker");
       if(confirm(`Remove the "${t}" row? This deletes the entire row.`)){
@@ -9261,7 +9262,9 @@ document.getElementById('optimizeBtn').addEventListener('click', runMatrixOptimi
 document.getElementById('sortMode')?.addEventListener('change', runMatrixOptimization);
 
 function escAttr(str){
-  return String(str).replace(/"/g, '&quot;');
+  // & must go first so an existing entity-like sequence isn't decoded by the browser;
+  // < and > are escaped too so a value is also safe if it's ever reused as content.
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function renderCellHTML(colDef, item, badge){
@@ -9277,7 +9280,7 @@ function renderCellHTML(colDef, item, badge){
 
   if(colDef.id === 'name'){
     return `<td>
-        <input class="cell-input" data-ticker="${item.ticker}" data-field="name" data-resolved-value="${escAttr(item.name)}" type="text" value="${escAttr(item.name)}">
+        <input class="cell-input" data-ticker="${escAttr(item.ticker)}" data-field="name" data-resolved-value="${escAttr(item.name)}" type="text" value="${escAttr(item.name)}">
         <div style="margin-top:4px;">${badge}</div>
       </td>`;
   }
@@ -9285,10 +9288,10 @@ function renderCellHTML(colDef, item, badge){
     const options = colDef.options.map(opt =>
       `<option value="${opt}" ${item.stability === opt ? 'selected' : ''}>${opt}</option>`
     ).join('');
-    return `<td><select class="cell-input" data-ticker="${item.ticker}" data-field="stability" data-resolved-value="${escAttr(item.stability)}">${options}</select></td>`;
+    return `<td><select class="cell-input" data-ticker="${escAttr(item.ticker)}" data-field="stability" data-resolved-value="${escAttr(item.stability)}">${options}</select></td>`;
   }
   if(colDef.id === 'stabilityNotes'){
-    return `<td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${item.ticker}" data-field="stabilityNotes" data-resolved-value="${escAttr(item.stabilityNotes)}">${item.stabilityNotes}</textarea></td>`;
+    return `<td class="moat-cell"><textarea class="cell-input cell-textarea" data-ticker="${escAttr(item.ticker)}" data-field="stabilityNotes" data-resolved-value="${escAttr(item.stabilityNotes)}">${item.stabilityNotes}</textarea></td>`;
   }
   if(colDef.id === 'calculatedUpside'){
     return `<td style="color: ${item.calculatedUpside >= 0 ? 'var(--emerald)' : '#ef4444'}; font-weight: 600;">${item.calculatedUpside >= 0 ? '+' : ''}${(item.calculatedUpside * 100).toFixed(1)}%</td>`;
@@ -9365,12 +9368,12 @@ function renderCellHTML(colDef, item, badge){
       return `<td class="${isDefault ? 'cell-input-unconfirmed' : ''}">${Number(val).toFixed(1)}%</td>`;
     }
     if(colDef.type === 'text'){
-      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
+      return `<td><input class="cell-input${defaultClass}" data-ticker="${escAttr(item.ticker)}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" type="text" value="${escAttr(val)}"></td>`;
     }
     if(colDef.type === 'date'){
-      return `<td><input class="cell-input${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" ${dateTextInputAttrs(ppCleanDate(val) || "")}></td>`;
+      return `<td><input class="cell-input${defaultClass}" data-ticker="${escAttr(item.ticker)}" data-field="${colDef.id}" data-resolved-value="${escAttr(val)}" ${dateTextInputAttrs(ppCleanDate(val) || "")}></td>`;
     }
-    return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
+    return `<td><input class="cell-input cell-input-num${defaultClass}" data-ticker="${escAttr(item.ticker)}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
   }
   if(colDef.id === 'currentPrice'){
     // Emerald font when Current Price has fallen to or below a user-added "To
@@ -9380,11 +9383,11 @@ function renderCellHTML(colDef, item, badge){
     const val = item.currentPrice;
     const isAtTarget = isAtOrBelowBuyPriceTarget(val, getCustomParams(), item.customValues);
     const styleAttr = isAtTarget ? ' style="color:var(--emerald);"' : '';
-    return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="currentPrice" data-resolved-value="${val}" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
+    return `<td><input class="cell-input cell-input-num" data-ticker="${escAttr(item.ticker)}" data-field="currentPrice" data-resolved-value="${val}" type="number" step="0.01" value="${val}"${styleAttr}></td>`;
   }
   // Default: built-in numeric field (roa, pe, targetPrice, revenueGrowth, etc.)
   const val = item[colDef.id];
-  return `<td><input class="cell-input cell-input-num" data-ticker="${item.ticker}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
+  return `<td><input class="cell-input cell-input-num" data-ticker="${escAttr(item.ticker)}" data-field="${colDef.id}" data-resolved-value="${val}" type="number" step="0.01" value="${val}"></td>`;
 }
 
 function renderTableHeader(){
@@ -9413,7 +9416,7 @@ function renderTableHeader(){
     const isSorted = columnSortState && columnSortState.colId === colId;
     const sortIcon = isSorted ? (columnSortState.direction === 'asc' ? '▲' : '▼') : '⇅';
     html += `<th>
-      <div>${def.label}</div>
+      <div>${escHtml(def.label)}</div>
       <div class="col-header-controls">
         <button class="col-ctrl-btn ${isSorted ? 'col-ctrl-sort-active' : ''}" data-action="sort" data-id="${colId}" title="Sort by this column">${sortIcon}</button>
         <button class="col-ctrl-btn" data-action="move" data-id="${colId}" data-dir="-1" ${leftDisabled} title="Move left">&lt;</button>
@@ -9765,7 +9768,7 @@ function runMatrixOptimization() {
 
     let badge;
     if(item.isOption) badge = item.currentPrice > 0 ? `<span style="color:#fbbf24; font-size:0.75rem; font-weight:600;" title="Option price stored for this contract (typed or fetched from Marketdata.app)">● option price</span>` : `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;" title="No price stored for this contract yet — type one in Current Price">○ no price</span>`;
-    else if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${item.ticker}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
+    else if(item.isEdited) badge = `<span style="color:#a78bfa; font-size:0.75rem; font-weight:600;">✎ edited</span> <button class="clear-override-btn" data-ticker="${escAttr(item.ticker)}" title="Clear manual price/P-E/ROA override and restore live/static data" style="background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0;">↺ clear</button>`;
     else if(item.isLive) badge = `<span style="color:var(--emerald); font-size:0.75rem; font-weight:600;">● LIVE</span>`;
     else if(item.fetchFailed) badge = `<span style="color:#ef4444; font-size:0.75rem; font-weight:600;" title="The last live fetch attempt (Finnhub and/or Alpha Vantage) couldn't return data for this ticker">⚠ fetch failed</span>`;
     else badge = `<span style="color:var(--text-secondary); font-size:0.75rem; font-weight:600;">○ static</span>`;
@@ -9777,14 +9780,14 @@ function runMatrixOptimization() {
     const upDisabled = rowIdx === 0 ? 'disabled' : '';
     const downDisabled = rowIdx === processedAssets.length - 1 ? 'disabled' : '';
     const tickerNameHtml = item.isOption
-      ? `<div style="font-weight:600;">${item.symbol}</div><div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>`
-      : `<input class="cell-input cell-input-ticker" data-ticker="${item.ticker}" data-field="__ticker_rename__" type="text" value="${item.ticker}">`;
+      ? `<div style="font-weight:600;">${escHtml(item.symbol)}</div><div style="font-size:0.7rem; color:#fbbf24;">CALL OPTION</div>`
+      : `<input class="cell-input cell-input-ticker" data-ticker="${escAttr(item.ticker)}" data-field="__ticker_rename__" type="text" value="${escAttr(item.ticker)}">`;
     const tickerCell = `<td>
         ${tickerNameHtml}
         <div class="row-ctrl-controls">
-          <button class="row-ctrl-btn" data-action="up" data-ticker="${item.ticker}" ${upDisabled} title="Move row up">&uarr;</button>
-          <button class="row-ctrl-btn" data-action="down" data-ticker="${item.ticker}" ${downDisabled} title="Move row down">&darr;</button>
-          <button class="row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${item.ticker}" title="Remove ${item.label} from this list">&times;</button>
+          <button class="row-ctrl-btn" data-action="up" data-ticker="${escAttr(item.ticker)}" ${upDisabled} title="Move row up">&uarr;</button>
+          <button class="row-ctrl-btn" data-action="down" data-ticker="${escAttr(item.ticker)}" ${downDisabled} title="Move row down">&darr;</button>
+          <button class="row-ctrl-btn row-ctrl-remove" data-action="delete" data-ticker="${escAttr(item.ticker)}" title="Remove ${escAttr(item.label)} from this list">&times;</button>
         </div>
       </td>`;
 
