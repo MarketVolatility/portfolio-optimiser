@@ -24,10 +24,10 @@ const marketData = [
   { ticker: "NVDA", name: "NVIDIA Corp.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
   { ticker: "MU", name: "Micron Technology", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
   { ticker: "AMZN", name: "Amazon.com Inc.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
-  { ticker: "TSM", name: "TSMC", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
-  { ticker: "GOOGL", name: "Alphabet / Google", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
+  { ticker: "TSM", name: "Taiwan Semiconductor (TSMC)", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
+  { ticker: "GOOGL", name: "Alphabet Inc.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
   { ticker: "SNDK", name: "Sandisk Corp.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
-  { ticker: "PLTR", name: "Palantir Tech.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
+  { ticker: "PLTR", name: "Palantir Technologies", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
   { ticker: "META", name: "Meta Platforms", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 },
   { ticker: "AAPL", name: "Apple Inc.", roa: 0, pe: 0, currentPrice: 0, targetPrice: 0, stability: "Med", stabilityNotes: "", revenueGrowth: 0, netMargin: 0, pegRatio: 0, debtToEquity: 0, freeCashFlow: 0, beta: 0 }
 ];
