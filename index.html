@@ -178,6 +178,131 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 .auth-step.active{ display:block; }
 .auth-brand{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent-blue); font-weight:800; margin-bottom:8px; }
 #appShell{ display:none; }
+
+/* --- v5.98 visual refresh ---
+   Layered on top of the rules above (later rules win at equal specificity), so the
+   original look can be restored by deleting this block. Inline styles written by
+   app.js still apply; !important is only used where an inline style must be beaten. */
+:root {
+  --sub: var(--text-secondary);          /* used by app.js status messages but never defined before */
+  --accent-cyan: #22d3ee;                /* used by app.js but never defined before */
+  --bg-raised: #1b2438; --bg-hover: #1f2a40; --gold: #facc15;
+  --radius: 12px; --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(0,0,0,.25), 0 8px 24px -12px rgba(0,0,0,.45);
+}
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(37,99,235,.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(16,185,129,.06), transparent 60%),
+    var(--bg-main);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+::selection { background: rgba(37,99,235,.45); }
+
+/* Keyboard focus is visible everywhere (it was removed on selects/inputs). */
+:where(button, select, input, textarea, a):focus-visible {
+  outline: 2px solid #60a5fa; outline-offset: 2px;
+}
+
+/* Header now sits at the top of the page. */
+header { margin-bottom: 1.5rem; padding-bottom: 1.25rem; }
+h1 { font-size: 2rem; letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #fff 0%, #bfdbfe 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+p.subtitle { font-size: 1rem; }
+
+/* Panels */
+.control-panel { padding: 1rem 1.25rem; gap: 0.75rem 1rem; border-radius: var(--radius);
+  margin-bottom: 1rem; box-shadow: var(--shadow); }
+.control-panel label { white-space: nowrap; }
+.disclaimer { border-radius: var(--radius); font-size: 0.875rem; margin-bottom: 1rem; }
+.table-container { border-radius: var(--radius); box-shadow: var(--shadow); }
+
+/* Compact top toolbar: view switch + account actions */
+.top-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: stretch; margin-bottom: 1rem; }
+.top-toolbar > .control-panel { margin-bottom: 0; padding: 0.6rem 0.9rem; }
+.top-toolbar > .view-toggle-panel { flex: 0 1 auto; min-width: 0; }
+body.view-mobile .top-toolbar > .control-panel { flex-basis: 100%; }
+.top-toolbar > .account-panel { flex: 1 1 420px; }
+.top-toolbar .tab-btn, .top-toolbar button { padding: 0.45rem 0.9rem; font-size: 0.85rem; }
+.view-toggle-panel .tab-btn { min-width: 0; }
+#syncStatus { margin-left: auto; }
+
+/* Buttons: consistent sizing, subtle lift, clear disabled state */
+button { padding: 0.6rem 1.25rem; font-size: 0.9rem; border-radius: var(--radius-sm); transition: background .15s, border-color .15s, color .15s, transform .05s; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.tab-btn { padding: 0.5rem 1rem; font-size: 0.875rem; }
+.tab-btn:hover:not(.active-tab) { border-color: #334155; color: var(--text-primary); background: rgba(255,255,255,.03); }
+/* Export buttons: the Word/PDF colours were dark-on-dark and hard to read. */
+.tab-btn-export-excel { color: #4ade80; }
+.tab-btn-export-word  { color: #93c5fd; }
+.tab-btn-export-pdf   { color: #fca5a5; }
+.tab-btn-export-text  { color: #cbd5e1; }
+
+/* Sticky jump-to navigation */
+.nav-btn-row { position: sticky; top: 0; z-index: 30; padding: 0.6rem 0;
+  margin: 0 0 1.25rem; background: linear-gradient(var(--bg-main) 75%, transparent);
+}
+.nav-btn { background: var(--bg-card); }
+
+/* Section headings (the yellow h2 + ▶ toggle rows) get a divider so the long page
+   reads as distinct sections instead of one continuous stream. */
+div:has(> .section-toggle-btn) {
+  padding-top: 1.25rem; border-top: 1px solid var(--border-color);
+}
+div:has(> .section-toggle-btn) > h2 { letter-spacing: -0.01em; }
+.section-toggle-btn { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Form fields */
+select, .form-input, .control-panel input[type="text"] { border-radius: var(--radius-sm); }
+select { padding: 0.6rem 2rem 0.6rem 0.9rem; font-size: 0.9rem; }
+select:hover, .form-input:hover { border-color: #334155; }
+textarea { border-radius: var(--radius-sm); }
+
+/* Tables: denser rows, zebra striping, right-aligned tabular numbers */
+table { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th { padding: 0.8rem 0.85rem; font-size: 0.72rem; color: #cbd5e1; vertical-align: bottom; }
+td { padding: 0.7rem 0.85rem; vertical-align: middle; }
+tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+tbody tr:nth-child(even) td:first-child { background: #172034; }
+tbody tr:hover td { background: var(--bg-hover); }
+tbody tr:hover td:first-child { background: var(--bg-hover); }
+.cell-input-num { text-align: right; }
+.cell-input { font-size: 0.9rem; }
+.moat-cell { min-width: 220px; }
+.cell-input[data-field="name"] { min-width: 180px; }
+.row-ctrl-controls { margin-top: 0.35rem; }
+.row-ctrl-btn { width: 24px; height: 24px; font-size: 0.8rem; }
+.allocation-badge { font-variant-numeric: tabular-nums; }
+
+/* Chips */
+.remove-chip { border-radius: 999px; padding: 0.35rem 0.5rem 0.35rem 0.85rem; }
+.remove-chip button { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
+.remove-chip button:hover { background: rgba(239,68,68,.15); }
+
+/* Sign-in card */
+.auth-overlay { background:
+  radial-gradient(800px 400px at 50% 0%, rgba(37,99,235,.18), transparent 70%), rgba(11,15,25,.98); }
+.auth-card { border-radius: 18px; }
+
+/* Automatic small-screen tweaks (the manual "Mobile interface" switch still works). */
+body.view-mobile .nav-btn-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+body.view-mobile .nav-btn-row::-webkit-scrollbar { display: none; }
+body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem 0.8rem; font-size: 0.8rem; min-height: 0; }
+@media (max-width: 720px) {
+  body { padding: 1rem; }
+  h1 { font-size: 1.5rem; }
+  .control-panel { flex-wrap: wrap; }
+  .top-toolbar > .control-panel { flex-basis: 100%; }
+  #syncStatus { margin-left: 0; flex-basis: 100%; }
+  .nav-btn-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem 0.8rem; font-size: 0.8rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media print { .nav-btn-row { position: static; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -240,6 +365,12 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 
 <div id="appShell">
 <div class="container">
+  <header>
+    <h1>Stock Portfolio Optimizer</h1>
+    <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
+    <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
+      Version v5.98 — Visual refresh: cleaner layout, readable export buttons, denser tables.</div>
+  </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
     <ul>
@@ -249,26 +380,22 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
     </ul>
   </div>
 
+  <div class="top-toolbar">
   <div class="control-panel view-toggle-panel" style="flex-wrap: wrap;">
     <span style="color:var(--text-secondary); font-size:0.85rem;">View as:</span>
     <button id="viewDesktopBtn" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">🖥 Desktop interface</button>
     <button id="viewMobileBtn" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">📱 Mobile interface</button>
   </div>
 
-  <div class="control-panel" style="flex-wrap: wrap; align-items: center;">
+  <div class="control-panel account-panel" style="flex-wrap: wrap; align-items: center;">
     <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
     <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
     <button id="resetAccountDataBtn" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Reset my account data</button>
     <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
     <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
+  </div>
 
-  <header>
-    <h1>Stock Portfolio Optimizer</h1>
-    <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
-    <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.97 — Buy Strategy: "Uncompleted Buys" display option; ticker colours by completion.</div>
-  </header>
   <div class="nav-btn-row">
     <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
     <button id="navDetailedUpdateBtn" type="button" class="nav-btn" title="Jump to Detailed Update for Selected Assets">Detailed Update for Selected Assets</button>
