@@ -278,6 +278,37 @@ tbody tr:hover td:first-child { background: var(--bg-hover); }
 .row-ctrl-btn { width: 24px; height: 24px; font-size: 0.8rem; }
 .allocation-badge { font-variant-numeric: tabular-nums; }
 
+/* v5.99: temporary column collapse — "−" in each header's top-right corner,
+   "+" on a collapsed column (see applyColumnCollapse in app.js). */
+th.col-collapsible { padding-right: 1.9rem; }
+.col-collapse-btn {
+  position: absolute; top: 4px; right: 4px; z-index: 2;
+  width: 20px; height: 20px; min-height: 0 !important; padding: 0 !important;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 5px; font-size: 0.85rem !important; font-weight: 700; line-height: 1;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #94a3b8;
+  text-transform: none; letter-spacing: 0;
+}
+.col-collapse-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+th.col-collapsed {
+  width: 30px; min-width: 30px; max-width: 30px; padding: 0 !important;
+  overflow: hidden; vertical-align: top;
+}
+th.col-collapsed > :not(.col-collapse-btn) { display: none !important; }
+th.col-collapsed { font-size: 0 !important; color: transparent !important; }
+th.col-collapsed .col-collapse-btn {
+  position: static; margin: 6px auto; display: flex;
+  color: #facc15; border-color: rgba(250,204,21,0.45); background: rgba(250,204,21,0.10);
+  font-size: 0.95rem !important;
+}
+td.col-collapsed {
+  width: 30px; min-width: 30px; max-width: 30px; padding: 0 !important;
+  overflow: hidden; font-size: 0 !important; color: transparent !important;
+  background-image: repeating-linear-gradient(180deg, transparent 0 6px, rgba(255,255,255,0.03) 6px 12px);
+}
+td.col-collapsed > * { display: none !important; }
+body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !important; }
+
 /* Chips */
 .remove-chip { border-radius: 999px; padding: 0.35rem 0.5rem 0.35rem 0.85rem; }
 .remove-chip button { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
@@ -369,7 +400,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v5.98 — Visual refresh: cleaner layout, readable export buttons, denser tables.</div>
+      Version v5.99 — Every table column can be temporarily collapsed with − / + in its header.</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
