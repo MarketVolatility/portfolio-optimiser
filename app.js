@@ -1,4 +1,4 @@
-// APP.JS BUILD: v5.98 (Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v5.99 (Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.98 (visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v5.99 (column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -10896,3 +10896,114 @@ initializeNewUserDefaults();
 // the auth overlay (already visible by default) stays up until sign-in/sign-up.
 checkExistingSession();
 
+
+// --- v5.99: temporary column collapse (every table) ---
+// Every header cell (except a table's first, row-identifying column) gets a small "−"
+// button in its top-right corner. Clicking it collapses that column to a narrow strip
+// whose header shows "+"; clicking "+" expands it again. This is display-only: no data,
+// column order, sort, or the permanent hide (×) options elsewhere are touched, and
+// exports are unaffected. State lives in sessionStorage, so it survives the frequent
+// table re-renders and page reloads in the same tab, but resets when the tab closes.
+// Tables are re-scanned after any DOM change via a MutationObserver, because the app
+// rebuilds its tables' innerHTML from many different places.
+const COL_COLLAPSE_STORAGE_KEY = "collapsedColumnsV1";
+let collapsedColumnsState = (() => {
+  try { return JSON.parse(sessionStorage.getItem(COL_COLLAPSE_STORAGE_KEY)) || {}; }
+  catch(e){ return {}; }
+})();
+function saveCollapsedColumnsState(){
+  try { sessionStorage.setItem(COL_COLLAPSE_STORAGE_KEY, JSON.stringify(collapsedColumnsState)); } catch(e){}
+}
+function collapseTableKey(table){
+  if(table.id) return table.id;
+  const host = table.closest("[id]");
+  const tables = host ? Array.from(host.querySelectorAll("table")) : [];
+  return (host ? host.id : "page") + "#" + Math.max(0, tables.indexOf(table));
+}
+function collapseColumnLabel(th){
+  if(th.dataset.colLabel) return th.dataset.colLabel;
+  const clone = th.cloneNode(true);
+  clone.querySelectorAll("button, select, input, .col-header-controls").forEach(el => el.remove());
+  return clone.textContent.replace(/\s+/g, " ").trim();
+}
+// Maps each cell of a row to its starting column index, honouring colspan. Cells that
+// span several columns (full-width message rows) are left alone.
+function cellsByColumn(row){
+  const map = {};
+  let col = 0;
+  Array.from(row.cells).forEach(cell => {
+    const span = cell.colSpan || 1;
+    if(span === 1) map[col] = cell;
+    col += span;
+  });
+  return map;
+}
+function applyColumnCollapse(table){
+  const thead = table.tHead;
+  if(!thead || !thead.rows.length) return;
+  const headRow = thead.rows[thead.rows.length - 1];
+  const headCells = cellsByColumn(headRow);
+  const key = collapseTableKey(table);
+  const collapsed = new Set(collapsedColumnsState[key] || []);
+  const collapsedIdx = new Set();
+  Object.keys(headCells).forEach(idxStr => {
+    const idx = Number(idxStr);
+    const th = headCells[idx];
+    if(idx === 0) return; // first column identifies the row — never collapsible
+    const label = collapseColumnLabel(th);
+    if(!label) return;
+    th.dataset.colLabel = label;
+    const isCollapsed = collapsed.has(label);
+    if(isCollapsed) collapsedIdx.add(idx);
+    th.classList.toggle("col-collapsed", isCollapsed);
+    th.classList.add("col-collapsible");
+    let btn = th.querySelector(":scope > .col-collapse-btn");
+    if(!btn){
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "col-collapse-btn";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const k = collapseTableKey(table);
+        const lbl = th.dataset.colLabel;
+        const set = new Set(collapsedColumnsState[k] || []);
+        if(set.has(lbl)) set.delete(lbl); else set.add(lbl);
+        if(set.size) collapsedColumnsState[k] = Array.from(set); else delete collapsedColumnsState[k];
+        saveCollapsedColumnsState();
+        applyColumnCollapse(table);
+      });
+      th.appendChild(btn);
+    }
+    const sign = isCollapsed ? "+" : "−";
+    if(btn.textContent !== sign) btn.textContent = sign;
+    btn.title = isCollapsed ? `Show the "${label}" column again` : `Temporarily hide the "${label}" column`;
+    btn.setAttribute("aria-label", btn.title);
+    btn.setAttribute("aria-expanded", String(!isCollapsed));
+  });
+  Array.from(table.rows).forEach(row => {
+    if(row === headRow) return;
+    const cells = cellsByColumn(row);
+    Object.keys(cells).forEach(idxStr => {
+      cells[idxStr].classList.toggle("col-collapsed", collapsedIdx.has(Number(idxStr)));
+    });
+  });
+}
+let colCollapseScheduled = false;
+function scheduleColumnCollapseScan(){
+  if(colCollapseScheduled) return;
+  colCollapseScheduled = true;
+  requestAnimationFrame(() => {
+    colCollapseScheduled = false;
+    colCollapseObserver.disconnect();
+    try { document.querySelectorAll("#appShell table").forEach(applyColumnCollapse); }
+    finally { observeForColumnCollapse(); }
+  });
+}
+const colCollapseObserver = new MutationObserver(scheduleColumnCollapseScan);
+function observeForColumnCollapse(){
+  const root = document.getElementById("appShell");
+  if(root) colCollapseObserver.observe(root, { childList: true, subtree: true });
+}
+observeForColumnCollapse();
+scheduleColumnCollapseScan();
