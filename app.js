@@ -1,4 +1,4 @@
-// APP.JS BUILD: v5.99 (Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.00 (New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v5.99 (column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.00 (News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -656,6 +656,7 @@ function applyUiViewMode(){
 // default landing section the very first time the page is ever loaded.
 const ACCORDION_SECTIONS = [
   { id: "pastPurchasesSectionBody", toggleBtn: "pastPurchasesToggleBtn" },
+  { id: "newsSectionBody", toggleBtn: "newsToggleBtn", navBtn: "navNewsBtn" },
   { id: "portfolioSectionBody", toggleBtn: "portfolioToggleBtn" },
   { id: "fetchLiveDataSectionBody", toggleBtn: "fetchLiveDataToggleBtn", navBtn: "navFetchLiveDataBtn" },
   { id: "detailedUpdateSectionBody", toggleBtn: "detailedUpdateToggleBtn", navBtn: "navDetailedUpdateBtn" },
@@ -10733,6 +10734,7 @@ try{
     ["navFetchLiveDataBtn", "fetchLiveDataSectionBody"],
     ["navDetailedUpdateBtn", "detailedUpdateSectionBody"],
     ["navQuickPriceUpdateBtn", "quickPriceUpdateSectionBody"],
+    ["navNewsBtn", "newsSectionBody"],
   ].forEach(([btnId, sectionId]) => {
     const btn = document.getElementById(btnId);
     if(btn) btn.addEventListener("click", () => openAccordionSectionFromNav(sectionId));
@@ -11007,3 +11009,140 @@ function observeForColumnCollapse(){
 }
 observeForColumnCollapse();
 scheduleColumnCollapseScan();
+
+
+// --- v6.00: News of Current and Potential Holdings ---
+// Builds a copy-and-paste AI prompt asking for a news briefing (last one month) on
+// every ticker currently held (same set as the auto "Current Holding" list: Sales
+// Strategy on the active Past Purchases list, units still held) plus every ticker on
+// a still-draft Buy Strategy row. Call-option rows contribute their underlying stock.
+// Nothing is parsed back — the AI's reply is a document for the user to read.
+function getNewsBriefingAssets(){
+  const byTicker = {};
+  const add = (ticker, reason, detail) => {
+    const t = String(ticker || "").trim().toUpperCase();
+    if(!t) return;
+    if(!byTicker[t]) byTicker[t] = { ticker: t, reasons: new Set(), details: [] };
+    byTicker[t].reasons.add(reason);
+    if(detail) byTicker[t].details.push(detail);
+  };
+  try { computeCurrentHoldingTickersPerSalesStrategy().forEach(t => add(t, "held")); } catch(e){ /* no Past Purchases data yet */ }
+  try {
+    getBuyStrategyRows().forEach(r => {
+      if(!r || !r.ticker || r.buyRealizedDate) return; // confirmed buys are already holdings
+      const k = ppParseKey(r.ticker);
+      add(k.symbol, "planned", k.isOption ? ppKeyLabel(r.ticker) : "");
+    });
+  } catch(e){ /* no Buy Strategy data yet */ }
+  return Object.values(byTicker)
+    .sort((x, y) => x.ticker.localeCompare(y.ticker))
+    .map(a => {
+      let name = "", price = 0;
+      try {
+        const v = getResolvedBuiltinAssetValues(a.ticker);
+        if(v){ name = v.name && v.name !== a.ticker ? v.name : ""; price = Number(v.currentPrice) || 0; }
+      } catch(e){ /* unknown ticker — AI looks it up */ }
+      return { ticker: a.ticker, name, price, held: a.reasons.has("held"), planned: a.reasons.has("planned"), details: a.details };
+    });
+}
+
+function buildNewsBriefingPrompt(assets){
+  if(assets.length === 0){
+    return "No assets yet — hold a ticker on your Past Purchases list (so it shows in Sales Strategy) or add a row to Buy Strategy, then click \"Refresh asset list\".";
+  }
+  const today = ppToday(); // YYYY-MM-DD
+  const fromIso = ppSubtractMonthsIso(today, 1);
+  const lines = assets.map((a, i) => {
+    const status = a.held && a.planned ? "currently held; more planned in Buy Strategy"
+      : a.held ? "currently held" : "potential buy, planned in Buy Strategy";
+    const parts = [`${i + 1}. ${a.ticker}${a.name ? " — " + a.name : ""} (${status})`];
+    if(a.price > 0) parts.push(`last price recorded in my app: $${a.price.toFixed(2)} (may be stale — use the latest close)`);
+    if(a.details.length) parts.push(`planned call option(s): ${Array.from(new Set(a.details)).join("; ")}`);
+    return parts.join(" | ");
+  });
+  return `You are a financial news analyst. Prepare a news briefing on the stocks listed below, covering news published in the last one month (${fmtDMY(fromIso)} to ${fmtDMY(today)}, DD/MM/YYYY) that could affect each stock's price.
+
+ASSETS (${assets.length}):
+${lines.join("\n")}
+
+FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a new page, in the order listed.
+
+1. HEADER (at the top of the asset's section, as a short block):
+   - Asset name and ticker
+   - Current price: latest closing price in USD, with its date
+   - Price trend, last 1 week: % change over the last 5 trading days, the week's high and low, and the direction (up / down / sideways) in a few words
+   - Expected price trend, next 1 week: direction (up / down / sideways), a likely price range, a confidence level (low / medium / high), and the main reason
+
+2. KEY NEWS (last one month, most important first): for each item, give the date, a 2–4 sentence summary, the likely price impact (positive / negative / neutral, and minor / moderate / major), and the source name.
+
+3. WHAT IT MEANS FOR THE PRICE: how the news fits together — earnings and guidance, analyst rating or price-target changes, products and contracts, legal or regulatory issues, management changes, insider or institutional buying and selling, and sector or macro factors.
+
+4. UPCOMING CATALYSTS (next few weeks): earnings dates, product events, ex-dividend dates, index changes, economic data, or anything else scheduled that could move the stock.
+
+5. RISKS TO WATCH: the main things that could push the price the other way from the expected trend.
+
+6. SOURCES: the publication and date for each news item (with links where available).
+
+RULES:
+- Use only real, verifiable news from the stated one-month window. Never invent news, quotes, prices, or dates. If you cannot find recent news on an asset, or cannot access current prices, say so plainly in that section instead of guessing.
+- Report every price and dollar amount in USD. If a stock trades in another currency, convert it at the latest exchange rate and say so.
+- For an asset with a planned call option, also comment briefly on what the news means for that option before its expiration date.
+- The "expected price trend" is your reasoned view from the news, not a guarantee. End the document with a one-line note that the briefing is not financial advice.
+
+OUTPUT FORMAT:
+- If you are able to create files, produce a Word document (.docx) titled "News of Current and Potential Holdings — ${fmtDMY(today)}", with each asset starting on a new page, its header block formatted as a small table, and the section headings above as Word headings.
+- If you cannot create a Word document, reply in plain text using the same structure: a line of "=" characters between assets, the header block first, then the numbered sections.`;
+}
+
+function renderNewsBriefing(){
+  const box = document.getElementById("newsPromptBox");
+  const list = document.getElementById("newsAssetList");
+  if(!box) return [];
+  const assets = getNewsBriefingAssets();
+  box.value = buildNewsBriefingPrompt(assets);
+  if(list){
+    list.innerHTML = assets.length === 0
+      ? `<span style="color:var(--text-secondary); font-size:0.9rem;">None yet.</span>`
+      : assets.map(a => {
+          const tag = a.held && a.planned ? "Held + Buy Strategy" : a.held ? "Held" : "Buy Strategy";
+          const color = a.held ? "var(--emerald)" : "var(--gold)";
+          return `<span class="remove-chip" title="${escAttr(a.name || a.ticker)}"><strong>${escHtml(a.ticker)}</strong><span style="color:${color}; font-size:0.75rem;">${escHtml(tag)}</span></span>`;
+        }).join("");
+  }
+  return assets;
+}
+
+function wireUpNewsBriefing(){
+  const box = document.getElementById("newsPromptBox");
+  if(!box) return; // index.html may be out of date
+  const status = document.getElementById("newsPromptStatus");
+  const setStatus = (text, color) => { if(status){ status.textContent = text; status.style.color = color; } };
+  renderNewsBriefing();
+  // Holdings and Buy Strategy change elsewhere on the page, so rebuild whenever the
+  // section is opened (its own toggle or the quick-nav button).
+  ["newsToggleBtn", "navNewsBtn"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener("click", () => setTimeout(renderNewsBriefing, 0));
+  });
+  const refreshBtn = document.getElementById("newsRefreshBtn");
+  if(refreshBtn) refreshBtn.addEventListener("click", () => {
+    const assets = renderNewsBriefing();
+    setStatus(`Asset list refreshed — ${assets.length} asset${assets.length === 1 ? "" : "s"}.`, "var(--text-secondary)");
+  });
+  const copyBtn = document.getElementById("newsCopyBtn");
+  if(copyBtn) copyBtn.addEventListener("click", async () => {
+    renderNewsBriefing(); // copy the up-to-date list, not whatever was rendered earlier
+    try{
+      await navigator.clipboard.writeText(box.value);
+      setStatus("Copied to clipboard.", "var(--emerald)");
+    }catch(e){
+      box.select();
+      setStatus("Couldn't use the clipboard automatically — the text is selected, so Ctrl/Cmd+C will copy it.", "var(--amber)");
+    }
+  });
+}
+try{
+  wireUpNewsBriefing();
+}catch(err){
+  console.error("Failed to wire up News of Current and Potential Holdings:", err);
+}
