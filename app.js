@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.08 (Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.09 (News prompt: each asset carries its Portfolio table data; the AI checks/updates it in a ~500-word data section with strengths and weaknesses. Earlier v6.08: Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.08 (− / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.09 (News prompt includes Portfolio data check; earlier v6.08: − / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -11062,6 +11062,57 @@ function getNewsBriefingAssets(){
     });
 }
 
+// v6.09: the Portfolio table's data for one ticker, in the Portfolio's own column order and
+// labels, so the AI can check it and comment on it. Uses the same stored values as the
+// "Sample Excel for Data Entry" export (live data / overrides / base data), plus the two
+// computed columns that describe the stock itself (Implied Upside, Cash Runway).
+// Left out: the option-only Strike/Expiration columns, Company Name (already in the
+// asset line), Optimized Weight Allocation (depends on the list, not the stock), dates,
+// position-tracking columns (Units Purchased, Average Purchase Price…) and other
+// computed custom columns. A ticker that isn't on any Portfolio List gets every column as "—".
+const NEWS_DATA_SKIP_IDS = new Set(["strike", "expiry", "name", "allocationWeight"]);
+function getPortfolioDataForNews(ticker){
+  let base = null;
+  try{ base = getResolvedBuiltinAssetValues(ticker); }catch(e){ base = null; }
+  // Not on any Portfolio List: still list every Portfolio column (all "—") so the AI
+  // fills in the same table for it.
+  const recorded = !!base;
+  if(!base) base = { stability: "", cashRunway: 99999 };
+  const ov = recorded ? (getGlobalOverrides()[ticker] || {}) : {};
+  const defs = getAllColumnDefs();
+  const byId = Object.fromEntries(defs.map(d => [d.id, d]));
+  const ordered = getColumnOrder().map(id => byId[id]).filter(Boolean);
+  defs.forEach(d => { if(!ordered.includes(d)) ordered.push(d); });
+  const fmtNum = (v) => {
+    const n = Number(v);
+    if(v === "" || v === null || v === undefined || !isFinite(n)) return v === undefined || v === null || v === "" ? "—" : String(v);
+    return String(Math.round(n * 100) / 100);
+  };
+  const out = [];
+  ordered.forEach(d => {
+    if(NEWS_DATA_SKIP_IDS.has(d.id)) return;
+    if(d.isCustom){
+      if(d.computed || d.type === "date" || MANUAL_ONLY_FIELD_LABELS.includes(d.label)) return;
+      const v = ov[d.id] !== undefined ? ov[d.id] : d.defaultValue;
+      out.push({ label: d.label, value: d.type === "number" ? fmtNum(v) : (v === undefined || v === "" ? "—" : String(v)) });
+      return;
+    }
+    if(d.id === "calculatedUpside"){
+      const cp = Number(base.currentPrice) || 0, tp = Number(base.targetPrice) || 0;
+      out.push({ label: d.label, value: cp > 0 && tp > 0 ? `${((tp - cp) / cp * 100).toFixed(1)}%` : "—" });
+      return;
+    }
+    if(d.id === "cashRunway"){
+      const r = Number(base.cashRunway);
+      out.push({ label: d.label, value: isFinite(r) && r < 99999 ? r.toFixed(1) : "—" });
+      return;
+    }
+    if(d.id === "stability"){ out.push({ label: d.label, value: base.stability || "—" }); return; }
+    out.push({ label: d.label, value: fmtNum(base[d.id]) });
+  });
+  return out;
+}
+
 function buildNewsBriefingPrompt(assets){
   if(assets.length === 0){
     return "No assets yet — hold a ticker on your Past Purchases list (so it shows in Sales Strategy) or add a row to Buy Strategy, then click \"Refresh asset list\".";
@@ -11089,14 +11140,34 @@ function buildNewsBriefingPrompt(assets){
         ? `call option(s): ${contracts}`
         : `also held/planned as call option(s): ${contracts} — covered by this stock's analysis; no separate option analysis`);
     }
-    return parts.join(" | ");
+    const data = getPortfolioDataForNews(a.ticker);
+    a._dataLabels = data.map(x => x.label);
+    const anyRecorded = data.some(x => x.value !== "—");
+    const dataLine = anyRecorded
+      ? `   My Portfolio data: ${data.map(x => `${x.label} = ${x.value}`).join("; ")}`
+      : `   My Portfolio data: nothing recorded yet — fill every parameter from the latest data: ${data.map(x => x.label).join("; ")}`;
+    return parts.join(" | ") + "\n" + dataLine;
   });
+  // Definitions for every Portfolio field that appears above (same wording the Detailed
+  // Update prompt uses), so "checked" values are measured the way the app expects.
+  const usedLabels = Array.from(new Set(assets.flatMap(a => a._dataLabels || [])));
+  const defLines = usedLabels
+    .map(l => ({ l, hint: DETAILED_UPDATE_LABEL_HINTS[String(l).trim().toLowerCase()] }))
+    .filter(x => x.hint)
+    .map(x => `- ${x.l}: ${x.hint}`);
+  const extraDefs = [];
+  if(usedLabels.includes("Implied Upside")) extraDefs.push("- Implied Upside: (Consensus Target Price − Current Price) ÷ Current Price × 100.");
+  if(usedLabels.includes("Cash Runway (yr)")) extraDefs.push("- Cash Runway (yr): Cash & Equivalents ($M) ÷ Operating Expenses ($M).");
+  if(usedLabels.includes("Stability")) extraDefs.push("- Stability: my own moat/stability rating (Ultra-high / High / Med / Low) — comment on whether it still looks right, but it is not a market figure.");
+  const defsBlock = (defLines.length || extraDefs.length)
+    ? `\n\nPORTFOLIO DATA DEFINITIONS (use these exact definitions when checking the numbers):\n${defLines.concat(extraDefs).join("\n")}`
+    : "";
   return `You are a financial news analyst. Prepare a news briefing on the stocks listed below, covering news published in the last one month (${fmtDMY(fromIso)} to ${fmtDMY(today)}, DD/MM/YYYY) that could affect each stock's price.
 
-ASSETS (${assets.length}):
-${lines.join("\n")}
+ASSETS (${assets.length}) — each with the data currently recorded for it in my Portfolio table (it may be stale or incomplete; "—" means not recorded, and a 0 may mean the value was never filled in):
+${lines.join("\n")}${defsBlock}
 
-FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a new page, in the order listed.
+FOR EACH ASSET, write roughly 1,300–1,500 words (about 2½–3 pages), starting on a new page, in the order listed — including about 500 words for the PORTFOLIO DATA section.
 
 1. HEADER (at the top of the asset's section, as a short block):
    - Asset name and ticker
@@ -11107,18 +11178,25 @@ FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a
 
 2. ONE-YEAR PERFORMANCE (one paragraph, about 100–150 words): how the stock has performed over the last 12 months — the % price change from one year ago to the latest close, the 52-week high and low (with dates), how it compares with the S&P 500 and the Nasdaq-100 over the same period, and the main events that drove the big moves. If the stock has been listed for less than a year, say so and cover the period since its listing date.
 
-3. KEY NEWS (last one month, most important first): for each item, give the date, a 2–4 sentence summary, the likely price impact (positive / negative / neutral, and minor / moderate / major), and the source name.
+3. PORTFOLIO DATA — CHECK, UPDATE AND ANALYSIS (about 500 words including the table):
+   a) A table in my Portfolio format, one row per parameter listed in "My Portfolio data", in the same order, with columns: Parameter | My Portfolio value | Latest value | As of (date) and source | Check — where Check is "✓ matches", "✎ updated" (my value is wrong or stale; give the corrected latest value) or "? unavailable" (you could not verify it; say why). Fill in every parameter, including ones recorded as "—" or 0.
+   b) Analysis of the data (using the latest values): valuation (P/E, forward P/E, PEG, implied upside to the consensus target), growth, profitability (margins, ROA), balance sheet and cash (D/E, cash, free cash flow, cash runway), risk (beta) and dividend, and how these compare with close peers or the sector where that helps.
+   c) Strengths: 3–5 bullet points drawn from the data.
+   d) Weaknesses: 3–5 bullet points drawn from the data.
 
-4. WHAT IT MEANS FOR THE PRICE: how the news fits together — earnings and guidance, analyst rating or price-target changes, products and contracts, legal or regulatory issues, management changes, insider or institutional buying and selling, and sector or macro factors.
+4. KEY NEWS (last one month, most important first): for each item, give the date, a 2–4 sentence summary, the likely price impact (positive / negative / neutral, and minor / moderate / major), and the source name.
 
-5. UPCOMING CATALYSTS (next few weeks): earnings dates, product events, ex-dividend dates, index changes, economic data, or anything else scheduled that could move the stock.
+5. WHAT IT MEANS FOR THE PRICE: how the news fits together — earnings and guidance, analyst rating or price-target changes, products and contracts, legal or regulatory issues, management changes, insider or institutional buying and selling, and sector or macro factors.
 
-6. RISKS TO WATCH: the main things that could push the price the other way from the expected trend.
+6. UPCOMING CATALYSTS (next few weeks): earnings dates, product events, ex-dividend dates, index changes, economic data, or anything else scheduled that could move the stock.
 
-7. SOURCES: the publication and date for each news item and for the price data used (with links where available).
+7. RISKS TO WATCH: the main things that could push the price the other way from the expected trend.
+
+8. SOURCES: the publication and date for each news item, for the price data, and for the figures used to check the Portfolio data (with links where available).
 
 RULES:
 - Use only real, verifiable news from the stated one-month window (the ONE-YEAR PERFORMANCE paragraph may refer to older events to explain the 12-month price moves). Never invent news, quotes, prices, or dates. If you cannot find recent news on an asset, or cannot access current prices, say so plainly in that section instead of guessing.
+- PORTFOLIO DATA: check every value against current sources (latest filings for fundamentals, latest close for prices, the analyst mean for the target). Never copy my value into "Latest value" without checking it, and never invent a figure — use "? unavailable" instead. Use plain numbers in the table, in the units shown in the parameter name.
 - Report every price and dollar amount in USD. If a stock trades in another currency, convert it at the latest exchange rate and say so.
 - CALL OPTIONS: assess every call option as its underlying stock. Do not write any option-specific analysis — nothing on the option's premium, strike, expiry, time value, Greeks or volatility, and no separate section for the contract.
   • If the option's stock is also on the list as a stock (marked "also held/planned as call option(s)"), write nothing extra about the option: just add a header line "Also held as: <contract(s)> — see the analysis of this stock in this section." (or "Also planned as:" for a Buy Strategy option).
