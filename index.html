@@ -445,7 +445,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.05 — News prompt: call options are assessed as their underlying stock.</div>
+      Version v6.06 — News prompt: adds a one-year performance paragraph for each stock.</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
@@ -713,7 +713,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
       No API key needed:
       <ul>
         <li>Covers every ticker you currently hold (the "Current Holding" set, from Sales Strategy on the open Past Purchases list) plus every ticker with a still-draft row in Buy Strategy.</li>
-        <li>Asks the AI for news from the <strong>last one month</strong> that could move each stock's price — about two pages per asset, each starting with a header: asset name, current price, price trend over the last week, and expected price trend over the next week.</li>
+        <li>Asks the AI for a <strong>one-year performance</strong> paragraph and news from the <strong>last one month</strong> that could move each stock's price — about two pages per asset, each starting with a header: asset name, current price, price trend over the last week, and expected price trend over the next week.</li>
         <li>The AI is asked to reply as a Word document (.docx) if it can create files, otherwise as plain text in the same layout.</li>
         <li>An AI's "expected trend" is an opinion, not a forecast you can rely on — treat the briefing as a starting point and verify the news yourself.</li>
       </ul>
