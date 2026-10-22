@@ -309,6 +309,17 @@ td.col-collapsed {
 td.col-collapsed > * { display: none !important; }
 body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !important; }
 
+/* v6.01: Current and Past News viewer */
+.news-doc { color: var(--text-primary); font-size: 0.92rem; line-height: 1.65; max-width: 900px; }
+.news-doc-text { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; }
+.news-doc h1, .news-doc h2, .news-doc h3, .news-doc h4 { color: #facc15; margin: 1.4rem 0 0.5rem; line-height: 1.3; }
+.news-doc h1 { font-size: 1.35rem; } .news-doc h2 { font-size: 1.15rem; } .news-doc h3 { font-size: 1rem; }
+.news-doc p { margin: 0 0 0.75rem; }
+.news-doc ul, .news-doc ol { margin: 0 0 0.75rem 1.4rem; }
+.news-doc table { width: auto; margin: 0.5rem 0 1rem; border: 1px solid var(--border-color); border-radius: 8px; }
+.news-doc th, .news-doc td { position: static; padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border-color); background: transparent !important; box-shadow: none; text-transform: none; font-size: 0.88rem; }
+.news-doc a { color: #93c5fd; }
+
 /* Chips */
 .remove-chip { border-radius: 999px; padding: 0.35rem 0.5rem 0.35rem 0.85rem; }
 .remove-chip button { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
@@ -341,6 +352,8 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
      browser's own native print dialog instead of a library, so it needs no script tag
      and can never fail on a blocked CDN. Text/Word export need no library either. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Word (.docx) reader for "Current and Past News" uploads; app.js retries other CDN hosts if this fails. -->
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 </head>
 <body>
 
@@ -400,7 +413,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.00 — New section: News of Current and Potential Holdings (AI news-briefing prompt).</div>
+      Version v6.01 — News: upload the AI’s reply (Word or text) and browse it in “Current and Past News”.</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
@@ -683,6 +696,27 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
       <span id="newsPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
     </div>
   </div>
+
+  <div class="control-panel" style="flex-direction:column; align-items:stretch; gap:0.75rem; margin-top:1rem;">
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+      <strong style="color:#facc15;">Save the AI's reply:</strong>
+      <button id="newsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md).">⬆ Upload AI result (Word or text)</button>
+      <input id="newsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none;">
+      <span id="newsUploadStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+    <div class="chart-note">Or paste the reply as text:</div>
+    <input id="newsPasteTitle" class="form-input" placeholder="Title (optional — defaults to today's date)" style="max-width:420px;">
+    <textarea id="newsPasteInput" rows="5" placeholder="Paste the AI's news briefing here…" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-size:0.85rem; resize:vertical;"></textarea>
+    <div><button id="newsSavePastedBtn" type="button">Save pasted text</button></div>
+    <div class="chart-note" data-intro="1">Word files (.docx) are kept in this browser so you can reopen the original; the text of every report is saved with the rest of your data and syncs to your other devices. Older .doc files aren't supported — save them as .docx first.</div>
+  </div>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
+    <h2 id="newsListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
+    <span id="newsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
+  <div id="newsTableContent"></div>
+  <div id="newsViewer" style="display:none; margin-top:1rem;"></div>
 
   </div>
 
