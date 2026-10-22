@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.01 (News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.02 (News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.01 (Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.02 (News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -11031,7 +11031,14 @@ function getNewsBriefingAssets(){
     byTicker[t].reasons.add(reason);
     if(detail) byTicker[t].details.push(detail);
   };
-  try { computeCurrentHoldingTickersPerSalesStrategy().forEach(t => add(t, "held")); } catch(e){ /* no Past Purchases data yet */ }
+  // Held call options come back as contract keys (TICKER|strike|YYYY-MM-DD); fold them
+  // into their underlying stock with a readable contract label, like Buy Strategy below.
+  try {
+    computeCurrentHoldingTickersPerSalesStrategy().forEach(t => {
+      const k = ppParseKey(t);
+      add(k.symbol, "held", k.isOption ? ppKeyLabel(t) : "");
+    });
+  } catch(e){ /* no Past Purchases data yet */ }
   try {
     getBuyStrategyRows().forEach(r => {
       if(!r || !r.ticker || r.buyRealizedDate) return; // confirmed buys are already holdings
@@ -11062,7 +11069,7 @@ function buildNewsBriefingPrompt(assets){
       : a.held ? "currently held" : "potential buy, planned in Buy Strategy";
     const parts = [`${i + 1}. ${a.ticker}${a.name ? " — " + a.name : ""} (${status})`];
     if(a.price > 0) parts.push(`last price recorded in my app: $${a.price.toFixed(2)} (may be stale — use the latest close)`);
-    if(a.details.length) parts.push(`planned call option(s): ${Array.from(new Set(a.details)).join("; ")}`);
+    if(a.details.length) parts.push(`call option(s) held or planned: ${Array.from(new Set(a.details)).join("; ")}`);
     return parts.join(" | ");
   });
   return `You are a financial news analyst. Prepare a news briefing on the stocks listed below, covering news published in the last one month (${fmtDMY(fromIso)} to ${fmtDMY(today)}, DD/MM/YYYY) that could affect each stock's price.
@@ -11091,7 +11098,7 @@ FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a
 RULES:
 - Use only real, verifiable news from the stated one-month window. Never invent news, quotes, prices, or dates. If you cannot find recent news on an asset, or cannot access current prices, say so plainly in that section instead of guessing.
 - Report every price and dollar amount in USD. If a stock trades in another currency, convert it at the latest exchange rate and say so.
-- For an asset with a planned call option, also comment briefly on what the news means for that option before its expiration date.
+- For an asset with a call option (held or planned), also comment briefly on what the news means for that option before its expiration date.
 - The "expected price trend" is your reasoned view from the news, not a guarantee. End the document with a one-line note that the briefing is not financial advice.
 
 OUTPUT FORMAT:
@@ -11201,7 +11208,12 @@ async function newsFilesTx(mode, fn){
     tx.onabort = () => { db.close(); reject(tx.error); };
   });
 }
-function newsFilePut(id, blob, name){ return newsFilesTx("readwrite", st => st.put({ blob, name }, id)); }
+// `html` caches mammoth's (slow) Word-to-HTML conversion so View opens instantly.
+function newsFilePut(id, blob, name, html){ return newsFilesTx("readwrite", st => st.put({ blob, name, html: html || "" }, id)); }
+const NEWS_MAMMOTH_OPTIONS = {
+  // Word's Title/Subtitle styles aren't headings by default; show them as such.
+  styleMap: ["p[style-name='Title'] => h1.news-doc-title:fresh", "p[style-name='Subtitle'] => h2:fresh"],
+};
 function newsFileGet(id){ return newsFilesTx("readonly", st => st.get(id)); }
 function newsFileDelete(id){ return newsFilesTx("readwrite", st => st.delete(id)); }
 function newsFileKeys(){ return newsFilesTx("readonly", st => st.getAllKeys()); }
@@ -11234,6 +11246,12 @@ function detectNewsTickers(text){
   const known = new Set();
   try{ getQuickPasteTickers().forEach(t => known.add(t)); }catch(e){}
   try{ getNewsBriefingAssets().forEach(a => known.add(a.ticker)); }catch(e){}
+  // Also pick up tickers written as "(TICKER)" or "NASDAQ: TICKER" / "NYSE: TICKER" — the way
+  // AI briefings name companies — even when the ticker isn't on any Portfolio List yet.
+  const NOT_TICKERS = new Set(["USD","EUR","GBP","JPY","KRW","AI","CEO","CFO","EPS","GAAP","FCF","QPU","US","UK","EU","ETF","IPO","SPAC","DGA","SDA","NASA","ISO","IEC","PEG","YOY","FY","EST","ET","PM","AM","LLC","INC","SA","AG","PLC","Q1","Q2","Q3","Q4","H1","H2","TBD","NA","OK"]);
+  const addPattern = (re) => { let m; while((m = re.exec(text))){ const t = m[1]; if(!NOT_TICKERS.has(t)) known.add(t); } };
+  addPattern(/\(([A-Z]{2,5})\)/g);
+  addPattern(/\b(?:NASDAQ|NYSE|NYSE American|AMEX):\s*([A-Z]{1,5})\b/g);
   const found = [];
   known.forEach(t => {
     const re = new RegExp("(^|[^A-Z0-9.])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Z0-9])");
@@ -11249,7 +11267,7 @@ function defaultNewsTitle(){
   return "News briefing " + fmtDMY(ppToday());
 }
 
-async function addNewsReport({ title, fileName, kind, size, text, blob }){
+async function addNewsReport({ title, fileName, kind, size, text, blob, html }){
   let body = String(text || "").replace(/\r\n/g, "\n").trim();
   let truncated = false;
   if(body.length > NEWS_TEXT_MAX_CHARS){ body = body.slice(0, NEWS_TEXT_MAX_CHARS); truncated = true; }
@@ -11265,7 +11283,7 @@ async function addNewsReport({ title, fileName, kind, size, text, blob }){
   };
   let fileSaved = false;
   if(blob){
-    try{ await newsFilePut(report.id, blob, fileName); fileSaved = true; }catch(e){ /* text is still saved */ }
+    try{ await newsFilePut(report.id, blob, fileName, html); fileSaved = true; }catch(e){ /* text is still saved */ }
   }
   const reports = getNewsReports();
   reports.push(report);
@@ -11285,7 +11303,9 @@ async function handleNewsFileUpload(file){
     const mammoth = await loadMammoth();
     const buf = await file.arrayBuffer();
     const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
-    return addNewsReport({ title: titleFromName, fileName: name, kind: "docx", size: file.size,
+    let html = "";
+    try{ html = (await mammoth.convertToHtml({ arrayBuffer: buf }, NEWS_MAMMOTH_OPTIONS)).value; }catch(e){ /* converted on first View instead */ }
+    return addNewsReport({ title: titleFromName, fileName: name, kind: "docx", size: file.size, html,
       text: value, blob: new Blob([buf], { type: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }) });
   }
   const text = await file.text();
@@ -11322,18 +11342,13 @@ function renderNewsTable(){
     container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">No news saved yet — copy the prompt above to your AI, then upload or paste its reply.</div>`;
     return;
   }
-  const btn = "padding:0.3rem 0.7rem; font-size:0.8rem;";
+  const btn = "padding:0.3rem 0.8rem; font-size:0.8rem;";
   const rows = reports.map((r, i) => {
     const isCurrent = i === 0;
-    const hasFile = r.kind === "docx" && newsFilesOnThisDevice.has(r.id);
     const status = isCurrent
       ? `<span style="color:var(--emerald); font-weight:600;">Current</span>`
       : `<span style="color:var(--text-secondary);">Past</span>`;
-    const openWord = r.kind !== "docx" ? ""
-      : hasFile
-        ? `<button type="button" class="tab-btn tab-btn-export-word" data-news-action="open" data-id="${escAttr(r.id)}" style="${btn}" title="Opens the original Word document saved from ${escAttr(r.fileName || "your upload")}">Open Word</button>`
-        : `<span style="color:var(--text-secondary); font-size:0.8rem;" title="Word files are kept in the browser they were uploaded from. The text is available here via View.">Word file on another device</span>`;
-    return `<tr${newsViewingId === r.id ? ' style="outline:1px solid var(--accent-blue); outline-offset:-1px;"' : ""}>
+    return `<tr>
       <td>
         <input class="cell-input" data-news-title="${escAttr(r.id)}" value="${escAttr(r.title)}" style="min-width:220px; font-weight:600;" title="Click to rename">
         <div class="row-ctrl-controls">
@@ -11346,14 +11361,24 @@ function renderNewsTable(){
       <td>${r.kind === "docx" ? "Word (.docx)" : "Text"}</td>
       <td style="white-space:nowrap; text-align:right;">${escHtml(fmtBytes(r.size))}</td>
       <td style="white-space:nowrap;">
-        <button type="button" class="tab-btn" data-news-action="view" data-id="${escAttr(r.id)}" style="${btn}">${newsViewingId === r.id ? "Hide" : "View"}</button>
-        ${openWord}
+        <button type="button" class="tab-btn" data-news-action="view" data-id="${escAttr(r.id)}" style="${btn}" title="Read this report in a pop-up window">👁 View</button>
       </td>
+      <td style="white-space:nowrap;">${newsDownloadWordCellHTML(r, btn)}</td>
     </tr>`;
   }).join("");
   container.innerHTML = `<div class="table-container"><table id="newsTable">
-    <thead><tr><th>Title</th><th>Status</th><th>Uploaded</th><th>Assets Covered</th><th>Format</th><th>Size</th><th>View / Open</th></tr></thead>
+    <thead><tr><th>Title</th><th>Status</th><th>Uploaded</th><th>Assets Covered</th><th>Format</th><th>Size</th><th>View</th><th>Download Word</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
+}
+
+// Download Word: a button for a Word report whose original file is in this browser; a
+// note when it was uploaded on another device; a dash for a text report (no Word file).
+function newsDownloadWordCellHTML(r, btnStyle){
+  if(r.kind !== "docx") return `<span style="color:var(--text-secondary);" title="This report was saved as text, so there is no Word file.">—</span>`;
+  if(newsFilesOnThisDevice.has(r.id)){
+    return `<button type="button" class="tab-btn tab-btn-export-word" data-news-action="open" data-id="${escAttr(r.id)}" style="${btnStyle}" title="Download the original Word document (${escAttr(r.fileName || "your upload")}) to open in Word">⬇ Download Word</button>`;
+  }
+  return `<span style="color:var(--text-secondary); font-size:0.8rem;" title="Word files are kept in the browser they were uploaded from. Its text can still be read with View.">On another device</span>`;
 }
 
 // Turns mammoth's HTML into a safe fragment: only simple formatting tags survive,
@@ -11375,31 +11400,92 @@ function sanitizeNewsHtml(html){
   return root.innerHTML;
 }
 
+// The viewer is a large pop-up (created once, attached to <body>) so a long report can
+// be scrolled without leaving the table. Closes with ✕, Esc, or a click on the backdrop.
+function getNewsViewerModal(){
+  let modal = document.getElementById("newsViewerModal");
+  if(modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "newsViewerModal";
+  modal.className = "news-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "newsViewerTitle");
+  modal.style.display = "none";
+  document.body.appendChild(modal);
+  modal.addEventListener("click", (e) => {
+    if(e.target === modal){ newsViewingId = null; renderNewsViewer(); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && modal.style.display !== "none"){ newsViewingId = null; renderNewsViewer(); }
+  });
+  return modal;
+}
+
 async function renderNewsViewer(){
-  const viewer = document.getElementById("newsViewer");
-  if(!viewer) return;
+  const modal = getNewsViewerModal();
   const r = newsViewingId ? getNewsReports().find(x => x.id === newsViewingId) : null;
-  if(!r){ viewer.style.display = "none"; viewer.innerHTML = ""; return; }
-  viewer.style.display = "";
-  const header = `<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-      <h3 style="margin:0; color:#facc15; font-size:1.1rem;">${escHtml(r.title)} <span style="color:var(--text-secondary); font-size:0.8rem; font-weight:400;">— uploaded ${escHtml(fmtDMYHM(new Date(r.uploadedAt)))}</span></h3>
-      <div style="display:flex; gap:0.5rem;">
-        <button type="button" class="tab-btn tab-btn-export-text" data-news-action="download-text" data-id="${escAttr(r.id)}" style="padding:0.3rem 0.7rem; font-size:0.8rem;">⬇ Save as text</button>
-        <button type="button" class="tab-btn" data-news-action="close" style="padding:0.3rem 0.7rem; font-size:0.8rem;">Close</button>
+  if(!r){
+    if(modal.style.display !== "none"){
+      modal.style.display = "none";
+      modal.innerHTML = "";
+      document.body.classList.remove("news-modal-open");
+    }
+    return;
+  }
+  const btn = "padding:0.4rem 0.9rem; font-size:0.85rem;";
+  const hasFile = r.kind === "docx" && newsFilesOnThisDevice.has(r.id);
+  const meta = [
+    r.kind === "docx" ? "Word document" : "Text",
+    "uploaded " + fmtDMYHM(new Date(r.uploadedAt)),
+    r.tickers && r.tickers.length ? r.tickers.join(", ") : "",
+  ].filter(Boolean).join(" · ");
+  modal.innerHTML = `<div class="news-modal-panel">
+      <div class="news-modal-header">
+        <div style="min-width:0;">
+          <h3 id="newsViewerTitle" class="news-modal-title">${escHtml(r.title)}</h3>
+          <div class="news-modal-meta">${escHtml(meta)}</div>
+        </div>
+        <div class="news-modal-actions">
+          ${hasFile ? `<button type="button" class="tab-btn tab-btn-export-word" data-news-action="open" data-id="${escAttr(r.id)}" style="${btn}">⬇ Download Word</button>` : ""}
+          <button type="button" class="tab-btn tab-btn-export-text" data-news-action="download-text" data-id="${escAttr(r.id)}" style="${btn}">⬇ Save as text</button>
+          <button type="button" class="news-modal-close" data-news-action="close" title="Close (Esc)" aria-label="Close">&times;</button>
+        </div>
+      </div>
+      <div class="news-modal-body" id="newsViewerBody" tabindex="0">
+        ${r.kind === "docx" && hasFile ? `<div class="news-modal-loading">Loading the Word document…</div>` : ""}
+        <div class="news-doc news-doc-text"${r.kind === "docx" && hasFile ? ' style="display:none;"' : ""}>${escHtml(r.text || "(empty)")}</div>
+        ${r.kind === "docx" && !hasFile ? `<div class="news-modal-note">The original Word file is on the device it was uploaded from — showing its text.</div>` : ""}
       </div>
     </div>`;
-  const textBody = `<div class="news-doc news-doc-text">${escHtml(r.text || "(empty)")}</div>`;
-  viewer.innerHTML = `<div class="table-container" style="padding:1.25rem; max-height:none;">${header}<div id="newsViewerBody">${textBody}</div></div>`;
-  // A Word report on this device is shown with its formatting (headings, tables).
-  if(r.kind === "docx" && newsFilesOnThisDevice.has(r.id)){
+  modal.style.display = "";
+  document.body.classList.add("news-modal-open");
+  const closeBtn = modal.querySelector(".news-modal-close");
+  if(closeBtn) closeBtn.focus();
+  // A Word report on this device is shown with its formatting (headings, tables), in the
+  // app's dark theme — the converted HTML carries no colours of its own.
+  if(r.kind === "docx" && hasFile){
+    const body = document.getElementById("newsViewerBody");
     try{
-      const [rec, mammoth] = await Promise.all([newsFileGet(r.id), loadMammoth()]);
-      if(rec && rec.blob && newsViewingId === r.id){
-        const { value } = await mammoth.convertToHtml({ arrayBuffer: await rec.blob.arrayBuffer() });
-        const body = document.getElementById("newsViewerBody");
-        if(body) body.innerHTML = `<div class="news-doc">${sanitizeNewsHtml(value)}</div>`;
+      const rec = await newsFileGet(r.id);
+      if(!rec || !rec.blob) throw new Error("missing");
+      let value = rec.html;
+      if(!value){
+        // Uploaded before v6.02 (no cached HTML): convert once, then keep the result.
+        const mammoth = await loadMammoth();
+        value = (await mammoth.convertToHtml({ arrayBuffer: await rec.blob.arrayBuffer() }, NEWS_MAMMOTH_OPTIONS)).value;
+        newsFilePut(r.id, rec.blob, rec.name, value).catch(() => {});
       }
-    }catch(e){ /* the plain-text view is already showing */ }
+      if(newsViewingId === r.id && body) body.innerHTML = `<div class="news-doc">${sanitizeNewsHtml(value)}</div>`;
+    }catch(e){
+      // Fall back to the saved plain text.
+      if(newsViewingId === r.id && body){
+        const loading = body.querySelector(".news-modal-loading");
+        if(loading) loading.remove();
+        const txt = body.querySelector(".news-doc-text");
+        if(txt) txt.style.display = "";
+      }
+    }
   }
 }
 
@@ -11423,7 +11509,7 @@ function wireUpNewsReports(){
   const uploadStatus = document.getElementById("newsUploadStatus");
   const listStatus = document.getElementById("newsListStatus");
   const container = document.getElementById("newsTableContent");
-  const viewer = document.getElementById("newsViewer");
+  const viewer = getNewsViewerModal();
   if(!container) return; // index.html may be out of date
   const setStatus = (el, text, color) => { if(el){ el.textContent = text; el.style.color = color; } };
   const savedMsg = (res) => `Saved "${res.report.title}"${res.report.tickers.length ? ` (${res.report.tickers.length} asset${res.report.tickers.length === 1 ? "" : "s"} detected)` : ""}.`
@@ -11439,7 +11525,6 @@ function wireUpNewsReports(){
       setStatus(uploadStatus, `Reading ${file.name}…`, "var(--text-secondary)");
       try{
         const res = await handleNewsFileUpload(file);
-        newsViewingId = res.report.id;
         await refreshNewsUi();
         setStatus(uploadStatus, savedMsg(res), "var(--emerald)");
       }catch(e){
@@ -11458,7 +11543,6 @@ function wireUpNewsReports(){
       const res = await addNewsReport({ title: titleEl && titleEl.value, kind: "text", text, size: new Blob([text]).size });
       if(input) input.value = "";
       if(titleEl) titleEl.value = "";
-      newsViewingId = res.report.id;
       await refreshNewsUi();
       setStatus(uploadStatus, savedMsg(res), "var(--emerald)");
     }catch(e){
@@ -11473,20 +11557,17 @@ function wireUpNewsReports(){
     const id = el.getAttribute("data-id");
     const report = id ? getNewsReports().find(r => r.id === id) : null;
     if(action === "view"){
-      newsViewingId = newsViewingId === id ? null : id;
-      renderNewsTable();
+      newsViewingId = id;
       await renderNewsViewer();
-      if(newsViewingId && viewer) viewer.scrollIntoView({ behavior: "smooth", block: "start" });
     }else if(action === "close"){
       newsViewingId = null;
-      renderNewsTable();
       renderNewsViewer();
     }else if(action === "open" && report){
       try{
         const rec = await newsFileGet(id);
         if(!rec || !rec.blob) throw new Error("missing");
         downloadBlob(rec.blob, report.fileName || (report.title + ".docx"));
-        setStatus(listStatus, `Opening ${report.fileName || report.title}… (your browser downloads it; open it in Word)`, "var(--emerald)");
+        setStatus(listStatus, `Downloading ${report.fileName || report.title} — open it in Word.`, "var(--emerald)");
       }catch(err){
         setStatus(listStatus, "The original Word file isn't stored in this browser — use View to read its text.", "var(--amber)");
       }
