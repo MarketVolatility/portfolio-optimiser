@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.00 (New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.01 (News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.00 (News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.01 (Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -550,7 +550,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront", "toBuyPriceRemoved"];
+const SYNC_KEYS = ["newsReports", "portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront", "toBuyPriceRemoved"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -597,6 +597,8 @@ function clearAllLocalAppData(){
   SYNC_KEYS.concat(NON_SYNCED_LOCAL_KEYS).forEach(k => {
     try{ localStorage.removeItem(k); }catch(e){ /* localStorage unavailable */ }
   });
+  // v6.01: uploaded news Word files live in IndexedDB, not localStorage.
+  try{ if(typeof newsFilesClearAll === "function") newsFilesClearAll(); }catch(e){ /* IndexedDB unavailable */ }
 }
 
 // Call this before doing ANYTHING else with local data for a just-authenticated
@@ -990,6 +992,9 @@ async function openDashboard(user){
   renderPastPurchasesColumnOrderList();
   renderPastPurchasesRowOrderList();
   renderPastPurchasesTable();
+  // v6.00/6.01: the News section reads holdings, Buy Strategy and saved reports, all
+  // of which the cloud pull above may have just replaced.
+  try{ renderNewsBriefing(); refreshNewsUi(); }catch(e){ /* News section not present */ }
 
   startAutoSync();
 }
@@ -11145,4 +11150,387 @@ try{
   wireUpNewsBriefing();
 }catch(err){
   console.error("Failed to wire up News of Current and Potential Holdings:", err);
+}
+
+
+// --- v6.01: Current and Past News (uploaded AI briefings) ---
+// Each saved report: { id, title, fileName, kind: "docx" | "text", uploadedAt (ms),
+// size (bytes of the original), tickers: [...], text }. The list lives in
+// localStorage key "newsReports" (in SYNC_KEYS, so the TEXT of every report reaches
+// the cloud and other devices). The original .docx is large binary data, so it is
+// kept only in this browser's IndexedDB — pushing it with every 8-second auto-sync
+// would be far too heavy. A Word report opened on another device therefore shows its
+// text, with a note that the original file is on the device it was uploaded from.
+const NEWS_REPORTS_KEY = "newsReports";
+const NEWS_TEXT_MAX_CHARS = 300000; // keeps one report from swamping the synced snapshot
+const MAMMOTH_URLS = [
+  "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js",
+  "https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js",
+];
+
+function getNewsReports(){
+  try{
+    const arr = JSON.parse(localStorage.getItem(NEWS_REPORTS_KEY) || "[]");
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function saveNewsReports(reports){
+  try{
+    localStorage.setItem(NEWS_REPORTS_KEY, JSON.stringify(reports));
+    return true;
+  }catch(e){ return false; } // quota exceeded / storage unavailable
+}
+
+// IndexedDB store for original Word files, keyed by report id.
+function newsFilesDb(){
+  return new Promise((resolve, reject) => {
+    if(!window.indexedDB) return reject(new Error("IndexedDB unavailable"));
+    const req = indexedDB.open("portfolioOptimizerFiles", 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore("newsFiles"); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function newsFilesTx(mode, fn){
+  const db = await newsFilesDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("newsFiles", mode);
+    const result = fn(tx.objectStore("newsFiles"));
+    tx.oncomplete = () => { db.close(); resolve(result && "result" in result ? result.result : undefined); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error); };
+  });
+}
+function newsFilePut(id, blob, name){ return newsFilesTx("readwrite", st => st.put({ blob, name }, id)); }
+function newsFileGet(id){ return newsFilesTx("readonly", st => st.get(id)); }
+function newsFileDelete(id){ return newsFilesTx("readwrite", st => st.delete(id)); }
+function newsFileKeys(){ return newsFilesTx("readonly", st => st.getAllKeys()); }
+function newsFilesClearAll(){ return newsFilesTx("readwrite", st => st.clear()).catch(() => {}); }
+
+let mammothLoadPromise = null;
+function loadMammoth(){
+  if(window.mammoth) return Promise.resolve(window.mammoth);
+  if(mammothLoadPromise) return mammothLoadPromise;
+  mammothLoadPromise = (async () => {
+    for(const url of MAMMOTH_URLS){
+      try{
+        await new Promise((resolve, reject) => {
+          const sc = document.createElement("script");
+          sc.src = url; sc.onload = resolve; sc.onerror = reject;
+          document.head.appendChild(sc);
+        });
+        if(window.mammoth) return window.mammoth;
+      }catch(e){ /* try the next host */ }
+    }
+    mammothLoadPromise = null;
+    throw new Error("Couldn't load the Word reader (check your internet connection).");
+  })();
+  return mammothLoadPromise;
+}
+
+// Tickers mentioned in a report: any known ticker (Portfolio Lists + the current news
+// asset set) appearing as a whole uppercase word.
+function detectNewsTickers(text){
+  const known = new Set();
+  try{ getQuickPasteTickers().forEach(t => known.add(t)); }catch(e){}
+  try{ getNewsBriefingAssets().forEach(a => known.add(a.ticker)); }catch(e){}
+  const found = [];
+  known.forEach(t => {
+    const re = new RegExp("(^|[^A-Z0-9.])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Z0-9])");
+    if(re.test(text)) found.push(t);
+  });
+  return found.sort();
+}
+
+function newNewsReportId(){
+  return "news_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+}
+function defaultNewsTitle(){
+  return "News briefing " + fmtDMY(ppToday());
+}
+
+async function addNewsReport({ title, fileName, kind, size, text, blob }){
+  let body = String(text || "").replace(/\r\n/g, "\n").trim();
+  let truncated = false;
+  if(body.length > NEWS_TEXT_MAX_CHARS){ body = body.slice(0, NEWS_TEXT_MAX_CHARS); truncated = true; }
+  const report = {
+    id: newNewsReportId(),
+    title: String(title || "").trim() || defaultNewsTitle(),
+    fileName: fileName || "",
+    kind,
+    uploadedAt: Date.now(),
+    size: size || body.length,
+    tickers: detectNewsTickers(body),
+    text: body,
+  };
+  let fileSaved = false;
+  if(blob){
+    try{ await newsFilePut(report.id, blob, fileName); fileSaved = true; }catch(e){ /* text is still saved */ }
+  }
+  const reports = getNewsReports();
+  reports.push(report);
+  if(!saveNewsReports(reports)){
+    if(fileSaved) newsFileDelete(report.id).catch(() => {});
+    throw new Error("Browser storage is full — delete some older reports and try again.");
+  }
+  return { report, truncated, fileSaved };
+}
+
+async function handleNewsFileUpload(file){
+  const name = file.name || "upload";
+  const lower = name.toLowerCase();
+  if(lower.endsWith(".doc")) throw new Error("Older .doc files can't be read — open it in Word and save it as .docx, then upload that.");
+  const titleFromName = name.replace(/\.[^.]+$/, "");
+  if(lower.endsWith(".docx")){
+    const mammoth = await loadMammoth();
+    const buf = await file.arrayBuffer();
+    const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
+    return addNewsReport({ title: titleFromName, fileName: name, kind: "docx", size: file.size,
+      text: value, blob: new Blob([buf], { type: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }) });
+  }
+  const text = await file.text();
+  return addNewsReport({ title: titleFromName, fileName: name, kind: "text", size: file.size, text });
+}
+
+function fmtBytes(n){
+  n = Number(n) || 0;
+  if(n < 1024) return n + " B";
+  if(n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+let newsFilesOnThisDevice = new Set();
+let newsViewingId = null;
+
+async function refreshNewsFilesOnDevice(){
+  try{
+    const keys = await newsFileKeys();
+    newsFilesOnThisDevice = new Set(keys || []);
+    // Drop stored files whose report no longer exists (deleted on another device).
+    const ids = new Set(getNewsReports().map(r => r.id));
+    (keys || []).forEach(k => { if(!ids.has(k)) newsFileDelete(k).catch(() => {}); });
+  }catch(e){ newsFilesOnThisDevice = new Set(); }
+}
+
+function renderNewsTable(){
+  const container = document.getElementById("newsTableContent");
+  const heading = document.getElementById("newsListHeading");
+  if(!container) return;
+  const reports = getNewsReports().slice().sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+  if(heading) heading.textContent = `Current and Past News viewing: ${reports.length} report${reports.length === 1 ? "" : "s"}`;
+  if(reports.length === 0){
+    container.innerHTML = `<div style="color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0;">No news saved yet — copy the prompt above to your AI, then upload or paste its reply.</div>`;
+    return;
+  }
+  const btn = "padding:0.3rem 0.7rem; font-size:0.8rem;";
+  const rows = reports.map((r, i) => {
+    const isCurrent = i === 0;
+    const hasFile = r.kind === "docx" && newsFilesOnThisDevice.has(r.id);
+    const status = isCurrent
+      ? `<span style="color:var(--emerald); font-weight:600;">Current</span>`
+      : `<span style="color:var(--text-secondary);">Past</span>`;
+    const openWord = r.kind !== "docx" ? ""
+      : hasFile
+        ? `<button type="button" class="tab-btn tab-btn-export-word" data-news-action="open" data-id="${escAttr(r.id)}" style="${btn}" title="Opens the original Word document saved from ${escAttr(r.fileName || "your upload")}">Open Word</button>`
+        : `<span style="color:var(--text-secondary); font-size:0.8rem;" title="Word files are kept in the browser they were uploaded from. The text is available here via View.">Word file on another device</span>`;
+    return `<tr${newsViewingId === r.id ? ' style="outline:1px solid var(--accent-blue); outline-offset:-1px;"' : ""}>
+      <td>
+        <input class="cell-input" data-news-title="${escAttr(r.id)}" value="${escAttr(r.title)}" style="min-width:220px; font-weight:600;" title="Click to rename">
+        <div class="row-ctrl-controls">
+          <button type="button" class="row-ctrl-btn row-ctrl-remove" data-news-action="delete" data-id="${escAttr(r.id)}" title="Delete this report">&times;</button>
+        </div>
+      </td>
+      <td>${status}</td>
+      <td style="white-space:nowrap;">${escHtml(fmtDMYHM(new Date(r.uploadedAt)))}</td>
+      <td>${r.tickers && r.tickers.length ? r.tickers.map(t => `<span class="ticker-txt" style="display:inline-block; margin:0 0.25rem 0.25rem 0;">${escHtml(t)}</span>`).join("") : '<span style="color:var(--text-secondary);">—</span>'}</td>
+      <td>${r.kind === "docx" ? "Word (.docx)" : "Text"}</td>
+      <td style="white-space:nowrap; text-align:right;">${escHtml(fmtBytes(r.size))}</td>
+      <td style="white-space:nowrap;">
+        <button type="button" class="tab-btn" data-news-action="view" data-id="${escAttr(r.id)}" style="${btn}">${newsViewingId === r.id ? "Hide" : "View"}</button>
+        ${openWord}
+      </td>
+    </tr>`;
+  }).join("");
+  container.innerHTML = `<div class="table-container"><table id="newsTable">
+    <thead><tr><th>Title</th><th>Status</th><th>Uploaded</th><th>Assets Covered</th><th>Format</th><th>Size</th><th>View / Open</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+// Turns mammoth's HTML into a safe fragment: only simple formatting tags survive,
+// all attributes are dropped except http(s) link targets.
+function sanitizeNewsHtml(html){
+  const allowed = new Set(["P","H1","H2","H3","H4","H5","H6","STRONG","B","EM","I","U","UL","OL","LI","TABLE","THEAD","TBODY","TR","TD","TH","BR","A","BLOCKQUOTE","SUP","SUB"]);
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
+  const walk = (node) => {
+    Array.from(node.children).forEach(el => {
+      walk(el);
+      if(!allowed.has(el.tagName)){ el.replaceWith(...el.childNodes); return; }
+      const href = el.tagName === "A" ? el.getAttribute("href") : null;
+      Array.from(el.attributes).forEach(a => el.removeAttribute(a.name));
+      if(href && /^https?:\/\//i.test(href)){ el.setAttribute("href", href); el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); }
+    });
+  };
+  const root = doc.body.firstElementChild;
+  walk(root);
+  return root.innerHTML;
+}
+
+async function renderNewsViewer(){
+  const viewer = document.getElementById("newsViewer");
+  if(!viewer) return;
+  const r = newsViewingId ? getNewsReports().find(x => x.id === newsViewingId) : null;
+  if(!r){ viewer.style.display = "none"; viewer.innerHTML = ""; return; }
+  viewer.style.display = "";
+  const header = `<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+      <h3 style="margin:0; color:#facc15; font-size:1.1rem;">${escHtml(r.title)} <span style="color:var(--text-secondary); font-size:0.8rem; font-weight:400;">— uploaded ${escHtml(fmtDMYHM(new Date(r.uploadedAt)))}</span></h3>
+      <div style="display:flex; gap:0.5rem;">
+        <button type="button" class="tab-btn tab-btn-export-text" data-news-action="download-text" data-id="${escAttr(r.id)}" style="padding:0.3rem 0.7rem; font-size:0.8rem;">⬇ Save as text</button>
+        <button type="button" class="tab-btn" data-news-action="close" style="padding:0.3rem 0.7rem; font-size:0.8rem;">Close</button>
+      </div>
+    </div>`;
+  const textBody = `<div class="news-doc news-doc-text">${escHtml(r.text || "(empty)")}</div>`;
+  viewer.innerHTML = `<div class="table-container" style="padding:1.25rem; max-height:none;">${header}<div id="newsViewerBody">${textBody}</div></div>`;
+  // A Word report on this device is shown with its formatting (headings, tables).
+  if(r.kind === "docx" && newsFilesOnThisDevice.has(r.id)){
+    try{
+      const [rec, mammoth] = await Promise.all([newsFileGet(r.id), loadMammoth()]);
+      if(rec && rec.blob && newsViewingId === r.id){
+        const { value } = await mammoth.convertToHtml({ arrayBuffer: await rec.blob.arrayBuffer() });
+        const body = document.getElementById("newsViewerBody");
+        if(body) body.innerHTML = `<div class="news-doc">${sanitizeNewsHtml(value)}</div>`;
+      }
+    }catch(e){ /* the plain-text view is already showing */ }
+  }
+}
+
+function downloadBlob(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function refreshNewsUi(){
+  await refreshNewsFilesOnDevice();
+  renderNewsTable();
+  renderNewsViewer();
+}
+
+function wireUpNewsReports(){
+  const fileInput = document.getElementById("newsUploadFileInput");
+  const uploadBtn = document.getElementById("newsUploadBtn");
+  const uploadStatus = document.getElementById("newsUploadStatus");
+  const listStatus = document.getElementById("newsListStatus");
+  const container = document.getElementById("newsTableContent");
+  const viewer = document.getElementById("newsViewer");
+  if(!container) return; // index.html may be out of date
+  const setStatus = (el, text, color) => { if(el){ el.textContent = text; el.style.color = color; } };
+  const savedMsg = (res) => `Saved "${res.report.title}"${res.report.tickers.length ? ` (${res.report.tickers.length} asset${res.report.tickers.length === 1 ? "" : "s"} detected)` : ""}.`
+    + (res.truncated ? " The text was very long, so only the first part was kept." : "")
+    + (res.report.kind === "docx" && !res.fileSaved ? " The original Word file couldn't be stored in this browser — its text is saved." : "");
+
+  if(uploadBtn && fileInput){
+    uploadBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = "";
+      if(!file) return;
+      setStatus(uploadStatus, `Reading ${file.name}…`, "var(--text-secondary)");
+      try{
+        const res = await handleNewsFileUpload(file);
+        newsViewingId = res.report.id;
+        await refreshNewsUi();
+        setStatus(uploadStatus, savedMsg(res), "var(--emerald)");
+      }catch(e){
+        setStatus(uploadStatus, e.message || "Couldn't read that file.", "#ef4444");
+      }
+    });
+  }
+
+  const pasteBtn = document.getElementById("newsSavePastedBtn");
+  if(pasteBtn) pasteBtn.addEventListener("click", async () => {
+    const input = document.getElementById("newsPasteInput");
+    const titleEl = document.getElementById("newsPasteTitle");
+    const text = (input && input.value || "").trim();
+    if(!text){ setStatus(uploadStatus, "Paste the AI's reply into the box first.", "var(--amber)"); return; }
+    try{
+      const res = await addNewsReport({ title: titleEl && titleEl.value, kind: "text", text, size: new Blob([text]).size });
+      if(input) input.value = "";
+      if(titleEl) titleEl.value = "";
+      newsViewingId = res.report.id;
+      await refreshNewsUi();
+      setStatus(uploadStatus, savedMsg(res), "var(--emerald)");
+    }catch(e){
+      setStatus(uploadStatus, e.message || "Couldn't save the text.", "#ef4444");
+    }
+  });
+
+  const onAction = async (e) => {
+    const el = e.target.closest("[data-news-action]");
+    if(!el) return;
+    const action = el.getAttribute("data-news-action");
+    const id = el.getAttribute("data-id");
+    const report = id ? getNewsReports().find(r => r.id === id) : null;
+    if(action === "view"){
+      newsViewingId = newsViewingId === id ? null : id;
+      renderNewsTable();
+      await renderNewsViewer();
+      if(newsViewingId && viewer) viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+    }else if(action === "close"){
+      newsViewingId = null;
+      renderNewsTable();
+      renderNewsViewer();
+    }else if(action === "open" && report){
+      try{
+        const rec = await newsFileGet(id);
+        if(!rec || !rec.blob) throw new Error("missing");
+        downloadBlob(rec.blob, report.fileName || (report.title + ".docx"));
+        setStatus(listStatus, `Opening ${report.fileName || report.title}… (your browser downloads it; open it in Word)`, "var(--emerald)");
+      }catch(err){
+        setStatus(listStatus, "The original Word file isn't stored in this browser — use View to read its text.", "var(--amber)");
+      }
+    }else if(action === "download-text" && report){
+      downloadBlob(new Blob([report.text || ""], { type: "text/plain;charset=utf-8" }), (report.title || "news").replace(/[\\/:*?"<>|]+/g, "_") + ".txt");
+    }else if(action === "delete" && report){
+      if(!confirm(`Delete "${report.title}"? This removes its text${report.kind === "docx" ? " and the saved Word file" : ""}.`)) return;
+      saveNewsReports(getNewsReports().filter(r => r.id !== id));
+      newsFileDelete(id).catch(() => {});
+      if(newsViewingId === id) newsViewingId = null;
+      await refreshNewsUi();
+      setStatus(listStatus, `Deleted "${report.title}".`, "var(--text-secondary)");
+    }
+  };
+  container.addEventListener("click", onAction);
+  if(viewer) viewer.addEventListener("click", onAction);
+
+  // Rename: the Title cell is editable, saved when the box loses focus or Enter is pressed.
+  container.addEventListener("change", (e) => {
+    const input = e.target.closest("[data-news-title]");
+    if(!input) return;
+    const id = input.getAttribute("data-news-title");
+    const title = input.value.trim();
+    const reports = getNewsReports();
+    const r = reports.find(x => x.id === id);
+    if(!r) return;
+    r.title = title || defaultNewsTitle();
+    saveNewsReports(reports);
+    renderNewsTable();
+    renderNewsViewer();
+  });
+  container.addEventListener("keydown", (e) => {
+    if(e.key === "Enter" && e.target.closest("[data-news-title]")) e.target.blur();
+  });
+
+  // Reports can arrive from another device via cloud sync, so rebuild on open.
+  ["newsToggleBtn", "navNewsBtn"].forEach(btnId => {
+    const el = document.getElementById(btnId);
+    if(el) el.addEventListener("click", () => setTimeout(refreshNewsUi, 0));
+  });
+  refreshNewsUi();
+}
+try{
+  wireUpNewsReports();
+}catch(err){
+  console.error("Failed to wire up Current and Past News:", err);
 }
