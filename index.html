@@ -445,7 +445,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.10 — New section: News of Selected Assets (your own lists, with a news-briefing prompt).</div>
+      Version v6.11 — News of Selected Assets: ✓/✕ asset picker, upload/paste of the AI reply and its own Current and Past News table.</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
@@ -759,56 +759,73 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
   </div>
   <div id="newsSelSectionBody">
 
-  <div class="disclaimer">
-    <strong>Your own lists of assets to research.</strong>
-    <ul>
-      <li>Create a list for any assets you want a news briefing on — held or not (a watch list, a sector, ideas to research).</li>
-      <li>Add assets one at a time, or import every asset from another list: any Portfolio List, a Past Purchases list, your Buy Strategy (potential holdings), your current holdings, or another of these lists. Where each list comes from is shown in brackets.</li>
-      <li>The prompt below works like the one above: news from the last month, one-year performance and a check of each asset's Portfolio data. Save the AI's reply with "⬆ Upload AI result" in News of Current and Potential Holdings, so all reports stay in one "Current and Past News" table.</li>
-    </ul>
-  </div>
-
   <div class="control-panel" style="flex-wrap: wrap;">
     <label for="nsListSelector" style="color:#facc15; font-size:1.3rem;">Selected Assets List:</label>
     <select id="nsListSelector" class="form-input" style="min-width:180px;"></select>
     <button id="nsNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="nsRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
     <button id="nsDeleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+    <span id="nsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
 
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="nsImportSelect" title="Copy every asset from another list into the list you're viewing. Assets already on it are skipped.">Import list:</label>
-    <select id="nsImportSelect" class="form-input" style="min-width:260px;"></select>
-    <button id="nsImportBtn">Import into selected list</button>
-    <span id="nsImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="nsAddTicker">Add asset:</label>
-    <input id="nsAddTicker" class="form-input" placeholder="Ticker (e.g. AAPL)" maxlength="12" autocomplete="off" style="width:160px;">
-    <button id="nsAddTickerBtn">+ Add to list</button>
-    <span id="nsAddStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.6rem;">
-    <h2 id="nsActiveHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Selected Assets viewing: —</h2>
-    <div style="display:flex; align-items:center; gap:0.6rem;">
-      <span id="nsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
-      <button id="nsClearBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Remove every asset from this list (the list itself stays)">Clear all</button>
+  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
+    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">📰 News of Selected Assets — copy and paste this to your AI</h2>
+    <div class="disclaimer" style="margin-bottom:1rem;">
+      Pick the assets for a news briefing on the list you're viewing — held or not:
+      <ul>
+        <li>Click <strong style="color:#eab308;">✓</strong> to include an asset, <strong style="color:#c98a9e;">✕</strong> to exclude it (both start grey/undecided, treated as excluded; click again to clear). Each Selected Assets list keeps its own choices.</li>
+        <li>"Request all from" ticks every asset on another list in one click — any Portfolio List, a Past Purchases list, your current holdings, Buy Strategy (potential holdings) or another Selected Assets list; where each list comes from is shown in brackets. "↺ Reset request list" sets every asset back to grey.</li>
+        <li>Add a ticker that isn't on any list yet with "Add to Request".</li>
+        <li>Click "Generate request", copy the prompt to an AI assistant, then save its reply below with "⬆ Upload AI result" or "Save pasted text". It works like News of Current and Potential Holdings: news from the last month, one-year performance, and a check of each asset's Portfolio data.</li>
+      </ul>
     </div>
-  </div>
-  <div id="nsAssetChips" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.25rem;"></div>
-
-  <div class="table-container" style="padding:1.25rem;">
-    <h2 id="nsPromptHeading" style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">📰 News briefing for this list — copy and paste this to your AI</h2>
-    <label for="nsPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
-    <textarea id="nsPromptBox" readonly rows="10" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
+      <input id="nsTicker" placeholder="Ticker (e.g. RGTI)" class="form-input" maxlength="12" autocomplete="off" style="width:140px;">
+      <input id="nsName" placeholder="Company Name" class="form-input" style="flex:1; min-width:180px;">
+      <button id="nsAddBtn" type="button">Add to Request</button>
+    </div>
+    <div id="nsAddStatus" style="color:var(--text-secondary); font-size:0.9rem; margin-top:0.5rem;"></div>
+    <div style="margin-top:0.75rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <label for="nsImportSelect" style="font-size:0.9rem;">Request all from:</label>
+      <select id="nsImportSelect" class="form-input" style="min-width:260px;"></select>
+      <button id="nsImportBtn" type="button" title="Mark every asset on the chosen list as ✓ included, in one click." style="background:transparent; border:1px solid #eab308; color:#eab308;">✓ Request all</button>
+      <button id="nsResetBtn" type="button" title="Reset every asset below back to grey/undecided, in one click." style="background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary);">↺ Reset request list</button>
+      <span id="nsImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+    <h3 id="nsActiveHeading" style="font-size:1rem; color:#facc15; font-weight:600; margin:1rem 0 0.25rem;">Selected Assets viewing: —</h3>
+    <div class="chart-note" style="margin-top:0.25rem;">All assets across your lists — click ✓ to include, ✕ to exclude from this list's request:</div>
+    <div id="nsRequestList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;"></div>
+    <div style="margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="nsGenerateBtn" type="button">Generate request</button>
+      <button id="nsRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh asset list</button>
+    </div>
+    <label for="nsPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI (one that can search the web gives the most current results):</label>
+    <textarea id="nsPromptBox" readonly rows="8" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
     <div style="margin-top:0.5rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
       <button id="nsCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
-      <button id="nsRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh prompt</button>
       <span id="nsPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
     </div>
   </div>
+
+  <div class="control-panel" style="flex-direction:column; align-items:stretch; gap:0.75rem; margin-top:1rem;">
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+      <strong style="color:#facc15;">Save the AI's reply:</strong>
+      <button id="nsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md). It is saved against the Selected Assets list you're viewing.">⬆ Upload AI result (Word or text)</button>
+      <input id="nsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none;">
+      <span id="nsUploadStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+    <div class="chart-note">Or paste the reply as text:</div>
+    <input id="nsPasteTitle" class="form-input" placeholder="Title (optional — defaults to today's date)" style="max-width:420px;">
+    <textarea id="nsPasteInput" rows="5" placeholder="Paste the AI's news briefing here…" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-size:0.85rem; resize:vertical;"></textarea>
+    <div><button id="nsSavePastedBtn" type="button">Save pasted text</button></div>
+    <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage (☁ in the Format column). Each report remembers which Selected Assets list it was saved under (List column). Older .doc files aren't supported — save them as .docx first.</div>
+  </div>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
+    <h2 id="nsReportsHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
+    <span id="nsReportsStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+  </div>
+  <div id="nsTableContent"></div>
 
   </div>
 
