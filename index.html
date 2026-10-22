@@ -445,7 +445,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.09 — News prompt: each asset includes its Portfolio data for the AI to check, update and analyse.</div>
+      Version v6.10 — New section: News of Selected Assets (your own lists, with a news-briefing prompt).</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
@@ -477,6 +477,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <button id="navDetailedUpdateBtn" type="button" class="nav-btn" title="Jump to Detailed Update for Selected Assets">Detailed Update for Selected Assets</button>
     <button id="navQuickPriceUpdateBtn" type="button" class="nav-btn" title="Jump to Update Current Price and Consensus Target Price">Update Current Price and Consensus Target Price</button>
     <button id="navNewsBtn" type="button" class="nav-btn" title="Jump to News of Current and Potential Holdings">News of Current and Potential Holdings</button>
+    <button id="navNewsSelBtn" type="button" class="nav-btn" title="Jump to News of Selected Assets">News of Selected Assets</button>
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
@@ -749,6 +750,65 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <span id="newsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div id="newsTableContent"></div>
+
+  </div>
+
+  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
+    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Selected Assets</h2>
+    <button id="newsSelToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Selected Assets section" onclick="toggleCollapsibleSection('newsSelSectionBody','newsSelToggleBtn')">▶</button>
+  </div>
+  <div id="newsSelSectionBody">
+
+  <div class="disclaimer">
+    <strong>Your own lists of assets to research.</strong>
+    <ul>
+      <li>Create a list for any assets you want a news briefing on — held or not (a watch list, a sector, ideas to research).</li>
+      <li>Add assets one at a time, or import every asset from another list: any Portfolio List, a Past Purchases list, your Buy Strategy (potential holdings), your current holdings, or another of these lists. Where each list comes from is shown in brackets.</li>
+      <li>The prompt below works like the one above: news from the last month, one-year performance and a check of each asset's Portfolio data. Save the AI's reply with "⬆ Upload AI result" in News of Current and Potential Holdings, so all reports stay in one "Current and Past News" table.</li>
+    </ul>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="nsListSelector" style="color:#facc15; font-size:1.3rem;">Selected Assets List:</label>
+    <select id="nsListSelector" class="form-input" style="min-width:180px;"></select>
+    <button id="nsNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
+    <button id="nsRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
+    <button id="nsDeleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="nsImportSelect" title="Copy every asset from another list into the list you're viewing. Assets already on it are skipped.">Import list:</label>
+    <select id="nsImportSelect" class="form-input" style="min-width:260px;"></select>
+    <button id="nsImportBtn">Import into selected list</button>
+    <span id="nsImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="nsAddTicker">Add asset:</label>
+    <input id="nsAddTicker" class="form-input" placeholder="Ticker (e.g. AAPL)" maxlength="12" autocomplete="off" style="width:160px;">
+    <button id="nsAddTickerBtn">+ Add to list</button>
+    <span id="nsAddStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.6rem;">
+    <h2 id="nsActiveHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Selected Assets viewing: —</h2>
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span id="nsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+      <button id="nsClearBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Remove every asset from this list (the list itself stays)">Clear all</button>
+    </div>
+  </div>
+  <div id="nsAssetChips" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.25rem;"></div>
+
+  <div class="table-container" style="padding:1.25rem;">
+    <h2 id="nsPromptHeading" style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">📰 News briefing for this list — copy and paste this to your AI</h2>
+    <label for="nsPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
+    <textarea id="nsPromptBox" readonly rows="10" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
+    <div style="margin-top:0.5rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button id="nsCopyBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">📋 Copy prompt</button>
+      <button id="nsRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh prompt</button>
+      <span id="nsPromptStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+    </div>
+  </div>
 
   </div>
 
