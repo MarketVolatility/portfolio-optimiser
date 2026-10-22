@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.09 (News prompt: each asset carries its Portfolio table data; the AI checks/updates it in a ~500-word data section with strengths and weaknesses. Earlier v6.08: Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.10 (New section 'News of Selected Assets': user-made lists (import from Portfolio / Past Purchases / Buy Strategy / holdings / other lists) with the news-briefing prompt. Earlier v6.09: News prompt: each asset carries its Portfolio table data; the AI checks/updates it in a ~500-word data section with strengths and weaknesses. Earlier v6.08: Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.09 (News prompt includes Portfolio data check; earlier v6.08: − / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.10 (News of Selected Assets; earlier v6.09: News prompt includes Portfolio data check; earlier v6.08: − / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -550,7 +550,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cfTIXfQwai1dHSRJmzoqJg_nLHE4UhR
 // whichever single browser/origin you clicked "Save key" in, and never traveled
 // with the rest of your synced data (lists/overrides, which use correctly-named
 // keys and always synced fine) to a new device, browser, or newly deployed URL.
-const SYNC_KEYS = ["newsReports", "portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront", "toBuyPriceRemoved"];
+const SYNC_KEYS = ["newsSelectedLists", "newsSelectedActiveList", "newsReports", "portfolioLists", "globalOverrides", "customParams", "columnOrder", "activeListId", "finnhubApiKey", "alphaVantageApiKey", "pastPurchasesRows", "pastPurchasesParams", "pastPurchasesTickers", "pastPurchasesValues", "pastPurchasesDateAdded", "hiddenBuiltinColumns", "pastPurchasesLists", "activePastPurchasesListId", "dusAssetStates", "legacyMarketTickersMigrated", "forwardPeReordered", "saleProfitRenamedToRealizedGain", "unrealizedGainColumnAdded", "unitsSoldColumnAdded", "currentMarketValueColumnAdded", "ppCostBasisMethod", "ssColumnOrder", "ssHiddenColumns", "ssDisplayRange", "marketDataApiKey", "optionPrices", "optionContractMultiplier", "optionColumnsAdded", "ssGainAfterExpiry", "bsColumnOrder", "bsHiddenColumns", "bsDisplayRange", "mainStrikeExpiryFront", "toBuyPriceRemoved"];
 
 // --- Local data ownership guard ---
 // localStorage is shared by EVERY Supabase account that ever signs in on a given
@@ -659,6 +659,7 @@ function applyUiViewMode(){
 const ACCORDION_SECTIONS = [
   { id: "pastPurchasesSectionBody", toggleBtn: "pastPurchasesToggleBtn" },
   { id: "newsSectionBody", toggleBtn: "newsToggleBtn", navBtn: "navNewsBtn" },
+  { id: "newsSelSectionBody", toggleBtn: "newsSelToggleBtn", navBtn: "navNewsSelBtn" },
   { id: "portfolioSectionBody", toggleBtn: "portfolioToggleBtn" },
   { id: "fetchLiveDataSectionBody", toggleBtn: "fetchLiveDataToggleBtn", navBtn: "navFetchLiveDataBtn" },
   { id: "detailedUpdateSectionBody", toggleBtn: "detailedUpdateToggleBtn", navBtn: "navDetailedUpdateBtn" },
@@ -995,6 +996,7 @@ async function openDashboard(user){
   // v6.00/6.01: the News section reads holdings, Buy Strategy and saved reports, all
   // of which the cloud pull above may have just replaced.
   try{ renderNewsBriefing(); refreshNewsUi(); }catch(e){ /* News section not present */ }
+  try{ renderNewsSelected(); }catch(e){ /* News of Selected Assets section not present */ }
 
   startAutoSync();
 }
@@ -10740,6 +10742,7 @@ try{
     ["navDetailedUpdateBtn", "detailedUpdateSectionBody"],
     ["navQuickPriceUpdateBtn", "quickPriceUpdateSectionBody"],
     ["navNewsBtn", "newsSectionBody"],
+    ["navNewsSelBtn", "newsSelSectionBody"],
   ].forEach(([btnId, sectionId]) => {
     const btn = document.getElementById(btnId);
     if(btn) btn.addEventListener("click", () => openAccordionSectionFromNav(sectionId));
@@ -11113,9 +11116,13 @@ function getPortfolioDataForNews(ticker){
   return out;
 }
 
-function buildNewsBriefingPrompt(assets){
+// opts (v6.10, for News of Selected Assets): docTitle — the Word document's title;
+// emptyMessage — shown instead of a prompt when there are no assets.
+function buildNewsBriefingPrompt(assets, opts){
+  opts = opts || {};
+  const docTitle = opts.docTitle || "News of Current and Potential Holdings";
   if(assets.length === 0){
-    return "No assets yet — hold a ticker on your Past Purchases list (so it shows in Sales Strategy) or add a row to Buy Strategy, then click \"Refresh asset list\".";
+    return opts.emptyMessage || "No assets yet — hold a ticker on your Past Purchases list (so it shows in Sales Strategy) or add a row to Buy Strategy, then click \"Refresh asset list\".";
   }
   const today = ppToday(); // YYYY-MM-DD
   const fromIso = ppSubtractMonthsIso(today, 1);
@@ -11125,7 +11132,10 @@ function buildNewsBriefingPrompt(assets){
   const lines = assets.map((a, i) => {
     const contracts = Array.from(new Set(a.details)).join("; ");
     let status;
-    if(a.optionOnly){
+    if(a.watch){
+      // On a Selected Assets list but neither held nor in Buy Strategy.
+      status = a.optionOnly ? "not held — selected for review as call option(s); analyse it as a stock" : "not currently held — selected for review";
+    }else if(a.optionOnly){
       status = a.held && a.planned ? "held and planned ONLY as call options — analyse it as a stock"
         : a.held ? "held ONLY as a call option — analyse it as a stock"
         : "planned ONLY as a call option in Buy Strategy — analyse it as a stock";
@@ -11138,7 +11148,7 @@ function buildNewsBriefingPrompt(assets){
     if(contracts){
       parts.push(a.optionOnly
         ? `call option(s): ${contracts}`
-        : `also held/planned as call option(s): ${contracts} — covered by this stock's analysis; no separate option analysis`);
+        : `also ${a.watch ? "on the list" : "held/planned"} as call option(s): ${contracts} — covered by this stock's analysis; no separate option analysis`);
     }
     const data = getPortfolioDataForNews(a.ticker);
     a._dataLabels = data.map(x => x.label);
@@ -11200,11 +11210,11 @@ RULES:
 - Report every price and dollar amount in USD. If a stock trades in another currency, convert it at the latest exchange rate and say so.
 - CALL OPTIONS: assess every call option as its underlying stock. Do not write any option-specific analysis — nothing on the option's premium, strike, expiry, time value, Greeks or volatility, and no separate section for the contract.
   • If the option's stock is also on the list as a stock (marked "also held/planned as call option(s)"), write nothing extra about the option: just add a header line "Also held as: <contract(s)> — see the analysis of this stock in this section." (or "Also planned as:" for a Buy Strategy option).
-  • If only the option is on the list (marked "held ONLY as a call option" or "planned ONLY as a call option"), write the full section on the underlying stock exactly as for any other stock, with the header line "Held as: <contract(s)> — assessed here as the stock." (write "Planned as:" instead when the option is only planned in Buy Strategy).
+  • If only the option is on the list (marked "held ONLY as a call option", "planned ONLY as a call option" or "selected for review as call option(s)"), write the full section on the underlying stock exactly as for any other stock, with the header line "Held as: <contract(s)> — assessed here as the stock." (write "Planned as:" instead when the option is only planned in Buy Strategy, or "Selected as:" when it is only selected for review).
 - The "expected price trend" is your reasoned view from the news, not a guarantee. End the document with a one-line note that the briefing is not financial advice.
 
 OUTPUT FORMAT:
-- If you are able to create files, produce a Word document (.docx) titled "News of Current and Potential Holdings — ${fmtDMY(today)}", with each asset starting on a new page, its header block formatted as a small table, and the section headings above as Word headings.
+- If you are able to create files, produce a Word document (.docx) titled "${docTitle} — ${fmtDMY(today)}", with each asset starting on a new page, its header block formatted as a small table, and the section headings above as Word headings.
 - If you cannot create a Word document, reply in plain text using the same structure: a line of "=" characters between assets, the header block first, then the numbered sections.`;
 }
 
@@ -11879,4 +11889,310 @@ try{
   wireUpNewsReports();
 }catch(err){
   console.error("Failed to wire up Current and Past News:", err);
+}
+
+
+// --- v6.10: News of Selected Assets ---
+// User-made lists of assets to get a news briefing on, whether held or not. Lists live in
+// localStorage "newsSelectedLists" = { [id]: { name, assets: [key, ...], createdAt } } with the
+// open one in "newsSelectedActiveList" (both synced). A key is a plain TICKER or a call-option
+// contract key (TICKER|strike|YYYY-MM-DD). The prompt is the same one News of Current and
+// Potential Holdings uses (buildNewsBriefingPrompt); each asset is marked held / in Buy
+// Strategy / not held, so the AI knows what it's looking at.
+const NS_LISTS_KEY = "newsSelectedLists";
+const NS_ACTIVE_KEY = "newsSelectedActiveList";
+
+function getNsLists(){
+  try{
+    const v = JSON.parse(localStorage.getItem(NS_LISTS_KEY) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  }catch(e){ return {}; }
+}
+function saveNsLists(lists){
+  try{ localStorage.setItem(NS_LISTS_KEY, JSON.stringify(lists)); return true; }catch(e){ return false; }
+}
+function getNsActiveId(){
+  const lists = getNsLists();
+  let id = null;
+  try{ id = localStorage.getItem(NS_ACTIVE_KEY); }catch(e){}
+  if(id && lists[id]) return id;
+  const ids = Object.keys(lists).sort((a, b) => (lists[a].createdAt || 0) - (lists[b].createdAt || 0));
+  return ids[0] || null;
+}
+function setNsActiveId(id){
+  try{ if(id) localStorage.setItem(NS_ACTIVE_KEY, id); else localStorage.removeItem(NS_ACTIVE_KEY); }catch(e){}
+}
+function nsListNameExists(name, exceptId){
+  const n = String(name || "").trim().toLowerCase();
+  return Object.entries(getNsLists()).some(([id, l]) => id !== exceptId && String(l.name || "").trim().toLowerCase() === n);
+}
+function createNsList(name){
+  const lists = getNsLists();
+  const id = "nslist_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+  lists[id] = { name, assets: [], createdAt: Date.now() };
+  saveNsLists(lists);
+  setNsActiveId(id);
+  return id;
+}
+function updateNsList(id, fn){
+  const lists = getNsLists();
+  if(!lists[id]) return null;
+  fn(lists[id]);
+  saveNsLists(lists);
+  return lists[id];
+}
+function normaliseNsKey(raw){
+  const k = String(raw || "").trim();
+  if(!k) return "";
+  const p = ppParseKey(k);
+  if(p.isOption) return ppMakeKey(p.symbol.toUpperCase(), p.strike, p.expiry);
+  return p.symbol.toUpperCase();
+}
+// Adds keys to a list (skipping ones already there); returns how many were new.
+function addKeysToNsList(id, keys){
+  let added = 0;
+  updateNsList(id, l => {
+    const have = new Set(l.assets || []);
+    keys.map(normaliseNsKey).filter(Boolean).forEach(k => { if(!have.has(k)){ have.add(k); (l.assets = l.assets || []).push(k); added++; } });
+  });
+  return added;
+}
+
+// Every list that can be imported from, labelled with where it comes from in brackets.
+function getNsImportSources(){
+  const out = [];
+  const activeId = getNsActiveId();
+  try{
+    const lists = getAllLists();
+    Object.keys(lists).forEach(id => {
+      out.push({ value: "pf:" + id, label: `${lists[id].name} (Portfolio)`, keys: () => getWorkingData(lists[id], true).map(a => a.ticker) });
+    });
+  }catch(e){}
+  let ppLists = {};
+  try{ ppLists = getAllPastPurchasesLists(); }catch(e){}
+  const ppIds = Object.keys(ppLists);
+  const optP = (() => { try{ return ppOptionParams(getPastPurchasesParams()); }catch(e){ return null; } })();
+  ppIds.forEach(id => {
+    out.push({ value: "pp:" + id, label: `${ppLists[id].name} (Past Purchases)`, keys: () => (ppLists[id].rows || []).map(r => ppRowKey(r, optP)).filter(Boolean) });
+  });
+  out.push({ value: "held", label: "Current Holding (Sales Strategy)", keys: () => computeCurrentHoldingTickersPerSalesStrategy() });
+  ppIds.forEach(id => {
+    const drafts = () => (ppLists[id].buyStrategy || []).filter(r => r && r.ticker && !r.buyRealizedDate).map(r => r.ticker);
+    out.push({ value: "bs:" + id, label: ppIds.length > 1 ? `Potential Holding — ${ppLists[id].name} (Buy Strategy)` : "Potential Holding (Buy Strategy)", keys: drafts });
+  });
+  out.push({ value: "news", label: "Current and Potential Holdings (News)", keys: () => getNewsBriefingAssets().flatMap(a => a.optionOnly ? [] : [a.ticker]) });
+  const ns = getNsLists();
+  Object.keys(ns).filter(id => id !== activeId).forEach(id => {
+    out.push({ value: "ns:" + id, label: `${ns[id].name} (Selected Assets)`, keys: () => (ns[id].assets || []).slice() });
+  });
+  return out;
+}
+
+// Assets for the prompt: one entry per underlying stock, with held / Buy Strategy status
+// taken from the same holdings the News of Current and Potential Holdings prompt uses.
+function getSelectedNewsAssets(keys){
+  let holdings = [];
+  try{ holdings = getNewsBriefingAssets(); }catch(e){}
+  const bySym = Object.fromEntries(holdings.map(h => [h.ticker, h]));
+  const sel = {};
+  (keys || []).forEach(k => {
+    const p = ppParseKey(k);
+    const sym = String(p.symbol || "").toUpperCase();
+    if(!sym) return;
+    if(!sel[sym]) sel[sym] = { stock: false, details: [] };
+    if(p.isOption) sel[sym].details.push(ppKeyLabel(k)); else sel[sym].stock = true;
+  });
+  return Object.keys(sel).sort().map(sym => {
+    const h = bySym[sym];
+    let name = "", price = 0;
+    try{
+      const v = getResolvedBuiltinAssetValues(sym);
+      if(v){ name = v.name && v.name !== sym ? v.name : ""; price = Number(v.currentPrice) || 0; }
+    }catch(e){}
+    const details = Array.from(new Set([...(h ? h.details : []), ...sel[sym].details]));
+    if(h){
+      return Object.assign({}, h, { name: h.name || name, price: h.price || price, details,
+        optionOnly: !(sel[sym].stock || h.stockHeld || h.stockPlanned) });
+    }
+    return { ticker: sym, name, price, held: false, planned: false, stockHeld: false, stockPlanned: false,
+      watch: true, optionOnly: !sel[sym].stock, details };
+  });
+}
+
+function renderNsListSelector(){
+  const sel = document.getElementById("nsListSelector");
+  if(!sel) return;
+  const lists = getNsLists();
+  const activeId = getNsActiveId();
+  const ids = Object.keys(lists).sort((a, b) => (lists[a].createdAt || 0) - (lists[b].createdAt || 0));
+  sel.innerHTML = ids.length
+    ? ids.map(id => `<option value="${escAttr(id)}"${id === activeId ? " selected" : ""}>${escHtml(lists[id].name)}</option>`).join("")
+    : '<option value="">No lists yet — click "+ New List"</option>';
+  ["nsRenameListBtn", "nsDeleteListBtn", "nsImportBtn", "nsAddTickerBtn", "nsClearBtn"].forEach(b => {
+    const el = document.getElementById(b); if(el) el.disabled = !activeId;
+  });
+}
+function renderNsImportSelect(){
+  const sel = document.getElementById("nsImportSelect");
+  if(!sel) return;
+  const sources = getNsImportSources();
+  sel.innerHTML = sources.map(src => {
+    let n = 0;
+    try{ n = new Set(src.keys()).size; }catch(e){}
+    return `<option value="${escAttr(src.value)}">${escHtml(src.label)} — ${n} asset${n === 1 ? "" : "s"}</option>`;
+  }).join("") || '<option value="">No lists to import from</option>';
+}
+function renderNsAssets(){
+  const wrap = document.getElementById("nsAssetChips");
+  const heading = document.getElementById("nsActiveHeading");
+  const id = getNsActiveId();
+  const list = id ? getNsLists()[id] : null;
+  const keys = list ? (list.assets || []) : [];
+  if(heading) heading.textContent = list ? `Selected Assets viewing: ${list.name} (${keys.length} asset${keys.length === 1 ? "" : "s"})` : "Selected Assets viewing: —";
+  if(!wrap) return;
+  if(!list){
+    wrap.innerHTML = `<span style="color:var(--text-secondary);">No lists yet — click "+ New List" above to create one.</span>`;
+    return;
+  }
+  if(keys.length === 0){
+    wrap.innerHTML = `<span style="color:var(--text-secondary);">No assets in this list yet — add a ticker or import a list above.</span>`;
+    return;
+  }
+  let holdings = {};
+  try{ holdings = Object.fromEntries(getNewsBriefingAssets().map(h => [h.ticker, h])); }catch(e){}
+  wrap.innerHTML = keys.map(k => {
+    const sym = ppParseKey(k).symbol;
+    const h = holdings[sym];
+    const tag = h ? (h.held && h.planned ? "Held + Buy Strategy" : h.held ? "Held" : "Buy Strategy") : "Not held";
+    const color = h ? (h.held ? "var(--emerald)" : "var(--gold)") : "var(--text-secondary)";
+    return `<div class="remove-chip"><span><strong>${escHtml(ppKeyLabel(k))}</strong> <span style="color:${color}; font-size:0.75rem;">${escHtml(tag)}</span></span><button type="button" data-ns-remove="${escAttr(k)}" title="Remove ${escAttr(ppKeyLabel(k))} from this list">&times;</button></div>`;
+  }).join("");
+}
+function renderNsPrompt(){
+  const box = document.getElementById("nsPromptBox");
+  const heading = document.getElementById("nsPromptHeading");
+  if(!box) return;
+  const id = getNsActiveId();
+  const list = id ? getNsLists()[id] : null;
+  if(heading) heading.textContent = list ? `📰 News briefing for "${list.name}" — copy and paste this to your AI` : "📰 News briefing for this list — copy and paste this to your AI";
+  if(!list){ box.value = 'Create a list first ("+ New List"), then add assets to it.'; return; }
+  box.value = buildNewsBriefingPrompt(getSelectedNewsAssets(list.assets || []), {
+    docTitle: `News of Selected Assets — ${list.name}`,
+    emptyMessage: `"${list.name}" has no assets yet — add a ticker or import a list above.`,
+  });
+}
+function renderNewsSelected(){
+  renderNsListSelector();
+  renderNsImportSelect();
+  renderNsAssets();
+  renderNsPrompt();
+}
+
+function wireUpNewsSelected(){
+  const body = document.getElementById("newsSelSectionBody");
+  if(!body) return; // index.html may be out of date
+  const status = (elId, text, color) => { const el = document.getElementById(elId); if(el){ el.textContent = text; el.style.color = color || "var(--emerald)"; } };
+
+  document.getElementById("nsListSelector")?.addEventListener("change", (e) => {
+    if(e.target.value){ setNsActiveId(e.target.value); renderNewsSelected(); }
+  });
+  document.getElementById("nsNewListBtn")?.addEventListener("click", () => {
+    let name = prompt("Name for the new Selected Assets list:", "List " + (Object.keys(getNsLists()).length + 1));
+    while(name !== null && name.trim() !== "" && nsListNameExists(name)){
+      name = prompt(`"${name.trim()}" is already in use. Please choose a different name:`, "");
+    }
+    if(name === null || name.trim() === "") return;
+    createNsList(name.trim());
+    renderNewsSelected();
+    status("nsListStatus", `Created and switched to "${name.trim()}". Add assets or import a list above.`);
+  });
+  document.getElementById("nsRenameListBtn")?.addEventListener("click", () => {
+    const id = getNsActiveId(); if(!id) return;
+    const current = getNsLists()[id];
+    let name = prompt("Rename this Selected Assets list:", current.name);
+    while(name !== null && name.trim() !== "" && nsListNameExists(name, id)){
+      name = prompt(`"${name.trim()}" is already in use by another list. Please choose a different name:`, "");
+    }
+    if(name === null || name.trim() === "") return;
+    updateNsList(id, l => { l.name = name.trim(); });
+    renderNewsSelected();
+    status("nsListStatus", `Renamed to "${name.trim()}".`);
+  });
+  document.getElementById("nsDeleteListBtn")?.addEventListener("click", async () => {
+    const id = getNsActiveId(); if(!id) return;
+    const current = getNsLists()[id];
+    const statusEl = document.getElementById("nsListStatus");
+    const verified = await verifyAccountPasswordForDestructiveAction(`deleting "${current.name}"`, statusEl, {title: `Delete "${current.name}"?`, message: "This removes the list and its assets. Saved news reports are not affected. This cannot be undone.", confirmLabel: "Delete"});
+    if(!verified) return;
+    const lists = getNsLists();
+    delete lists[id];
+    saveNsLists(lists);
+    setNsActiveId(null);
+    renderNewsSelected();
+    const next = getNsActiveId();
+    status("nsListStatus", next ? `Deleted "${current.name}". Now viewing "${getNsLists()[next].name}".` : `Deleted "${current.name}".`);
+  });
+  document.getElementById("nsImportBtn")?.addEventListener("click", () => {
+    const id = getNsActiveId(); if(!id) return;
+    const val = document.getElementById("nsImportSelect").value;
+    const src = getNsImportSources().find(x => x.value === val);
+    if(!src){ status("nsImportStatus", "Pick a list to import from.", "var(--amber)"); return; }
+    let keys = [];
+    try{ keys = src.keys(); }catch(e){}
+    const added = addKeysToNsList(id, keys);
+    renderNewsSelected();
+    status("nsImportStatus", added ? `Imported ${added} asset${added === 1 ? "" : "s"} from ${src.label}.` : `Nothing new to import — every asset from ${src.label} is already on this list.`, added ? "var(--emerald)" : "var(--text-secondary)");
+  });
+  const addTicker = () => {
+    const id = getNsActiveId(); if(!id) return;
+    const input = document.getElementById("nsAddTicker");
+    const t = String(input.value || "").trim().toUpperCase();
+    if(!/^[A-Z0-9][A-Z0-9.\-]{0,11}$/.test(t)){ status("nsAddStatus", "Type a ticker symbol, e.g. AAPL.", "var(--amber)"); return; }
+    const added = addKeysToNsList(id, [t]);
+    input.value = "";
+    renderNewsSelected();
+    status("nsAddStatus", added ? `Added ${t}.` : `${t} is already on this list.`, added ? "var(--emerald)" : "var(--text-secondary)");
+  };
+  document.getElementById("nsAddTickerBtn")?.addEventListener("click", addTicker);
+  document.getElementById("nsAddTicker")?.addEventListener("keydown", (e) => { if(e.key === "Enter") addTicker(); });
+  document.getElementById("nsAssetChips")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-ns-remove]");
+    if(!btn) return;
+    const id = getNsActiveId(); if(!id) return;
+    const key = btn.getAttribute("data-ns-remove");
+    updateNsList(id, l => { l.assets = (l.assets || []).filter(k => k !== key); });
+    renderNewsSelected();
+  });
+  document.getElementById("nsClearBtn")?.addEventListener("click", () => {
+    const id = getNsActiveId(); if(!id) return;
+    const l = getNsLists()[id];
+    if(!(l.assets || []).length) return;
+    if(!confirm(`Remove all ${l.assets.length} assets from "${l.name}"? The list itself stays.`)) return;
+    updateNsList(id, x => { x.assets = []; });
+    renderNewsSelected();
+    status("nsListStatus", `Cleared "${l.name}".`);
+  });
+  document.getElementById("nsRefreshBtn")?.addEventListener("click", () => {
+    renderNewsSelected();
+    status("nsPromptStatus", "Prompt refreshed with the latest Portfolio data.", "var(--text-secondary)");
+  });
+  document.getElementById("nsCopyBtn")?.addEventListener("click", async () => {
+    renderNsPrompt();
+    const box = document.getElementById("nsPromptBox");
+    try{
+      await navigator.clipboard.writeText(box.value);
+      status("nsPromptStatus", "Copied to clipboard.");
+    }catch(e){
+      box.select();
+      status("nsPromptStatus", "Couldn't use the clipboard automatically — the text is selected, so Ctrl/Cmd+C will copy it.", "var(--amber)");
+    }
+  });
+  // Other lists, holdings and Portfolio data change elsewhere — rebuild whenever the section is opened.
+  ["newsSelToggleBtn", "navNewsSelBtn"].forEach(b => document.getElementById(b)?.addEventListener("click", () => setTimeout(renderNewsSelected, 0)));
+  renderNewsSelected();
+}
+try{
+  wireUpNewsSelected();
+}catch(err){
+  console.error("Failed to wire up News of Selected Assets:", err);
 }
