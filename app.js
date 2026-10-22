@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.11 (News of Selected Assets: Detailed-Update-style ✓/✕ picker, upload/paste of the AI reply and its own Current and Past News table. Earlier v6.10: New section 'News of Selected Assets': user-made lists (import from Portfolio / Past Purchases / Buy Strategy / holdings / other lists) with the news-briefing prompt. Earlier v6.09: News prompt: each asset carries its Portfolio table data; the AI checks/updates it in a ~500-word data section with strengths and weaknesses. Earlier v6.08: Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.12 (Both ✓/✕ pickers (Detailed Update, News of Selected Assets) list every asset in the app — 'All assets across your App Lists'. Earlier v6.11: News of Selected Assets: Detailed-Update-style ✓/✕ picker, upload/paste of the AI reply and its own Current and Past News table. Earlier v6.10: New section 'News of Selected Assets': user-made lists (import from Portfolio / Past Purchases / Buy Strategy / holdings / other lists) with the news-briefing prompt. Earlier v6.09: News prompt: each asset carries its Portfolio table data; the AI checks/updates it in a ~500-word data section with strengths and weaknesses. Earlier v6.08: Column collapse − / + now also on each table's first column (Title / Ticker / Asset). Earlier v6.07: News: benchmark index funds such as SPY/QQQ no longer count as Assets Covered unless held or planned. Earlier v6.06: News prompt: adds a ONE-YEAR PERFORMANCE paragraph per stock. Earlier v6.05: News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.11 (Selected Assets picker + reports; earlier v6.10: News of Selected Assets; earlier v6.09: News prompt includes Portfolio data check; earlier v6.08: − / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.12 (pickers list every app asset; earlier v6.11: Selected Assets picker + reports; earlier v6.10: News of Selected Assets; earlier v6.09: News prompt includes Portfolio data check; earlier v6.08: − / + on first columns too; earlier v6.07: News Assets Covered ignores benchmark funds; earlier v6.06: News prompt one-year performance paragraph; earlier v6.05: News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -2042,23 +2042,54 @@ function setDusAssetState(ticker, state){
   saveDusAssetStates(states);
 }
 
-// Same source ticker list as the Brief Update below (every ticker across every
-// Portfolio List, deduped), but carrying each one's current display name too,
-// since the checklist shows both.
-function getAllPortfolioAssetsForDetailedUpdate(){
-  const seen = new Set();
-  const rows = [];
-  Object.values(getAllLists()).forEach(list => {
-    getWorkingData(list).forEach(asset => {
-      if(!seen.has(asset.ticker)){
-        seen.add(asset.ticker);
+// v6.12: every stock anywhere in the app — all Portfolio Lists, every Past Purchases list
+// (bought or sold), Sales Strategy and Buy Strategy rows, and every News of Selected Assets
+// list — deduped and alphabetical, each with its display name. A call-option contract counts
+// as its underlying stock. Used by both ✓/✕ pickers (Detailed Update for Selected Assets and
+// News of Selected Assets), so they always offer the same complete set.
+function getAllAppAssets(){
+  const names = {};
+  const add = (raw, name) => {
+    const sym = String(ppParseKey(raw).symbol || "").trim().toUpperCase();
+    if(!sym) return;
+    if(!(sym in names)) names[sym] = "";
+    if(name && !names[sym]) names[sym] = String(name);
+  };
+  try{
+    Object.values(getAllLists()).forEach(list => {
+      getWorkingData(list, true).forEach(asset => {
         const ov = asset._overrides || {};
-        rows.push({ ticker: asset.ticker, name: ov.name !== undefined ? ov.name : asset.name });
-      }
+        add(asset.ticker, String(asset.ticker).indexOf("|") === -1 ? (ov.name !== undefined ? ov.name : asset.name) : "");
+      });
     });
+  }catch(e){}
+  try{
+    const optP = ppOptionParams(getPastPurchasesParams());
+    Object.values(getAllPastPurchasesLists()).forEach(list => {
+      (list.rows || []).forEach(r => add(ppRowKey(r, optP)));
+      (list.salesStrategy || []).forEach(r => r && add(r.ticker));
+      (list.buyStrategy || []).forEach(r => r && add(r.ticker));
+    });
+  }catch(e){}
+  try{
+    // Read directly (not via getNsLists): this can run during start-up, before the News of
+    // Selected Assets code further down has been evaluated.
+    const nsLists = JSON.parse(localStorage.getItem("newsSelectedLists") || "{}") || {};
+    Object.values(nsLists).forEach(l => {
+      [...(l.assets || []), ...(l.excluded || []), ...(l.extra || [])].forEach(k => add(k, (l.names || {})[k]));
+    });
+  }catch(e){}
+  return Object.keys(names).sort((a, b) => a.localeCompare(b)).map(ticker => {
+    let name = names[ticker];
+    if(!name){
+      try{ const v = getResolvedBuiltinAssetValues(ticker); if(v && v.name) name = v.name; }catch(e){}
+    }
+    return { ticker, name: name || ticker };
   });
-  rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
-  return rows;
+}
+// Detailed Update's checklist: every asset in the app (was: Portfolio Lists only).
+function getAllPortfolioAssetsForDetailedUpdate(){
+  return getAllAppAssets();
 }
 
 function getDusIncludedAssets(){
@@ -11969,12 +12000,32 @@ function updateNsList(id, fn){
   saveNsLists(lists);
   return lists[id];
 }
+// v6.12: a list holds stock symbols only — a call-option contract is picked as its stock
+// (the briefing assesses options as their stock anyway).
 function normaliseNsKey(raw){
   const k = String(raw || "").trim();
   if(!k) return "";
-  const p = ppParseKey(k);
-  if(p.isOption) return ppMakeKey(p.symbol.toUpperCase(), p.strike, p.expiry);
-  return p.symbol.toUpperCase();
+  return String(ppParseKey(k).symbol || "").trim().toUpperCase();
+}
+// Lists saved by v6.10/v6.11 may hold contract keys; fold them into their stock once.
+function migrateNsListsToSymbolsIfNeeded(){
+  const lists = getNsLists();
+  let changed = false;
+  Object.values(lists).forEach(l => {
+    ["assets", "excluded", "extra"].forEach(f => {
+      const arr = l[f] || [];
+      if(!arr.some(k => String(k).indexOf("|") !== -1)) return;
+      l[f] = Array.from(new Set(arr.map(normaliseNsKey).filter(Boolean)));
+      changed = true;
+    });
+    if(l.assets && l.excluded){
+      const inc = new Set(l.assets);
+      const before = l.excluded.length;
+      l.excluded = l.excluded.filter(k => !inc.has(k));
+      if(l.excluded.length !== before) changed = true;
+    }
+  });
+  if(changed) saveNsLists(lists);
 }
 // Adds keys to a list (skipping ones already there); returns how many were new.
 function addKeysToNsList(id, keys){
@@ -12075,11 +12126,17 @@ function renderNsImportSelect(){
 // Every asset that can be picked: the union of every importable list plus anything typed into
 // this list or already ✓/✕ on it, alphabetically. Names come from the Portfolio data, then
 // from what was typed with "Add to Request".
+// The picker offers every asset in the app (same set as Detailed Update), plus anything typed
+// into or already ✓/✕ on this list.
 function getNsUniverse(list){
-  const keys = new Set();
-  getNsImportSources().forEach(src => { try{ src.keys().forEach(k => { const n = normaliseNsKey(k); if(n) keys.add(n); }); }catch(e){} });
-  if(list){ [...(list.assets || []), ...(list.excluded || []), ...(list.extra || [])].forEach(k => keys.add(k)); }
-  return Array.from(keys).sort((a, b) => a.localeCompare(b));
+  const rows = getAllAppAssets();
+  const have = new Set(rows.map(r => r.ticker));
+  if(list){
+    [...(list.assets || []), ...(list.excluded || []), ...(list.extra || [])].map(normaliseNsKey).forEach(k => {
+      if(k && !have.has(k)){ have.add(k); rows.push({ ticker: k, name: (list.names || {})[k] || k }); }
+    });
+  }
+  return rows.sort((a, b) => a.ticker.localeCompare(b.ticker));
 }
 function nsAssetName(key, list){
   const p = ppParseKey(key);
@@ -12111,20 +12168,16 @@ function renderNsAssets(){
     return;
   }
   const inc = new Set(included), exc = new Set(list.excluded || []);
-  let holdings = {};
-  try{ holdings = Object.fromEntries(getNewsBriefingAssets().map(h => [h.ticker, h])); }catch(e){}
   const universe = getNsUniverse(list);
   if(universe.length === 0){
     wrap.innerHTML = `<span style="color:var(--text-secondary);">No assets on any list yet — add one above.</span>`;
     return;
   }
-  wrap.innerHTML = universe.map(k => {
+  wrap.innerHTML = universe.map(a => {
+    const k = a.ticker;
     const state = inc.has(k) ? "included" : exc.has(k) ? "excluded" : "";
-    const label = ppKeyLabel(k);
-    const name = nsAssetName(k, list);
-    const h = holdings[ppParseKey(k).symbol];
-    const tag = h ? ` <span style="color:${h.held ? "var(--emerald)" : "var(--gold)"}; font-size:0.72rem;">${h.held ? "Held" : "Buy Strategy"}</span>` : "";
-    return `<div class="remove-chip"><span>${escHtml(label)}${name ? " — " + escHtml(name) : ""}${tag}</span>`
+    const label = k;
+    return `<div class="remove-chip"><span>${escHtml(k)} — ${escHtml(a.name || k)}</span>`
       + `<button type="button" data-ns-key="${escAttr(k)}" data-ns-state="excluded" title="Exclude ${escAttr(label)} from the request" style="color:${state === "excluded" ? DUS_EXCLUDED_COLOR : "var(--text-secondary)"};">&#10007;</button>`
       + `<button type="button" data-ns-key="${escAttr(k)}" data-ns-state="included" title="Include ${escAttr(label)} in the request" style="color:${state === "included" ? DUS_INCLUDED_COLOR : "var(--text-secondary)"};">&#10003;</button></div>`;
   }).join("");
@@ -12151,6 +12204,7 @@ function resetNsPromptBox(){
   if(st) st.textContent = 'Tick the assets to include, then click "Generate request".';
 }
 function renderNewsSelected(){
+  migrateNsListsToSymbolsIfNeeded();
   renderNsListSelector();
   renderNsImportSelect();
   renderNsAssets();
