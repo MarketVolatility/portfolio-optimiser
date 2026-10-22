@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.03 (News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.05 (News prompt: call options are assessed as their stock — a pointer when the stock is also listed, a full stock analysis when only the option is. Earlier v6.04: News: Assets Covered lists only the companies a report is about — no passing mentions, no 'V' in 'View', options folded into their stock. Earlier v6.03: News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.03 (News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.05 (News prompt treats call options as their stock; earlier v6.04: News Assets Covered detection fixed; earlier v6.03: News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -11027,9 +11027,12 @@ function getNewsBriefingAssets(){
   const add = (ticker, reason, detail) => {
     const t = String(ticker || "").trim().toUpperCase();
     if(!t) return;
-    if(!byTicker[t]) byTicker[t] = { ticker: t, reasons: new Set(), details: [] };
+    if(!byTicker[t]) byTicker[t] = { ticker: t, reasons: new Set(), stockReasons: new Set(), details: [] };
     byTicker[t].reasons.add(reason);
+    // v6.05: remember whether the STOCK itself is held/planned, or only a call option on it —
+    // the prompt treats the two cases differently (see buildNewsBriefingPrompt).
     if(detail) byTicker[t].details.push(detail);
+    else byTicker[t].stockReasons.add(reason);
   };
   // Held call options come back as contract keys (TICKER|strike|YYYY-MM-DD); fold them
   // into their underlying stock with a readable contract label, like Buy Strategy below.
@@ -11054,7 +11057,9 @@ function getNewsBriefingAssets(){
         const v = getResolvedBuiltinAssetValues(a.ticker);
         if(v){ name = v.name && v.name !== a.ticker ? v.name : ""; price = Number(v.currentPrice) || 0; }
       } catch(e){ /* unknown ticker — AI looks it up */ }
-      return { ticker: a.ticker, name, price, held: a.reasons.has("held"), planned: a.reasons.has("planned"), details: a.details };
+      return { ticker: a.ticker, name, price, held: a.reasons.has("held"), planned: a.reasons.has("planned"),
+        stockHeld: a.stockReasons.has("held"), stockPlanned: a.stockReasons.has("planned"),
+        optionOnly: a.stockReasons.size === 0, details: a.details };
     });
 }
 
@@ -11064,12 +11069,27 @@ function buildNewsBriefingPrompt(assets){
   }
   const today = ppToday(); // YYYY-MM-DD
   const fromIso = ppSubtractMonthsIso(today, 1);
+  // Call options are assessed as their underlying stock (v6.05). A contract whose stock is
+  // also on the list only gets a pointer to that stock's analysis; a contract whose stock
+  // isn't on the list gets the full stock analysis, under the stock's ticker.
   const lines = assets.map((a, i) => {
-    const status = a.held && a.planned ? "currently held; more planned in Buy Strategy"
-      : a.held ? "currently held" : "potential buy, planned in Buy Strategy";
+    const contracts = Array.from(new Set(a.details)).join("; ");
+    let status;
+    if(a.optionOnly){
+      status = a.held && a.planned ? "held and planned ONLY as call options — analyse it as a stock"
+        : a.held ? "held ONLY as a call option — analyse it as a stock"
+        : "planned ONLY as a call option in Buy Strategy — analyse it as a stock";
+    }else{
+      status = a.stockHeld && a.stockPlanned ? "stock currently held; more planned in Buy Strategy"
+        : a.stockHeld ? "stock currently held" : "stock is a potential buy, planned in Buy Strategy";
+    }
     const parts = [`${i + 1}. ${a.ticker}${a.name ? " — " + a.name : ""} (${status})`];
     if(a.price > 0) parts.push(`last price recorded in my app: $${a.price.toFixed(2)} (may be stale — use the latest close)`);
-    if(a.details.length) parts.push(`call option(s) held or planned: ${Array.from(new Set(a.details)).join("; ")}`);
+    if(contracts){
+      parts.push(a.optionOnly
+        ? `call option(s): ${contracts}`
+        : `also held/planned as call option(s): ${contracts} — covered by this stock's analysis; no separate option analysis`);
+    }
     return parts.join(" | ");
   });
   return `You are a financial news analyst. Prepare a news briefing on the stocks listed below, covering news published in the last one month (${fmtDMY(fromIso)} to ${fmtDMY(today)}, DD/MM/YYYY) that could affect each stock's price.
@@ -11084,6 +11104,7 @@ FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a
    - Current price: latest closing price in USD, with its date
    - Price trend, last 1 week: % change over the last 5 trading days, the week's high and low, and the direction (up / down / sideways) in a few words
    - Expected price trend, next 1 week: direction (up / down / sideways), a likely price range, a confidence level (low / medium / high), and the main reason
+   - Call options (only for assets marked with call options): one line listing the contract(s) — see the CALL OPTIONS rule below
 
 2. KEY NEWS (last one month, most important first): for each item, give the date, a 2–4 sentence summary, the likely price impact (positive / negative / neutral, and minor / moderate / major), and the source name.
 
@@ -11098,7 +11119,9 @@ FOR EACH ASSET, write about two pages (roughly 800–1,000 words), starting on a
 RULES:
 - Use only real, verifiable news from the stated one-month window. Never invent news, quotes, prices, or dates. If you cannot find recent news on an asset, or cannot access current prices, say so plainly in that section instead of guessing.
 - Report every price and dollar amount in USD. If a stock trades in another currency, convert it at the latest exchange rate and say so.
-- For an asset with a call option (held or planned), also comment briefly on what the news means for that option before its expiration date.
+- CALL OPTIONS: assess every call option as its underlying stock. Do not write any option-specific analysis — nothing on the option's premium, strike, expiry, time value, Greeks or volatility, and no separate section for the contract.
+  • If the option's stock is also on the list as a stock (marked "also held/planned as call option(s)"), write nothing extra about the option: just add a header line "Also held as: <contract(s)> — see the analysis of this stock in this section." (or "Also planned as:" for a Buy Strategy option).
+  • If only the option is on the list (marked "held ONLY as a call option" or "planned ONLY as a call option"), write the full section on the underlying stock exactly as for any other stock, with the header line "Held as: <contract(s)> — assessed here as the stock." (write "Planned as:" instead when the option is only planned in Buy Strategy).
 - The "expected price trend" is your reasoned view from the news, not a guarantee. End the document with a one-line note that the briefing is not financial advice.
 
 OUTPUT FORMAT:
@@ -11116,7 +11139,8 @@ function renderNewsBriefing(){
     list.innerHTML = assets.length === 0
       ? `<span style="color:var(--text-secondary); font-size:0.9rem;">None yet.</span>`
       : assets.map(a => {
-          const tag = a.held && a.planned ? "Held + Buy Strategy" : a.held ? "Held" : "Buy Strategy";
+          const base = a.held && a.planned ? "Held + Buy Strategy" : a.held ? "Held" : "Buy Strategy";
+          const tag = a.optionOnly ? base + " (call option)" : a.details.length ? base + " + call" : base;
           const color = a.held ? "var(--emerald)" : "var(--gold)";
           return `<span class="remove-chip" title="${escAttr(a.name || a.ticker)}"><strong>${escHtml(a.ticker)}</strong><span style="color:${color}; font-size:0.75rem;">${escHtml(tag)}</span></span>`;
         }).join("");
@@ -11240,24 +11264,61 @@ function loadMammoth(){
   return mammothLoadPromise;
 }
 
-// Tickers mentioned in a report: any known ticker (Portfolio Lists + the current news
-// asset set) appearing as a whole uppercase word.
+// "Assets Covered" = the assets a report is ABOUT, not every ticker it happens to mention
+// (a briefing on NVDA naming AMD's share move doesn't cover AMD).
+//  1. Subject tickers: how briefings label the company a section is about —
+//     "Company Name (TICKER)", "NASDAQ: TICKER" / "NYSE: TICKER", or an option contract
+//     key "(TICKER|strike|date)", which counts as its underlying stock.
+//  2. Only if a report has no such labels (e.g. loose pasted text): tickers you hold or
+//     plan to buy, plus Portfolio List tickers of 2+ letters, written as whole words.
+// Matching is case-sensitive with letters of EITHER case blocked on both sides, so the
+// one-letter ticker "V" no longer matches "View" or "Vera", and "MU" doesn't match "MUCH".
+const NEWS_TICKER_DETECTION_VERSION = 2;
+const NOT_TICKERS = new Set(["USD","EUR","GBP","JPY","KRW","CNY","AI","CEO","CFO","CTO","COO","EPS","GAAP","FCF","QPU","US","USA","UK","EU","ETF","IPO","SPAC","DGA","SDA","NASA","ISO","IEC","PEG","YOY","FY","EST","ET","PM","AM","LLC","INC","SA","AG","PLC","Q1","Q2","Q3","Q4","H1","H2","TBD","NA","OK","FDA","SEC","DOD","GDP","CPI","PE","ROA","ROE","EBITDA","LEO","GPU","CPU","TSX","LSE","II","III","IV","VI","PDF","DOCX","TXT","AND","THE","FOR","NOT","AS"]);
+function newsWordRegex(t){
+  return new RegExp("(^|[^A-Za-z0-9.])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9])");
+}
 function detectNewsTickers(text){
+  text = String(text || "");
   const known = new Set();
-  try{ getQuickPasteTickers().forEach(t => known.add(t)); }catch(e){}
-  try{ getNewsBriefingAssets().forEach(a => known.add(a.ticker)); }catch(e){}
-  // Also pick up tickers written as "(TICKER)" or "NASDAQ: TICKER" / "NYSE: TICKER" — the way
-  // AI briefings name companies — even when the ticker isn't on any Portfolio List yet.
-  const NOT_TICKERS = new Set(["USD","EUR","GBP","JPY","KRW","AI","CEO","CFO","EPS","GAAP","FCF","QPU","US","UK","EU","ETF","IPO","SPAC","DGA","SDA","NASA","ISO","IEC","PEG","YOY","FY","EST","ET","PM","AM","LLC","INC","SA","AG","PLC","Q1","Q2","Q3","Q4","H1","H2","TBD","NA","OK"]);
-  const addPattern = (re) => { let m; while((m = re.exec(text))){ const t = m[1]; if(!NOT_TICKERS.has(t)) known.add(t); } };
-  addPattern(/\(([A-Z]{2,5})\)/g);
-  addPattern(/\b(?:NASDAQ|NYSE|NYSE American|AMEX):\s*([A-Z]{1,5})\b/g);
-  const found = [];
-  known.forEach(t => {
-    const re = new RegExp("(^|[^A-Z0-9.])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Z0-9])");
-    if(re.test(text)) found.push(t);
+  try{ getQuickPasteTickers().forEach(t => { if(t && t.indexOf("|") === -1) known.add(t); }); }catch(e){}
+  const mine = new Set();
+  try{ getNewsBriefingAssets().forEach(a => mine.add(a.ticker)); }catch(e){}
+
+  const subjects = new Set();
+  const add = (t) => {
+    t = String(t || "").toUpperCase();
+    if(!t || NOT_TICKERS.has(t)) return;
+    // One-letter labels like "(A)" are list markers far more often than tickers.
+    if(t.length === 1 && !known.has(t) && !mine.has(t)) return;
+    subjects.add(t);
+  };
+  let m;
+  const paren = /\(([A-Z]{1,5})(?:\|[^)\s]*)?\)/g;          // (AVAV)  (IONQ|15|2028-01-21)
+  while((m = paren.exec(text))) add(m[1]);
+  const exch = /\b(?:NASDAQ|Nasdaq|NYSE(?: American)?|AMEX)\s*:\s*([A-Z]{1,5})(?![A-Za-z0-9])/g;
+  while((m = exch.exec(text))) add(m[1]);
+  const optKey = /(?:^|[^A-Za-z0-9])([A-Z]{1,5})\|\d+(?:\.\d+)?\|\d{4}-\d{2}-\d{2}/g;   // bare option keys
+  while((m = optKey.exec(text))) add(m[1]);
+  if(subjects.size) return Array.from(subjects).sort();
+
+  const found = new Set();
+  mine.forEach(t => { if(newsWordRegex(t).test(text)) found.add(t); });
+  known.forEach(t => { if(t.length >= 2 && newsWordRegex(t).test(text)) found.add(t); });
+  return Array.from(found).sort();
+}
+// Reports saved before the current detection rules get their list recomputed once.
+function redetectNewsTickersIfNeeded(){
+  const reports = getNewsReports();
+  let changed = false;
+  reports.forEach(r => {
+    if(r.tickersV === NEWS_TICKER_DETECTION_VERSION) return;
+    r.tickers = detectNewsTickers(r.text || "");
+    r.tickersV = NEWS_TICKER_DETECTION_VERSION;
+    changed = true;
   });
-  return found.sort();
+  if(changed) saveNewsReports(reports);
+  return changed;
 }
 
 function newNewsReportId(){
@@ -11377,6 +11438,7 @@ async function addNewsReport({ title, fileName, kind, size, text, blob, html }){
     uploadedAt: Date.now(),
     size: size || body.length,
     tickers: detectNewsTickers(body),
+    tickersV: NEWS_TICKER_DETECTION_VERSION,
     text: body,
   };
   let fileSaved = false;
@@ -11460,7 +11522,7 @@ function renderNewsTable(){
       </td>
       <td>${status}</td>
       <td style="white-space:nowrap;">${escHtml(fmtDMYHM(new Date(r.uploadedAt)))}</td>
-      <td>${r.tickers && r.tickers.length ? r.tickers.map(t => `<span class="ticker-txt" style="display:inline-block; margin:0 0.25rem 0.25rem 0;">${escHtml(t)}</span>`).join("") : '<span style="color:var(--text-secondary);">—</span>'}</td>
+      <td>${r.tickers && r.tickers.length ? r.tickers.map(t => `<span class="ticker-txt" style="display:inline-block; margin:0 0.25rem 0.25rem 0;">${escHtml(t)}</span>`).join(" ") : '<span style="color:var(--text-secondary);">—</span>'}</td>
       <td style="white-space:nowrap;">${r.kind === "docx" ? "Word (.docx)" : "Text"} ${newsCloudBadgeHTML(r)}</td>
       <td style="white-space:nowrap; text-align:right;">${escHtml(fmtBytes(r.size))}</td>
       <td style="white-space:nowrap;">
@@ -11608,6 +11670,7 @@ function downloadBlob(blob, name){
 }
 
 async function refreshNewsUi(){
+  redetectNewsTickersIfNeeded();
   await refreshNewsFilesOnDevice();
   renderNewsTable();
   renderNewsViewer();
