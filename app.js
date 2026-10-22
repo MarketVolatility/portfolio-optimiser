@@ -1,4 +1,4 @@
-// APP.JS BUILD: v6.02 (News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
+// APP.JS BUILD: v6.03 (News: Word files are stored in Supabase Storage (bucket news-files) as well as the browser; report text keeps syncing with the rest. Earlier v6.02: News: separate View and Download Word columns; View opens a large dark pop-up. Earlier v6.01: News: upload the AI reply as Word/text and browse it in the 'Current and Past News' table. Earlier v6.00: New section 'News of Current and Potential Holdings': copyable AI prompt for a one-month news briefing on held + Buy Strategy tickers. Earlier v5.99: Temporary column collapse: − / + in every table header's top-right corner. Earlier v5.98: Visual refresh in index.html; HTML-escaping of user-entered tickers/labels in rendered lists and tables. Earlier v5.97: Buy Strategy: new Display option 'Uncompleted Buys' hides every completed buy; the Ticker text is green for an uncompleted buy and dusky pink for a completed one.)
 // APP.JS BUILD: v5.96 (AI update prompts: every requested field now has a precise definition (trailing vs latest quarter, strict cash, opex excluding cost of revenue, ratios not percentages, 0 only when unavailable) plus data rules (cross-check two sources, newest filings, plain numbers with no $ % or thousands separators). Lessons from the earlier manual data runs.)
 // APP.JS BUILD: v5.95 (Portfolio table: the 'To Buy Price' column is removed (one-time, per account); 'Units Purchased' and 'Average Purchase Price ($)' are now pulled from Past Purchases -- units held now and their FIFO average price -- for every row that has Past Purchases history, and shown read-only; Actual Upside, Book Value etc. therefore follow Past Purchases.)
 // APP.JS BUILD: v5.94 (Both AI update prompts -- Detailed Update and Update Current Price/Consensus Target -- now instruct the assistant to report everything in USD, converting other currencies such as KRW at the latest exchange rate available. 'APPLE' is not in the app's code; it is only an entry on the user's saved list.)
@@ -527,7 +527,7 @@
 // on both Portfolio Lists and Past Purchases now requires re-entering and verifying
 // the account password first, via the same verifyAccountPasswordForDestructiveAction()
 // helper "Reset my account data" now also shares.)
-console.log("app.js loaded — build v6.02 (News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
+console.log("app.js loaded — build v6.03 (News Word files in the cloud; earlier v6.02: News pop-up viewer + Download Word column; earlier v6.01: Current and Past News uploads; earlier v6.00: News of Current and Potential Holdings prompt; earlier v5.99: column collapse − / + in table headers; earlier v5.98: visual refresh + HTML-escaping of user text; earlier v5.97: Buy Strategy: Display option Uncompleted Buys; ticker green for uncompleted, dusky pink for completed; earlier v5.96: AI update prompts carry precise field definitions and data rules; earlier v5.95: Portfolio: To Buy Price removed; Units Purchased and Average Purchase Price pulled from Past Purchases; earlier v5.94: AI update prompts tell the assistant to convert non-USD prices (e.g. KRW) to USD with the latest exchange rate; earlier v5.93: Portfolio: each option shown with its stock in the row below (stock scored, option not), option + stock count as one asset, option Units Purchased / Average Purchase Price from Sales Strategy; earlier v5.91: Portfolio shows call options with Strike Price + Expiration Date; expandable glossary headings, standard expander look; one pop-up to delete; passwords hidden with Show/Hide; earlier v5.90: All Past Purchases list; v5.89 auto lists follow the active Past Purchases list; v5.88 Portfolio auto lists: Current Holding via Sales Strategy, Current and Potential Holding, Purchases to date / 3m / 6m / 1y; v5.87 Portfolio below Past Purchases and Planning, expandable lists, per-table glossary; v5.86 Sales Strategy gain on last-units row; v5.85 Buy Strategy section below Sales Strategy; earlier v5.84: Sales Strategy gain per row, moved after Expiration Date, no Total Units Sold; collapsible Introduction / Disclaimer notes; Sales Strategy Unrealised Capital Gain + total row; DD/MM/YYYY dates everywhere; fresh import picker + overwrite option; sample Excel: no Current Price, latest date first; v5.83 call options in Past Purchases + Sales Strategy, Marketdata.app option prices; earlier v5.82: Excel exports built in-app with a frozen, bold header row; earlier v5.80: Past Purchases: newest purchase first by default, display-independent FIFO matching, table-identical exports, 0000-00-00 for missing Date Sale, safer date import/export)");
 
 // --- Supabase auth (mandatory gate) + cross-device sync ---
 // Design note: localStorage stays the fast synchronous source of truth the
@@ -11267,6 +11267,104 @@ function defaultNewsTitle(){
   return "News briefing " + fmtDMY(ppToday());
 }
 
+// --- v6.03: Word files in the cloud ---
+// The report TEXT already reaches the cloud through the synced "newsReports" key. The
+// original .docx goes to a private Supabase Storage bucket instead ("news-files", one
+// folder per user: <user id>/<report id>.docx) — uploaded once, not with every 8-second
+// snapshot. Each report remembers `cloudFile: true` once its file is safely uploaded, so
+// any device can download it on demand (and keeps a local copy in IndexedDB after that).
+// The bucket and its access rules are created once with supabase-news-files-setup.sql.
+const NEWS_CLOUD_BUCKET = "news-files";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+async function newsCloudContext(){
+  const client = getAuthClient();
+  const { data } = await client.auth.getSession();
+  const uid = data && data.session && data.session.user ? data.session.user.id : null;
+  if(!uid) throw new Error("not signed in");
+  return { bucket: client.storage.from(NEWS_CLOUD_BUCKET), uid };
+}
+function newsCloudPath(uid, id){ return `${uid}/${id}.docx`; }
+async function newsCloudUpload(id, blob){
+  const { bucket, uid } = await newsCloudContext();
+  const { error } = await bucket.upload(newsCloudPath(uid, id), blob, { upsert: true, contentType: DOCX_MIME });
+  if(error) throw error;
+}
+async function newsCloudDownload(id){
+  const { bucket, uid } = await newsCloudContext();
+  const { data, error } = await bucket.download(newsCloudPath(uid, id));
+  if(error) throw error;
+  return data; // Blob
+}
+async function newsCloudDelete(id){
+  const { bucket, uid } = await newsCloudContext();
+  const { error } = await bucket.remove([newsCloudPath(uid, id)]);
+  if(error) throw error;
+}
+// Plain-English reason for a failed cloud call (the bucket missing is the likely one
+// until the one-time setup SQL has been run).
+function describeNewsCloudError(e){
+  const msg = String((e && (e.message || e.error || e.statusText)) || e || "");
+  if(/bucket not found/i.test(msg)) return "cloud file storage isn't set up yet (run supabase-news-files-setup.sql once in Supabase)";
+  if(/row-level security|policy|unauthori[sz]ed|403/i.test(msg)) return "the cloud storage access rules are missing (run supabase-news-files-setup.sql once in Supabase)";
+  if(/not signed in/i.test(msg)) return "you're not signed in";
+  if(/too large|payload|413/i.test(msg)) return "the file is larger than the cloud storage limit";
+  return msg || "network error";
+}
+// Updates one report's fields in place, re-reading the list first so a concurrent
+// change elsewhere isn't overwritten.
+function patchNewsReport(id, fields){
+  const reports = getNewsReports();
+  const r = reports.find(x => x.id === id);
+  if(!r) return null;
+  Object.assign(r, fields);
+  saveNewsReports(reports);
+  return r;
+}
+// Uploads one report's Word file and records the result. Returns { ok, error }.
+async function pushNewsFileToCloud(id, blob){
+  try{
+    await newsCloudUpload(id, blob);
+    patchNewsReport(id, { cloudFile: true });
+    return { ok: true };
+  }catch(e){
+    return { ok: false, error: describeNewsCloudError(e) };
+  }
+}
+// The Word file for a report: this browser's copy if there is one, otherwise the cloud
+// copy (which is then cached locally). Returns { blob, name, html } or null.
+async function getNewsFileRecord(report){
+  try{
+    const rec = await newsFileGet(report.id);
+    if(rec && rec.blob) return rec;
+  }catch(e){ /* IndexedDB unavailable — try the cloud */ }
+  if(!report.cloudFile) return null;
+  const blob = await newsCloudDownload(report.id);
+  const rec = { blob, name: report.fileName, html: "" };
+  try{ await newsFilePut(report.id, blob, report.fileName, ""); newsFilesOnThisDevice.add(report.id); }catch(e){ /* still usable this time */ }
+  return rec;
+}
+// One-time catch-up: Word files uploaded before v6.03 (or while offline / before the
+// bucket existed) are pushed to the cloud the next time the news table is shown.
+let newsCloudBackfillRunning = false;
+async function backfillNewsFilesToCloud(){
+  if(newsCloudBackfillRunning) return 0;
+  newsCloudBackfillRunning = true;
+  let uploaded = 0;
+  try{
+    const pending = getNewsReports().filter(r => r.kind === "docx" && !r.cloudFile && newsFilesOnThisDevice.has(r.id));
+    for(const r of pending){
+      let rec = null;
+      try{ rec = await newsFileGet(r.id); }catch(e){}
+      if(!rec || !rec.blob) continue;
+      const res = await pushNewsFileToCloud(r.id, rec.blob);
+      if(!res.ok) break; // same cause would fail the rest too (no bucket, offline, signed out)
+      uploaded++;
+    }
+  }finally{ newsCloudBackfillRunning = false; }
+  return uploaded;
+}
+
 async function addNewsReport({ title, fileName, kind, size, text, blob, html }){
   let body = String(text || "").replace(/\r\n/g, "\n").trim();
   let truncated = false;
@@ -11291,7 +11389,12 @@ async function addNewsReport({ title, fileName, kind, size, text, blob, html }){
     if(fileSaved) newsFileDelete(report.id).catch(() => {});
     throw new Error("Browser storage is full — delete some older reports and try again.");
   }
-  return { report, truncated, fileSaved };
+  let cloud = null;
+  if(blob){
+    cloud = await pushNewsFileToCloud(report.id, blob);
+    if(cloud.ok) report.cloudFile = true;
+  }
+  return { report, truncated, fileSaved, cloud };
 }
 
 async function handleNewsFileUpload(file){
@@ -11358,7 +11461,7 @@ function renderNewsTable(){
       <td>${status}</td>
       <td style="white-space:nowrap;">${escHtml(fmtDMYHM(new Date(r.uploadedAt)))}</td>
       <td>${r.tickers && r.tickers.length ? r.tickers.map(t => `<span class="ticker-txt" style="display:inline-block; margin:0 0.25rem 0.25rem 0;">${escHtml(t)}</span>`).join("") : '<span style="color:var(--text-secondary);">—</span>'}</td>
-      <td>${r.kind === "docx" ? "Word (.docx)" : "Text"}</td>
+      <td style="white-space:nowrap;">${r.kind === "docx" ? "Word (.docx)" : "Text"} ${newsCloudBadgeHTML(r)}</td>
       <td style="white-space:nowrap; text-align:right;">${escHtml(fmtBytes(r.size))}</td>
       <td style="white-space:nowrap;">
         <button type="button" class="tab-btn" data-news-action="view" data-id="${escAttr(r.id)}" style="${btn}" title="Read this report in a pop-up window">👁 View</button>
@@ -11371,14 +11474,21 @@ function renderNewsTable(){
     <tbody>${rows}</tbody></table></div>`;
 }
 
+// ☁ when everything about the report is in the cloud; a warning when its Word file is
+// still only in one browser. Text reports are always in the cloud (synced with the rest).
+function newsCloudBadgeHTML(r){
+  if(r.kind !== "docx" || r.cloudFile) return `<span title="Saved in the cloud — available on all your devices" style="color:var(--emerald);">☁</span>`;
+  return `<span title="The text is in the cloud, but the Word file is only in one browser so far" style="color:var(--amber);">☁ text only</span>`;
+}
+
 // Download Word: a button for a Word report whose original file is in this browser; a
 // note when it was uploaded on another device; a dash for a text report (no Word file).
 function newsDownloadWordCellHTML(r, btnStyle){
   if(r.kind !== "docx") return `<span style="color:var(--text-secondary);" title="This report was saved as text, so there is no Word file.">—</span>`;
-  if(newsFilesOnThisDevice.has(r.id)){
+  if(newsFilesOnThisDevice.has(r.id) || r.cloudFile){
     return `<button type="button" class="tab-btn tab-btn-export-word" data-news-action="open" data-id="${escAttr(r.id)}" style="${btnStyle}" title="Download the original Word document (${escAttr(r.fileName || "your upload")}) to open in Word">⬇ Download Word</button>`;
   }
-  return `<span style="color:var(--text-secondary); font-size:0.8rem;" title="Word files are kept in the browser they were uploaded from. Its text can still be read with View.">On another device</span>`;
+  return `<span style="color:var(--text-secondary); font-size:0.8rem;" title="This Word file hasn't reached the cloud yet, so only the device it was uploaded from has it. It uploads automatically when that device next opens this section. Its text can still be read with View.">On another device</span>`;
 }
 
 // Turns mammoth's HTML into a safe fragment: only simple formatting tags survive,
@@ -11434,7 +11544,7 @@ async function renderNewsViewer(){
     return;
   }
   const btn = "padding:0.4rem 0.9rem; font-size:0.85rem;";
-  const hasFile = r.kind === "docx" && newsFilesOnThisDevice.has(r.id);
+  const hasFile = r.kind === "docx" && (newsFilesOnThisDevice.has(r.id) || !!r.cloudFile);
   const meta = [
     r.kind === "docx" ? "Word document" : "Text",
     "uploaded " + fmtDMYHM(new Date(r.uploadedAt)),
@@ -11455,7 +11565,7 @@ async function renderNewsViewer(){
       <div class="news-modal-body" id="newsViewerBody" tabindex="0">
         ${r.kind === "docx" && hasFile ? `<div class="news-modal-loading">Loading the Word document…</div>` : ""}
         <div class="news-doc news-doc-text"${r.kind === "docx" && hasFile ? ' style="display:none;"' : ""}>${escHtml(r.text || "(empty)")}</div>
-        ${r.kind === "docx" && !hasFile ? `<div class="news-modal-note">The original Word file is on the device it was uploaded from — showing its text.</div>` : ""}
+        ${r.kind === "docx" && !hasFile ? `<div class="news-modal-note">The Word file hasn't reached the cloud yet (it's on the device it was uploaded from) — showing its text.</div>` : ""}
       </div>
     </div>`;
   modal.style.display = "";
@@ -11467,7 +11577,7 @@ async function renderNewsViewer(){
   if(r.kind === "docx" && hasFile){
     const body = document.getElementById("newsViewerBody");
     try{
-      const rec = await newsFileGet(r.id);
+      const rec = await getNewsFileRecord(r);
       if(!rec || !rec.blob) throw new Error("missing");
       let value = rec.html;
       if(!value){
@@ -11501,6 +11611,10 @@ async function refreshNewsUi(){
   await refreshNewsFilesOnDevice();
   renderNewsTable();
   renderNewsViewer();
+  // Push any Word file that isn't in the cloud yet, then show the updated ☁ badges.
+  if(getNewsReports().some(r => r.kind === "docx" && !r.cloudFile && newsFilesOnThisDevice.has(r.id))){
+    backfillNewsFilesToCloud().then(n => { if(n > 0) renderNewsTable(); }).catch(() => {});
+  }
 }
 
 function wireUpNewsReports(){
@@ -11514,7 +11628,8 @@ function wireUpNewsReports(){
   const setStatus = (el, text, color) => { if(el){ el.textContent = text; el.style.color = color; } };
   const savedMsg = (res) => `Saved "${res.report.title}"${res.report.tickers.length ? ` (${res.report.tickers.length} asset${res.report.tickers.length === 1 ? "" : "s"} detected)` : ""}.`
     + (res.truncated ? " The text was very long, so only the first part was kept." : "")
-    + (res.report.kind === "docx" && !res.fileSaved ? " The original Word file couldn't be stored in this browser — its text is saved." : "");
+    + (res.report.kind === "docx" && !res.fileSaved ? " The original Word file couldn't be stored in this browser — its text is saved." : "")
+    + (res.cloud ? (res.cloud.ok ? " Word file saved to the cloud." : ` The Word file is only in this browser for now — ${res.cloud.error}; it will be uploaded automatically once that's fixed.`) : "");
 
   if(uploadBtn && fileInput){
     uploadBtn.addEventListener("click", () => fileInput.click());
@@ -11564,12 +11679,15 @@ function wireUpNewsReports(){
       renderNewsViewer();
     }else if(action === "open" && report){
       try{
-        const rec = await newsFileGet(id);
+        if(!newsFilesOnThisDevice.has(id)) setStatus(listStatus, "Fetching the Word file from the cloud…", "var(--text-secondary)");
+        const rec = await getNewsFileRecord(report);
         if(!rec || !rec.blob) throw new Error("missing");
         downloadBlob(rec.blob, report.fileName || (report.title + ".docx"));
         setStatus(listStatus, `Downloading ${report.fileName || report.title} — open it in Word.`, "var(--emerald)");
       }catch(err){
-        setStatus(listStatus, "The original Word file isn't stored in this browser — use View to read its text.", "var(--amber)");
+        setStatus(listStatus, report.cloudFile
+          ? `Couldn't fetch the Word file from the cloud — ${describeNewsCloudError(err)}.`
+          : "The Word file hasn't reached the cloud yet — use View to read its text.", "var(--amber)");
       }
     }else if(action === "download-text" && report){
       downloadBlob(new Blob([report.text || ""], { type: "text/plain;charset=utf-8" }), (report.title || "news").replace(/[\\/:*?"<>|]+/g, "_") + ".txt");
@@ -11577,6 +11695,7 @@ function wireUpNewsReports(){
       if(!confirm(`Delete "${report.title}"? This removes its text${report.kind === "docx" ? " and the saved Word file" : ""}.`)) return;
       saveNewsReports(getNewsReports().filter(r => r.id !== id));
       newsFileDelete(id).catch(() => {});
+      if(report.cloudFile) newsCloudDelete(id).catch(() => {});
       if(newsViewingId === id) newsViewingId = null;
       await refreshNewsUi();
       setStatus(listStatus, `Deleted "${report.title}".`, "var(--text-secondary)");
