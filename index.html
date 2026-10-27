@@ -82,7 +82,7 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .section-toggle-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); width: 32px; height: 32px; border-radius: 6px; font-size: 0.9rem; line-height: 1; cursor: pointer; flex-shrink: 0; }
 .section-toggle-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
 .section-toggle-btn, .expander-toggle { font-size: 0.8rem; border-radius: 8px; }
-.expander-heading { color: #facc15; font-size: 1.1rem; font-weight: 600; padding: 0.4rem 1rem; }
+.expander-heading { color: #fff; font-size: 1.1rem; font-weight: 600; padding: 0.4rem 1rem; }
 .pw-wrap { position: relative; display: block; }
 .pw-wrap input { width: 100%; box-sizing: border-box; padding-right: 4.2rem; }
 .pw-toggle-btn { position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 6px; font-size: 0.75rem; padding: 0.15rem 0.5rem; cursor: pointer; }
@@ -312,7 +312,7 @@ body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !impor
 /* v6.01: Current and Past News viewer */
 .news-doc { color: var(--text-primary); font-size: 0.92rem; line-height: 1.65; max-width: 900px; }
 .news-doc-text { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; }
-.news-doc h1, .news-doc h2, .news-doc h3, .news-doc h4 { color: #facc15; margin: 1.4rem 0 0.5rem; line-height: 1.3; }
+.news-doc h1, .news-doc h2, .news-doc h3, .news-doc h4 { color: #fff; margin: 1.4rem 0 0.5rem; line-height: 1.3; }
 .news-doc h1 { font-size: 1.35rem; } .news-doc h2 { font-size: 1.15rem; } .news-doc h3 { font-size: 1rem; }
 .news-doc p { margin: 0 0 0.75rem; }
 .news-doc ul, .news-doc ol { margin: 0 0 0.75rem 1.4rem; }
@@ -329,7 +329,7 @@ body.news-modal-open { overflow: hidden; }
   box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
 .news-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
   padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); background: #182238; }
-.news-modal-title { margin: 0; color: #facc15; font-size: 1.15rem; line-height: 1.35; word-break: break-word; }
+.news-modal-title { margin: 0; color: #fff; font-size: 1.15rem; line-height: 1.35; word-break: break-word; }
 .news-modal-meta { color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.2rem; }
 .news-modal-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .news-modal-close { width: 36px; height: 36px; padding: 0 !important; font-size: 1.4rem !important; line-height: 1;
@@ -566,6 +566,46 @@ body.view-mobile .v7-work > .table-container { flex: none; width: 100%; }
 body.view-mobile .v7-drawer { max-width: none; width: 100%; max-height: none; }
 body.view-mobile .v7-table-scroll { max-height: 70vh; }
 body.view-mobile .v7-menu-list { left: 0; right: auto; }
+
+/* ===== Holdings & Planning workspace (Phase 4c) ===== */
+.screen[data-screen="holdings"] > div:has(> #pastPurchasesToggleBtn) { display: none !important; }
+.v7-holdings-totals { margin-bottom: 16px; }
+.v7-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 14px; }
+.v7-tab { min-height: 44px; padding: 0 18px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-secondary);
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: -1px; }
+.v7-tab:hover { color: #fff; }
+.v7-tab.v7-on { color: #fff; border-bottom-color: #3b82f6; }
+.v7-tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.v7-pane[hidden] { display: none !important; }
+.v7-heading-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.v7-heading-row h2 { font-size: 1.15rem !important; }
+.v7-subbar { justify-content: flex-start; }
+.v7-addbar { justify-content: flex-start; }
+.v7-lots-main { flex: 999 1 560px; min-width: 0; }
+.v7-lots-main > [hidden] { display: none !important; }
+.v7-groups .v7-group-row th, .v7-groups .v7-group-row td { background: #18213a; font-weight: 600; }
+.v7-groups th[scope="row"] { text-align: left; white-space: nowrap; }
+.v7-group-toggle { background: none; border: 0; padding: 0; color: #fff; font: inherit; font-weight: 600; cursor: pointer; min-height: 28px; }
+.v7-group-toggle span, .v7-card-head > span > span:first-child { color: var(--text-secondary); }
+.v7-group-sub { display: block; font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-top: 2px; }
+.v7-lot-row td { font-size: 13px; color: #cbd5e1; }
+.v7-lot-row td:first-child { padding-left: 32px; white-space: normal; }
+.v7-cards { display: none; list-style: none; margin: 0; padding: 0; flex-direction: column; gap: 10px; }
+.v7-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 4px 14px; }
+.v7-card-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 56px; background: none; border: 0;
+  padding: 8px 0; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.v7-card-num { text-align: right; font-variant-numeric: tabular-nums; }
+.v7-card-num > span { display: block; font-size: 12px; }
+.v7-card-lots { list-style: none; margin: 0; padding: 8px 0 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.v7-card-lots li { display: flex; justify-content: space-between; gap: 10px; }
+@media (max-width: 820px) {
+  .v7-groups-table { display: none; }
+  .v7-cards { display: flex; }
+  .v7-tab { flex: 1 1 0; padding: 0 8px; }
+}
+body.view-mobile .v7-groups-table { display: none; }
+body.view-mobile .v7-cards { display: flex; }
+body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -661,7 +701,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
       </div>
       <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
       <div id="htmlBuildLine" class="app-build-line">
-      Version v7.1 — Portfolio workspace: mandate buttons, one Import / Export menu, column filters, Table setup drawer; Holdings &amp; Planning moved before Portfolio. Your data and scoring are unchanged.</div>
+      Version v7.2 — Holdings &amp; Planning: totals, Lots / Sales plan / Buy plan tabs, By ticker view (cards on a phone), Table setup drawer; white headings. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -680,19 +720,96 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 
   <section class="screen" data-screen="holdings" aria-label="Holdings and Planning" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Past Purchases and Planning</h2>
     <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" data-section="pastPurchasesSectionBody">▶</button>
   </div>
   <div id="pastPurchasesSectionBody">
 
+  <div class="v7-list-bar">
   <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="ppListSelector" style="color:#facc15; font-size:1.3rem;">Past Purchases List:</label>
+    <label for="ppListSelector" style="color:#fff; font-size:1.3rem;">Past Purchases List:</label>
     <select id="ppListSelector" class="form-input" style="min-width:180px;"></select>
     <button id="ppNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="ppRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
     <button id="ppDeleteListBtn" title="Requires re-entering your account password to confirm." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Delete List</button>
   </div>
+  <div class="control-panel" style="flex-wrap: wrap;">
+    <label for="ppImportListSelect" title="Import a Portfolio List's assets, or copy another Past Purchases list's rows, into the list you're currently viewing.">Import list:</label>
+    <select id="ppImportListSelect" class="form-input" style="min-width:220px;"></select>
+    <button id="ppImportListBtn">Import into Past Purchases</button>
+    <span id="ppImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    <span style="width:1px; align-self:stretch; background:var(--border-color); margin:0 0.5rem;"></span>
+    <button id="ppRefreshFromPortfolioBtn" title="Re-pulls Units Purchased/Average Purchase Price/Date Purchased plus any matching column you've already added here (e.g. Current Price) from the Portfolio Lists table, using its latest values — including after a live data fetch.">↻ Refresh from Portfolio Lists</button>
+    <span id="ppRefreshStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  </div>
 
+  <section id="v7HoldingsTotals" class="dash-tiles v7-holdings-totals" aria-label="Totals"></section>
+
+  <div class="v7-tabs" role="tablist" aria-label="Holdings views" data-v7>
+    <button type="button" role="tab" class="v7-tab" data-holdings-tab="lots" aria-controls="v7PaneLots">Lots</button>
+    <button type="button" role="tab" class="v7-tab" data-holdings-tab="sales" aria-controls="v7PaneSales">Sales plan</button>
+    <button type="button" role="tab" class="v7-tab" data-holdings-tab="buys" aria-controls="v7PaneBuys">Buy plan</button>
+  </div>
+
+  <div id="v7PaneLots" class="v7-pane" role="tabpanel" aria-label="Lots">
+  <div class="control-panel v7-toolbar">
+    <div class="v7-toolbar-group">
+      <div class="v7-seg" role="group" aria-label="Lots view" data-v7>
+        <button type="button" class="v7-seg-btn" data-lots-view-btn="groups" aria-pressed="true">By ticker</button>
+        <button type="button" class="v7-seg-btn" data-lots-view-btn="table" aria-pressed="false">All lots (edit)</button>
+      </div>
+      <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="How a separate sale row's cost is worked out when you bought the same ticker at different prices. Average cost: your average purchase price of the units held at the time of the sale. FIFO: the oldest purchases are treated as sold first.">Cost basis:
+        <select id="ppCostBasisSelect" style="padding:0.4rem 0.8rem; font-size:0.85rem;">
+          <option value="average">Average cost</option>
+          <option value="fifo">FIFO (oldest first)</option>
+        </select>
+      </label>
+      <button id="ppCurrentHoldingsToggle" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Show only purchase rows that still have unsold units (after every sale row on this list is matched against them)">Current Holdings</button>
+    </div>
+    <div class="v7-toolbar-group v7-toolbar-actions">
+      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabTickerBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">+ Add asset</button>
+      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabParamBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Columns</button>
+      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabRowsBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Row order</button>
+      <details class="v7-menu" id="v7PpIoMenu">
+        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <div class="v7-menu-list">
+    <button id="ppSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every row of the currently open Past Purchases list (purchases and sales, one line each), with every fillable parameter as a column, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="ppImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into the currently open Past Purchases list. Each line becomes its own row (purchases and sales can be on separate lines); lines already in the table are ignored, new ones are added next to that ticker's rows, and you'll be asked what to do with any line that conflicts with an existing row.">⬆ Import Excel</button>
+    <label style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:var(--text-secondary);" title="When ticked, importing REPLACES every row in the open Past Purchases list with the rows in the file (you are asked to confirm first). Leave unticked to merge as before."><input type="checkbox" id="ppImportOverwrite"> Overwrite list with file</label>
+    <button id="ppExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="ppExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="ppExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+        </div>
+      </details>
+    <input id="ppImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    </div>
+  </div>
+  <div class="v7-heading-row">
+    <h2 id="ppActiveListHeading" style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Past Purchases viewing: —</h2>
+    <span id="ppListActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
+    <span id="ppExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+  </div>
+  <div class="v7-work">
+    <div class="v7-lots-main">
+      <div id="v7LotsGroups"></div>
+      <div id="v7LotsTable" hidden>
+        <div class="control-panel v7-toolbar v7-subbar">
+          <label for="ppSortMode" class="v7-toolbar-label">Sort by</label>
+    <select id="ppSortMode">
+      <option value="date-new">Date Added (newest first)</option>
+      <option value="date-old">Date Added (oldest first)</option>
+      <option value="alpha">Alphabetical (Asset)</option>
+      <option value="param-date-purchased" selected>Date Purchased (most recent first) — default</option>
+      <option value="param-date-purchased-old">Date Purchased (oldest first)</option>
+      <option value="param-date-sale">Date Sale (most recent first)</option>
+      <option value="param-date-sale-old">Date Sale (oldest first)</option>
+      <option value="param-sale-profit">Realized Gain (highest first)</option>
+      <option value="param-missed-gain">Missed Gain % (highest first)</option>
+      <option value="custom">Custom order (reorder with ↑ ↓)</option>
+    </select>
+        </div>
   <div class="disclaimer">
     <strong>Freeform tracking table.</strong>
     <ul>
@@ -703,25 +820,23 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
       <li>That pull only happens once, when a row is added — use "↻ Refresh from Portfolio Lists" below anytime, including after "Fetch live data" up on the Portfolio Lists table, to re-pull the latest values into rows already here.</li>
     </ul>
   </div>
-
-  <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="ppImportListSelect" title="Import a Portfolio List's assets, or copy another Past Purchases list's rows, into the list you're currently viewing.">Import list:</label>
-    <select id="ppImportListSelect" class="form-input" style="min-width:220px;"></select>
-    <button id="ppImportListBtn">Import into Past Purchases</button>
-    <span id="ppImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-    <span style="width:1px; align-self:stretch; background:var(--border-color); margin:0 0.5rem;"></span>
-    <button id="ppRefreshFromPortfolioBtn" title="Re-pulls Units Purchased/Average Purchase Price/Date Purchased plus any matching column you've already added here (e.g. Current Price) from the Portfolio Lists table, using its latest values — including after a live data fetch.">↻ Refresh from Portfolio Lists</button>
-    <span id="ppRefreshStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-
-  <div class="control-panel" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+    <div class="disclaimer">
+      This table lays purchases and sales out as FIFO-matched lots: a purchase splits across several rows here if it fed more than one sale, and a sale splits across several rows if it drew from more than one purchase — always oldest-purchase-first (FIFO), even when "Cost basis" above is set to Average cost, since Average cost blends prices across lots and has nothing clean to split into rows like this. Every cell here is editable and writes back to the real purchase or sale it belongs to. In the ticker cell: <strong>↑ ↓</strong> reorders that ticker's whole block of rows, <strong>Sell</strong> records a new sale, and <strong>×</strong> deletes; "Held: x/y" shows how many units of that purchase are still unsold. The "Total current market and book value" (shown as two totals — Book Value and Current Market Value, each in its own column), "Total Realized Gain to date", and monthly Realized Gain totals below are computed from these FIFO-matched rows.
+    </div>
+    <div id="ppLotMatchContent"></div>
+      </div>
+    </div>
+    <aside id="v7PpSetupDrawer" class="control-panel v7-drawer" aria-labelledby="v7PpSetupTitle" hidden>
+      <div class="v7-drawer-head" data-v7>
+        <h3 id="v7PpSetupTitle" class="v7-drawer-title" tabindex="-1">Table setup</h3>
+        <button type="button" id="v7PpSetupClose" class="v7-tool-btn" aria-label="Close table setup">✕</button>
+      </div>
     <div style="display:flex; gap: 0.5rem; flex-wrap:wrap;">
       <button id="ppTabTickerBtn" class="tab-btn active-tab">+/- Asset</button>
       <button id="ppTabParamBtn" class="tab-btn">+/- Parameter</button>
       <button id="ppTabColumnsBtn" class="tab-btn">⇄ Reorder Columns</button>
       <button id="ppTabRowsBtn" class="tab-btn">⇅ Reorder Rows</button>
     </div>
-
     <div id="ppTickerPanel">
       <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Assets can repeat — add the same asset again to record another purchase-and-sale round as its own row. You can also edit an asset's name directly in the table.</div>
       <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end;">
@@ -781,106 +896,44 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
       <div class="chart-note" data-intro="1" style="margin-bottom:0.5rem;">Reorder assets with the arrows. This automatically switches "Sort by" to "Custom order" so your arrangement actually shows in the table.</div>
       <div id="ppRowOrderList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
     </div>
+    </aside>
+  </div>
   </div>
 
-  <div class="control-panel">
-    <label for="ppSortMode" style="display:block; margin-bottom:4px;">Sort by:</label>
-    <select id="ppSortMode">
-      <option value="date-new">Date Added (newest first)</option>
-      <option value="date-old">Date Added (oldest first)</option>
-      <option value="alpha">Alphabetical (Asset)</option>
-      <option value="param-date-purchased" selected>Date Purchased (most recent first) — default</option>
-      <option value="param-date-purchased-old">Date Purchased (oldest first)</option>
-      <option value="param-date-sale">Date Sale (most recent first)</option>
-      <option value="param-date-sale-old">Date Sale (oldest first)</option>
-      <option value="param-sale-profit">Realized Gain (highest first)</option>
-      <option value="param-missed-gain">Missed Gain % (highest first)</option>
-      <option value="custom">Custom order (reorder with ↑ ↓)</option>
-    </select>
-  </div>
-
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.6rem;">
-    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-      <h2 id="ppActiveListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases viewing: —</h2>
-      <button id="ppCurrentHoldingsToggle" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Show only purchase rows that still have unsold units (after every sale row on this list is matched against them)">Current Holdings</button>
-      <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="How a separate sale row's cost is worked out when you bought the same ticker at different prices. Average cost: your average purchase price of the units held at the time of the sale. FIFO: the oldest purchases are treated as sold first.">Cost basis:
-        <select id="ppCostBasisSelect" style="padding:0.4rem 0.8rem; font-size:0.85rem;">
-          <option value="average">Average cost</option>
-          <option value="fifo">FIFO (oldest first)</option>
-        </select>
-      </label>
-    </div>
-    <span id="ppListActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
-    <button id="ppSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every row of the currently open Past Purchases list (purchases and sales, one line each), with every fillable parameter as a column, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
-    <button id="ppImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into the currently open Past Purchases list. Each line becomes its own row (purchases and sales can be on separate lines); lines already in the table are ignored, new ones are added next to that ticker's rows, and you'll be asked what to do with any line that conflicts with an existing row.">⬆ Import Excel</button>
-    <input id="ppImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
-    <label style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:var(--text-secondary);" title="When ticked, importing REPLACES every row in the open Past Purchases list with the rows in the file (you are asked to confirm first). Leave unticked to merge as before."><input type="checkbox" id="ppImportOverwrite"> Overwrite list with file</label>
-    <span id="ppExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-    <button id="ppExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-    <button id="ppExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-    <button id="ppExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="ppExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
-  </div>
-  <div style="margin-bottom:2rem;">
-    <div class="disclaimer">
-      This table lays purchases and sales out as FIFO-matched lots: a purchase splits across several rows here if it fed more than one sale, and a sale splits across several rows if it drew from more than one purchase — always oldest-purchase-first (FIFO), even when "Cost basis" above is set to Average cost, since Average cost blends prices across lots and has nothing clean to split into rows like this. Every cell here is editable and writes back to the real purchase or sale it belongs to. In the ticker cell: <strong>↑ ↓</strong> reorders that ticker's whole block of rows, <strong>Sell</strong> records a new sale, and <strong>×</strong> deletes; "Held: x/y" shows how many units of that purchase are still unsold. The "Total current market and book value" (shown as two totals — Book Value and Current Market Value, each in its own column), "Total Realized Gain to date", and monthly Realized Gain totals below are computed from these FIFO-matched rows.
-    </div>
-    <div id="ppLotMatchContent"></div>
-  </div>
-
-  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Sales Strategy</h2>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
-    <button id="ssSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft (not yet realized) Sales Strategy row, with Ticker/Units to Sell/Selling Price as columns, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
-    <button id="ssImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Sales Strategy table. Each line becomes its own new draft row (two lines for the same ticker are separate batches, not a conflict); a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
-    <input id="ssImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
-    <span id="ssExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-    <button id="ssExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-    <button id="ssExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-    <button id="ssExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="ssExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
-  </div>
-  <div class="disclaimer">
-    This table starts already populated — every currently-held ticker on this Past Purchases list gets its own draft row automatically, with no "+ Add Row" click needed, and a newly-bought ticker gets one too, whenever there's no existing row left to show its pending units. Plan a sale of a ticker already on this Past Purchases list without touching your real holdings yet. Enter <strong>Units to Sell</strong> and a <strong>Selling Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder a row, <strong>Dup</strong> to add another row for the same ticker if you want to sell it off in separate batches at different prices, and <strong>×</strong> to remove a draft. Click <strong>Save</strong> to lock in that batch's numbers — if any units of that ticker are still left over once every row is counted, a fresh blank row is added right below it automatically, so you're never left forgetting to plan a sale for units you still hold. In a column header: click <strong>⇅</strong> to sort by that column (click again to reverse, a third time to clear back to its normal order), <strong>&lt; &gt;</strong> to move the column, and <strong>×</strong> to hide it — hiding never deletes anything, and "Show all columns" below the table brings a hidden one straight back. <strong>Total Units Holding</strong> is this ticker's real current holding (it drops as real sales are confirmed, here and on Past Purchases, and rises the moment more is bought); <strong>Units Pending Plan</strong> = Total Units Holding − Units to Sell planned in this row and every row above it for that ticker (a running total down the table, in this table's own order — reorder a ticker's rows with <strong>↑ ↓</strong> to change which row "sees" which units first); <strong>Average Purchase Price of Units Left</strong> is the FIFO cost of whichever lots would remain after this row and the ones above it. Nothing here is real until you click <strong>Confirm Sale</strong> and pick the date — that adds a real sale row to the Lot Matching table above and updates every table and total that depends on it. A confirmed row is locked green and keeps its own <strong>↑ ↓</strong> and <strong>×</strong> (no Dup/Save — there's nothing left to plan); it drops off this table (not off the real record) after the "Display" window below has passed since its sale date. Removing a draft row with <strong>×</strong> stays removed through ordinary editing elsewhere — it won't silently reappear just because you bought or sold something unrelated; click <strong>⟳ Refresh</strong> next to "Display" whenever you want this table fully resynced right now, which does bring back a row for any currently-held ticker that has none, including one you removed earlier.
-  </div>
-  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+  <div id="v7PaneSales" class="v7-pane" role="tabpanel" aria-label="Sales plan" hidden>
+  <div class="control-panel v7-toolbar">
+    <div class="v7-toolbar-group">
     <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="How long a completed (realized) sale stays visible in this table after its sale date before dropping off — the real sale record on Past Purchases/Lot Matching is never affected either way. &quot;Default&quot; is 28 days; &quot;All&quot; never hides one.">Display
       <select id="ssDisplayRangeSelect" style="padding:0.4rem 0.8rem; font-size:0.85rem;"></select>
     </label>
     <button id="ssRefreshBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Fully resync this table from the Past Purchases table above right now: re-pulls every ticker's Current Price/Total Units Holding/Sold/Units Pending Plan, AND adds back a draft row for any currently-held ticker that has none right now — even one you removed earlier — as long as it still shows pending units. (Day-to-day editing elsewhere never removes a row you've deleted on its own; this button is the explicit, on-demand full resync.)">⟳ Refresh</button>
     <span id="ssRefreshStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
-  </div>
-  <div id="ssHiddenColumnsNotice" style="margin-bottom:0.75rem;"></div>
-  <div style="margin-bottom:2rem;">
-    <div id="ssTableContent"></div>
-  </div>
-
-  <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Buy Strategy</h2>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; align-items:center;">
-    <button id="bsSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft Buy Strategy row (Ticker, Strike Price, Expiration Date, Units to Buy, Buying Price) so you can add rows offline and re-import them.">⬇ Sample Excel for Data Entry</button>
-    <button id="bsImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Buy Strategy table. Each line becomes its own new draft row; a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
-    <input id="bsImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
-    <span id="bsExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  <div style="display:flex; gap: 0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-    <button id="bsExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
-    <button id="bsExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
-    <button id="bsExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
-    <button id="bsExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+    </div>
+    <div class="v7-toolbar-group v7-toolbar-actions">
+      <details class="v7-menu" id="v7SsIoMenu">
+        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <div class="v7-menu-list">
+    <button id="ssSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft (not yet realized) Sales Strategy row, with Ticker/Units to Sell/Selling Price as columns, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
+    <button id="ssImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Sales Strategy table. Each line becomes its own new draft row (two lines for the same ticker are separate batches, not a conflict); a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
+    <button id="ssExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="ssExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="ssExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="ssExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+        </div>
+      </details>
+    <input id="ssImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="ssExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
   </div>
   <div class="disclaimer">
-    Plan buys of any ticker or call option — one you already hold, one you don't, or one you're watching in Sales Strategy — without touching your real holdings. Use the bar below to add a row: pick a known ticker/contract from the list (everything on Past Purchases, Sales Strategy and this table) or type a <strong>Ticker</strong>; for a call option also give its <strong>Strike</strong> and <strong>Expiration</strong> (DD/MM/YYYY). Then enter <strong>Units to Buy</strong> and your <strong>Buying Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder, <strong>Save</strong> to commit typed numbers, <strong>Dup</strong> to plan another batch of the same ticker at a different price, and <strong>×</strong> to remove a draft. Column headers work as in Sales Strategy: <strong>⇅</strong> sort, <strong>&lt; &gt;</strong> move, <strong>×</strong> hide ("Show all columns" brings it back). <strong>Current Price</strong>, <strong>Total Units Holding</strong> and <strong>Current Average Purchase Price</strong> come from Past Purchases (FIFO, units still held). <strong>Units Planned to Sell</strong> is the total of that ticker's still-draft Sales Strategy rows. <strong>Units Holding After Plan</strong> = Total Units Holding − Units Planned to Sell + the buys in this row and every row above it for that ticker, and <strong>New Average Purchase Price</strong> is the blended cost of those units (the lots left after the planned sells, oldest first, plus the planned buys). <strong>Planned Cost</strong> = Units to Buy × Buying Price (× the contract multiplier for an option), and the first row totals it for this table only. <strong>Buying Price vs Current (%)</strong> is negative when you plan to buy below the current price. Nothing here is real until you click <strong>Confirm Buy</strong> and pick the date — that adds a real purchase row to the Lot Matching table above (with the strike/expiration for an option) and updates every table that depends on it. A confirmed row is locked green and drops off this table (not off the real record) after the "Display" window has passed.
+    This table starts already populated — every currently-held ticker on this Past Purchases list gets its own draft row automatically, with no "+ Add Row" click needed, and a newly-bought ticker gets one too, whenever there's no existing row left to show its pending units. Plan a sale of a ticker already on this Past Purchases list without touching your real holdings yet. Enter <strong>Units to Sell</strong> and a <strong>Selling Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder a row, <strong>Dup</strong> to add another row for the same ticker if you want to sell it off in separate batches at different prices, and <strong>×</strong> to remove a draft. Click <strong>Save</strong> to lock in that batch's numbers — if any units of that ticker are still left over once every row is counted, a fresh blank row is added right below it automatically, so you're never left forgetting to plan a sale for units you still hold. In a column header: click <strong>⇅</strong> to sort by that column (click again to reverse, a third time to clear back to its normal order), <strong>&lt; &gt;</strong> to move the column, and <strong>×</strong> to hide it — hiding never deletes anything, and "Show all columns" below the table brings a hidden one straight back. <strong>Total Units Holding</strong> is this ticker's real current holding (it drops as real sales are confirmed, here and on Past Purchases, and rises the moment more is bought); <strong>Units Pending Plan</strong> = Total Units Holding − Units to Sell planned in this row and every row above it for that ticker (a running total down the table, in this table's own order — reorder a ticker's rows with <strong>↑ ↓</strong> to change which row "sees" which units first); <strong>Average Purchase Price of Units Left</strong> is the FIFO cost of whichever lots would remain after this row and the ones above it. Nothing here is real until you click <strong>Confirm Sale</strong> and pick the date — that adds a real sale row to the Lot Matching table above and updates every table and total that depends on it. A confirmed row is locked green and keeps its own <strong>↑ ↓</strong> and <strong>×</strong> (no Dup/Save — there's nothing left to plan); it drops off this table (not off the real record) after the "Display" window below has passed since its sale date. Removing a draft row with <strong>×</strong> stays removed through ordinary editing elsewhere — it won't silently reappear just because you bought or sold something unrelated; click <strong>⟳ Refresh</strong> next to "Display" whenever you want this table fully resynced right now, which does bring back a row for any currently-held ticker that has none, including one you removed earlier.
   </div>
-  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+  <div id="ssHiddenColumnsNotice" style="margin-bottom:0.75rem;"></div>
+  <div id="ssTableContent"></div>
+  </div>
+
+  <div id="v7PaneBuys" class="v7-pane" role="tabpanel" aria-label="Buy plan" hidden>
+  <div class="control-panel v7-toolbar v7-addbar">
     <select id="bsKnownSelect" style="padding:0.4rem 0.6rem; font-size:0.85rem; max-width:260px;" title="Pick any ticker or call-option contract already on Past Purchases, Sales Strategy or this table to fill the boxes beside it."></select>
     <input id="bsAddTicker" class="form-input" placeholder="Ticker" maxlength="12" style="width:100px;" autocomplete="off">
     <input id="bsAddStrike" class="form-input" placeholder="Strike (option)" type="number" step="0.01" style="width:120px;">
@@ -888,16 +941,35 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
     <button id="bsAddRowBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;">+ Add Row</button>
     <span id="bsAddStatus" style="font-size:0.85rem;"></span>
   </div>
-  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+  <div class="control-panel v7-toolbar">
+    <div class="v7-toolbar-group">
     <label style="display:flex; align-items:center; gap:0.4rem; color:var(--text-secondary); font-size:0.85rem;" title="How long a confirmed buy stays visible in this table after its date before dropping off — the real purchase on Past Purchases/Lot Matching is never affected. &quot;Default&quot; is 28 days; &quot;All&quot; never hides one.">Display
       <select id="bsDisplayRangeSelect" style="padding:0.4rem 0.8rem; font-size:0.85rem;"></select>
     </label>
     <button id="bsRefreshBtn" type="button" class="tab-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;" title="Re-pull Current Price, holdings, average cost and planned sells from Past Purchases and Sales Strategy right now.">⟳ Refresh</button>
     <span id="bsRefreshStatus" style="color:var(--text-secondary); font-size:0.85rem;"></span>
+    </div>
+    <div class="v7-toolbar-group v7-toolbar-actions">
+      <details class="v7-menu" id="v7BsIoMenu">
+        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <div class="v7-menu-list">
+    <button id="bsSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft Buy Strategy row (Ticker, Strike Price, Expiration Date, Units to Buy, Buying Price) so you can add rows offline and re-import them.">⬇ Sample Excel for Data Entry</button>
+    <button id="bsImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Buy Strategy table. Each line becomes its own new draft row; a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
+    <button id="bsExportExcelBtn" class="tab-btn tab-btn-export-excel" title="Download this table as an Excel file (.xlsx)">⬇ Export to Excel</button>
+    <button id="bsExportTextBtn" class="tab-btn tab-btn-export-text" title="Download this table as a text file (.txt)">⬇ Export to Text</button>
+    <button id="bsExportWordBtn" class="tab-btn tab-btn-export-word" title="Download this table as a Word document (.doc)">⬇ Export to Word</button>
+    <button id="bsExportPdfBtn" class="tab-btn tab-btn-export-pdf" title="Opens your browser's print dialog — choose &quot;Save as PDF&quot; as the destination. Needs no internet connection.">🖨 Export to PDF</button>
+        </div>
+      </details>
+    <input id="bsImportExcelFileInput" type="file" accept=".xlsx,.xls" style="display:none;">
+    <span id="bsExcelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
+    </div>
+  </div>
+  <div class="disclaimer">
+    Plan buys of any ticker or call option — one you already hold, one you don't, or one you're watching in Sales Strategy — without touching your real holdings. Use the bar below to add a row: pick a known ticker/contract from the list (everything on Past Purchases, Sales Strategy and this table) or type a <strong>Ticker</strong>; for a call option also give its <strong>Strike</strong> and <strong>Expiration</strong> (DD/MM/YYYY). Then enter <strong>Units to Buy</strong> and your <strong>Buying Price</strong> — use the ticker cell's <strong>↑ ↓</strong> to reorder, <strong>Save</strong> to commit typed numbers, <strong>Dup</strong> to plan another batch of the same ticker at a different price, and <strong>×</strong> to remove a draft. Column headers work as in Sales Strategy: <strong>⇅</strong> sort, <strong>&lt; &gt;</strong> move, <strong>×</strong> hide ("Show all columns" brings it back). <strong>Current Price</strong>, <strong>Total Units Holding</strong> and <strong>Current Average Purchase Price</strong> come from Past Purchases (FIFO, units still held). <strong>Units Planned to Sell</strong> is the total of that ticker's still-draft Sales Strategy rows. <strong>Units Holding After Plan</strong> = Total Units Holding − Units Planned to Sell + the buys in this row and every row above it for that ticker, and <strong>New Average Purchase Price</strong> is the blended cost of those units (the lots left after the planned sells, oldest first, plus the planned buys). <strong>Planned Cost</strong> = Units to Buy × Buying Price (× the contract multiplier for an option), and the first row totals it for this table only. <strong>Buying Price vs Current (%)</strong> is negative when you plan to buy below the current price. Nothing here is real until you click <strong>Confirm Buy</strong> and pick the date — that adds a real purchase row to the Lot Matching table above (with the strike/expiration for an option) and updates every table that depends on it. A confirmed row is locked green and drops off this table (not off the real record) after the "Display" window has passed.
   </div>
   <div id="bsHiddenColumnsNotice" style="margin-bottom:0.75rem;"></div>
-  <div style="margin-bottom:2rem;">
-    <div id="bsTableContent"></div>
+  <div id="bsTableContent"></div>
   </div>
 
   </div>
@@ -906,7 +978,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 
   <section class="screen" data-screen="news" aria-label="News and Research" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Current and Potential Holdings</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">News of Current and Potential Holdings</h2>
     <button id="newsToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Current and Potential Holdings section" data-section="newsSectionBody">▶</button>
   </div>
   <div id="newsSectionBody">
@@ -949,7 +1021,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
-    <h2 id="newsListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
+    <h2 id="newsListHeading" style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
     <span id="newsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div id="newsTableContent"></div>
@@ -957,13 +1029,13 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Selected Assets</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">News of Selected Assets</h2>
     <button id="newsSelToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Selected Assets section" data-section="newsSelSectionBody">▶</button>
   </div>
   <div id="newsSelSectionBody">
 
   <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="nsListSelector" style="color:#facc15; font-size:1.3rem;">Selected Assets List:</label>
+    <label for="nsListSelector" style="color:#fff; font-size:1.3rem;">Selected Assets List:</label>
     <select id="nsListSelector" class="form-input" style="min-width:180px;"></select>
     <button id="nsNewListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="nsRenameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
@@ -995,7 +1067,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
       <button id="nsResetBtn" type="button" title="Reset every asset below back to grey/undecided, in one click." style="background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary);">↺ Reset request list</button>
       <span id="nsImportStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
     </div>
-    <h3 id="nsActiveHeading" style="font-size:1rem; color:#facc15; font-weight:600; margin:1rem 0 0.25rem;">Selected Assets viewing: —</h3>
+    <h3 id="nsActiveHeading" style="font-size:1rem; color:#fff; font-weight:600; margin:1rem 0 0.25rem;">Selected Assets viewing: —</h3>
     <div class="chart-note" style="margin-top:0.25rem;">All assets across your App Lists — click ✓ to include, ✕ to exclude from the request:</div>
     <div id="nsRequestList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;"></div>
     <div style="margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
@@ -1025,7 +1097,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
-    <h2 id="nsReportsHeading" style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
+    <h2 id="nsReportsHeading" style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
     <span id="nsReportsStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div id="nsTableContent"></div>
@@ -1036,14 +1108,14 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 
   <section class="screen" data-screen="portfolio" aria-label="Portfolio" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Portfolio</h2>
     <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" data-section="portfolioSectionBody">▶</button>
   </div>
   <div id="portfolioSectionBody">
 
   <div class="v7-list-bar">
   <div class="control-panel" style="flex-wrap: wrap;">
-    <label for="listSelector" style="color:#facc15; font-size:1.3rem;">Portfolio List:</label>
+    <label for="listSelector" style="color:#fff; font-size:1.3rem;">Portfolio List:</label>
     <select id="listSelector" class="form-input" style="min-width:180px;"></select>
     <button id="newListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">+ New List</button>
     <button id="renameListBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Rename</button>
@@ -1105,7 +1177,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
-    <h2 id="activeListHeading" style="font-size:1.3rem; color:#facc15; font-weight:600;">Portfolio viewing: —</h2>
+    <h2 id="activeListHeading" style="font-size:1.3rem; color:#fff; font-weight:600;">Portfolio viewing: —</h2>
     <span id="listActionStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
     <span id="excelDataEntryStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
   </div>
@@ -1208,7 +1280,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 
   <section class="screen" data-screen="data" aria-label="Data updates" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Fetch Live Data</h2>
     <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" data-section="fetchLiveDataSectionBody">▶</button>
   </div>
   <div id="fetchLiveDataSectionBody">
@@ -1249,7 +1321,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Detailed Update for Selected Assets</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Detailed Update for Selected Assets</h2>
     <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" data-section="detailedUpdateSectionBody">▶</button>
   </div>
   <div id="detailedUpdateSectionBody">
@@ -1298,7 +1370,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Update Current Price and Consensus Target Price</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Update Current Price and Consensus Target Price</h2>
     <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" data-section="quickPriceUpdateSectionBody">▶</button>
   </div>
   <div id="quickPriceUpdateSectionBody">
@@ -1334,13 +1406,13 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 
   <section class="screen" data-screen="methodology" aria-label="Methodology and Glossary" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
-    <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Methodology and Glossary</h2>
+    <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Methodology and Glossary</h2>
     <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" data-section="methodologyGlossarySectionBody">▶</button>
   </div>
   <div id="methodologyGlossarySectionBody">
 
   <div class="table-container" style="margin-top:2rem; padding:1.5rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">How each mandate calculates Optimized Weight</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">How each mandate calculates Optimized Weight</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Every asset gets a raw score under whichever mandate is selected, then each asset's weight = its score ÷ the sum of all scores in the list, so weights always total 100%.</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
@@ -1372,7 +1444,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem; margin-bottom:2rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Parameter glossary (A–Z) — shared definitions</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">Parameter glossary (A–Z) — shared definitions</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Definitions for every parameter whose meaning is the same wherever it appears, A–Z. A parameter whose meaning differs between tables is NOT listed here — look it up in that table's own glossary further down (Portfolio, Past Purchases, Sales Strategy, Buy Strategy).</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
@@ -1449,7 +1521,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Portfolio table — definitions</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">Portfolio table — definitions</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Where a parameter means something different here than in Past Purchases, Sales Strategy or Buy Strategy, this table gives the Portfolio meaning.</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
@@ -1472,7 +1544,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Past Purchases (Lot Matching) table — definitions</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">Past Purchases (Lot Matching) table — definitions</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">The Past Purchases and Planning section's Lot Matching table. Purchases and sales are matched oldest-first (FIFO), separately for each ticker or option contract.</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
@@ -1500,7 +1572,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Sales Strategy table — definitions</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">Sales Strategy table — definitions</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Planned (draft) sales. Nothing here is real until you click Confirm Sale.</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
@@ -1523,7 +1595,7 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
   </div>
 
   <div class="table-container" style="margin-top:1.5rem; padding:1.5rem;">
-    <h2 style="color:#facc15; font-size:1.2rem; margin-bottom:1rem;">Buy Strategy table — definitions</h2>
+    <h2 style="color:#fff; font-size:1.2rem; margin-bottom:1rem;">Buy Strategy table — definitions</h2>
     <p class="chart-note chart-note-info" data-intro="1" style="margin-bottom:1rem;">Planned (draft) buys. Nothing here is real until you click Confirm Buy.</p>
     <table style="width:100%; border-collapse:separate; border-spacing:0;">
       <thead>
