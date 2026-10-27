@@ -377,6 +377,143 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 @media print { .nav-btn-row { position: static; } }
+
+/* ===== v7 app shell (Phase 4): left navigation, top bar, screens ===== */
+body { padding: 0; }
+body.view-mobile { padding: 0 !important; }
+.app-layout { display: flex; min-height: 100vh; }
+.app-nav { position: sticky; top: 0; height: 100vh; width: 248px; flex: 0 0 248px; box-sizing: border-box; overflow-y: auto;
+  background: #0f1525; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 18px 12px; }
+.app-brand { display: flex; gap: 10px; align-items: center; padding: 4px 8px 18px; }
+.app-brand-name { font-weight: 700; font-size: 15px; line-height: 1.25; color: #fff; }
+.app-brand-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.app-nav-list { display: flex; flex-direction: column; gap: 2px; }
+.app-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 0 12px; border: 0; border-radius: 8px;
+  background: transparent; color: #cbd5e1; font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; }
+.app-nav-item:hover { background: var(--bg-raised); color: #fff; }
+.app-nav-item:focus-visible, .app-primary-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.app-nav-item[aria-current="page"] { background: #1e3a8a; color: #fff; font-weight: 600; }
+.app-nav-item.app-nav-sub { padding-left: 40px; min-height: 36px; font-size: 13px; }
+.app-nav-item.nav-btn-active:not([aria-current="page"]) { color: #facc15; }
+.app-nav-ico { width: 18px; height: 18px; flex: 0 0 18px; }
+.app-nav-sub .app-nav-ico { width: 15px; height: 15px; flex-basis: 15px; }
+.app-nav-group { margin: 14px 12px 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+.app-nav-more { display: none; }
+.app-nav-account { margin-top: auto; padding: 14px 8px 0; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;
+  font-size: 13px; color: var(--text-secondary); }
+.app-nav-email strong { color: #fff; font-weight: 500; word-break: break-all; }
+.app-nav-sync { display: flex; gap: 6px; align-items: flex-start; }
+.app-sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); margin-top: 5px; flex: 0 0 8px; }
+.app-nav-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.app-small-btn, .app-nav-actions .tab-btn { min-height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-color);
+  background: transparent; color: #cbd5e1; font-size: 12px; cursor: pointer; }
+.app-small-btn.app-danger { border-color: #ef4444; color: #fca5a5; }
+.app-link-danger { background: none; border: 0; padding: 0; color: #fca5a5; font-size: 12px; text-align: left; cursor: pointer; text-decoration: underline; }
+.app-build-line { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.app-topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 14px clamp(16px, 3vw, 32px); background: rgba(11,15,25,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-color); }
+.app-topbar h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.01em; }
+.app-topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.app-primary-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 8px; border: 0;
+  background: var(--accent-blue); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.app-primary-btn:hover { background: var(--accent-hover); }
+.app-primary-btn .app-nav-ico { width: 16px; height: 16px; flex-basis: 16px; }
+.app-main > .container { width: 100%; box-sizing: border-box; padding: 24px clamp(16px, 3vw, 32px) 48px; }
+.screen[hidden] { display: none !important; }
+@media (max-width: 820px) {
+.app-layout { display: block; }
+.app-nav { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 60; height: auto; width: auto; flex: none; overflow: visible;
+  flex-direction: column; padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border-color); }
+.app-brand, .app-nav-account, .app-nav-group { display: none; }
+.app-nav-list { flex-direction: row; flex-wrap: nowrap; width: 100%; gap: 0; }
+.app-nav-item { display: none; }
+.app-nav-item.nav-primary, .app-nav-item.app-nav-more { display: flex; flex: 1 1 0; flex-direction: column; justify-content: center; gap: 3px;
+  min-height: 56px; padding: 4px 2px; font-size: 11px; text-align: center; line-height: 1.15; }
+.app-nav.nav-open { max-height: 85vh; overflow-y: auto; padding-top: 12px; box-shadow: 0 -12px 40px rgba(0,0,0,.6); }
+.app-nav.nav-open .app-nav-list { flex-wrap: wrap; }
+.app-nav.nav-open .app-nav-item:not(.nav-primary):not(.app-nav-more) { display: flex; flex: 1 1 100%; padding-left: 16px; min-height: 48px; order: 1; }
+.app-nav.nav-open .app-nav-account { display: flex; margin-top: 10px; padding-bottom: 10px; }
+.app-topbar h1 { font-size: 1.25rem; }
+.app-main > .container { padding: 16px 12px 104px; }
+}
+/* "Mobile interface" forces the phone layout on any screen width. */
+body.view-mobile .app-layout { display: block;}
+body.view-mobile .app-nav { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 60; height: auto; width: auto; flex: none; overflow: visible;
+  flex-direction: column; padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--border-color);}
+body.view-mobile .app-brand, body.view-mobile .app-nav-account, body.view-mobile .app-nav-group { display: none;}
+body.view-mobile .app-nav-list { flex-direction: row; flex-wrap: nowrap; width: 100%; gap: 0;}
+body.view-mobile .app-nav-item { display: none;}
+body.view-mobile .app-nav-item.nav-primary, body.view-mobile .app-nav-item.app-nav-more { display: flex; flex: 1 1 0; flex-direction: column; justify-content: center; gap: 3px;
+  min-height: 56px; padding: 4px 2px; font-size: 11px; text-align: center; line-height: 1.15;}
+body.view-mobile .app-nav.nav-open { max-height: 85vh; overflow-y: auto; padding-top: 12px; box-shadow: 0 -12px 40px rgba(0,0,0,.6);}
+body.view-mobile .app-nav.nav-open .app-nav-list { flex-wrap: wrap;}
+body.view-mobile .app-nav.nav-open .app-nav-item:not(.nav-primary):not(.app-nav-more) { display: flex; flex: 1 1 100%; padding-left: 16px; min-height: 48px; order: 1; }
+body.view-mobile .app-nav.nav-open .app-nav-account { display: flex; margin-top: 10px; padding-bottom: 10px;}
+body.view-mobile .app-topbar h1 { font-size: 1.25rem;}
+body.view-mobile .app-main > .container { padding: 16px 12px 104px; }
+
+/* ===== Dashboard (Phase 4) ===== */
+#dashboardContent { display: flex; flex-direction: column; gap: 20px; font-variant-numeric: tabular-nums; }
+.dash-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.dash-tile, .dash-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+.dash-label { color: var(--text-secondary); font-size: 13px; }
+.dash-big { font-size: 26px; font-weight: 700; margin-top: 6px; color: #fff; }
+.dash-sub { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+.dash-pos, .dash-big.dash-pos, .dash-sub.dash-pos { color: #34d399; }
+.dash-neg, .dash-big.dash-neg, .dash-sub.dash-neg { color: #fb7185; }
+.dash-muted { color: var(--text-secondary); }
+.dash-strong { font-weight: 600; }
+.dash-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.dash-wide { flex: 999 1 640px; }
+.dash-side { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.dash-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.dash-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.dash-card-head h2 { margin: 0; font-size: 17px; color: #fff; }
+.dash-table-wrap { overflow-x: auto; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dash-table th { text-align: right; color: var(--text-secondary); font-weight: 500; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border-color); white-space: nowrap; background: transparent; text-transform: none; }
+.dash-table td { text-align: right; padding: 10px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+.dash-table th:first-child, .dash-table td:first-child { text-align: left; }
+.dash-table td:first-child { white-space: normal; min-width: 90px; max-width: 200px; }
+.dash-table td.dash-weight { text-align: left; min-width: 150px; }
+.dash-table th:last-child { text-align: left; }
+.dash-indent { padding-left: 14px; color: #cbd5e1; }
+.dash-weight > span { display: block; margin-top: 4px; font-size: 13px; }
+.dash-bar { position: relative; height: 8px; background: #1e293b; border-radius: 4px; }
+.dash-bar-fill { height: 8px; background: #3b82f6; border-radius: 4px; }
+.dash-bar-fill.dash-over { background: var(--amber); }
+.dash-bar-tick { position: absolute; top: -4px; width: 2px; height: 16px; background: #f8fafc; margin-left: -1px; }
+.dash-note { margin: 12px 0 0; color: var(--text-secondary); font-size: 12px; }
+.dash-empty { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.dash-link { background: none; border: 0; padding: 0; color: #93c5fd; font: inherit; font-size: 13px; cursor: pointer; }
+.dash-link:hover { color: #bfdbfe; text-decoration: underline; }
+.dash-alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+.dash-alerts li { display: flex; gap: 10px; align-items: flex-start; }
+.dash-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: 0 0 8px; background: #93c5fd; }
+.dash-alert-warn .dash-dot { background: var(--amber); }
+.dash-months { display: grid; grid-template-columns: 72px 1fr 88px; gap: 8px 10px; align-items: center; font-size: 13px; }
+.dash-months > span:last-of-type, .dash-months > span:nth-child(3n) { text-align: right; }
+.dash-mbar { display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+.dash-mneg { display: flex; justify-content: flex-end; border-right: 1px solid #334155; }
+.dash-mneg > div { height: 12px; background: #fb7185; border-radius: 3px 0 0 3px; }
+.dash-mpos { border-left: 1px solid #334155; }
+.dash-mpos > div { height: 12px; background: #34d399; border-radius: 0 3px 3px 0; }
+.dash-mbar > div:empty { height: 12px; }
+.dash-reports { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dash-reports li { padding: 12px; background: var(--bg-raised); border-radius: 8px; font-size: 14px; }
+.dash-reports .dash-muted { font-size: 13px; margin-top: 2px; }
+.dash-callout { margin: 0; padding: 12px; border: 1px dashed #334155; border-radius: 8px; font-size: 14px; color: #cbd5e1; }
+@media (max-width: 820px) {
+.dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dash-tile { padding: 12px 14px; }
+.dash-big { font-size: 19px; }
+.dash-sub { font-size: 12px; }
+}
+body.view-mobile .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+body.view-mobile .dash-tile { padding: 12px 14px; }
+body.view-mobile .dash-big { font-size: 19px; }
+body.view-mobile .dash-sub { font-size: 12px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -440,45 +577,56 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 </div>
 
 <div id="appShell">
+<div class="app-layout">
+  <nav id="appNav" class="app-nav" aria-label="Main">
+    <div class="app-brand">
+      <svg width="30" height="30" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#2563eb"/><path d="M7 19l5-6 4 3 5-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><div class="app-brand-name">Stock Portfolio Optimizer</div><div class="app-brand-sub">Multi-factor cash weight optimization</div></div>
+    </div>
+    <div class="app-nav-list">
+      <button type="button" class="app-nav-item nav-primary" data-route="dashboard"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></button>
+      <button type="button" class="app-nav-item nav-primary" data-route="portfolio" data-open-section="portfolioSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><span>Portfolio</span></button>
+      <button type="button" class="app-nav-item nav-primary" data-route="holdings" data-open-section="pastPurchasesSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Holdings &amp; Planning</span></button>
+      <button type="button" class="app-nav-item nav-primary" id="navNewsBtn" data-route="news" data-open-section="newsSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg><span>News &amp; Research</span></button>
+      <button type="button" class="app-nav-item app-nav-sub" id="navNewsSelBtn" data-route="news" data-open-section="newsSelSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Selected assets</span></button>
+      <div class="app-nav-group">Data updates</div>
+      <button type="button" class="app-nav-item" id="navFetchLiveDataBtn" data-route="data" data-open-section="fetchLiveDataSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span>Fetch live data</span></button>
+      <button type="button" class="app-nav-item" id="navDetailedUpdateBtn" data-route="data" data-open-section="detailedUpdateSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Detailed update</span></button>
+      <button type="button" class="app-nav-item" id="navQuickPriceUpdateBtn" data-route="data" data-open-section="quickPriceUpdateSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6.5c0-1.9-2.2-3.5-5-3.5s-5 1.6-5 3.5 2.2 3.1 5 3.5 5 1.6 5 3.5-2.2 3.5-5 3.5-5-1.6-5-3.5"/></svg><span>Price &amp; target update</span></button>
+      <button type="button" class="app-nav-item" data-route="methodology" data-open-section="methodologyGlossarySectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>Methodology &amp; glossary</span></button>
+      <button type="button" class="app-nav-item app-nav-more" id="appNavMoreBtn" aria-expanded="false" aria-controls="appNav"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
+    </div>
+    <div class="app-nav-account">
+      <div class="app-nav-email">Signed in as <strong id="loggedInEmailInline"></strong></div>
+      <div class="app-nav-sync"><span class="app-sync-dot" aria-hidden="true"></span><span id="syncStatus"></span></div>
+      <div class="app-nav-actions">
+        <button id="syncNowBtn" type="button" class="app-small-btn">Sync now</button>
+        <button id="logOutBtnInline" type="button" class="app-small-btn app-danger">Log Out</button>
+      </div>
+      <div class="app-nav-actions view-toggle-panel" role="group" aria-label="Interface">
+        <button id="viewDesktopBtn" type="button" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">Desktop</button>
+        <button id="viewMobileBtn" type="button" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">Mobile</button>
+      </div>
+      <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
+      <div id="htmlBuildLine" class="app-build-line">
+      Version v7.0 — New layout: left navigation (bottom tabs on a phone), screens, and a Dashboard landing page. Your data, sections and scoring are unchanged.</div>
+    </div>
+  </nav>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <h1 id="screenTitle">Dashboard</h1>
+      <div class="app-topbar-actions">
+        <button type="button" class="app-primary-btn" data-route="data" data-open-section="fetchLiveDataSectionBody" id="topFetchLiveBtn"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span>Fetch live data</span></button>
+      </div>
+    </header>
+
 <div class="container">
-  <header>
-    <h1>Stock Portfolio Optimizer</h1>
-    <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
-    <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.16 — The whole app now runs from tested TypeScript modules (the old single script is gone); everything works as before.</div>
-  </header>
-  <div class="disclaimer" data-keep-open="1">
-    <strong>⚠ Not financial advice.</strong>
-    <ul>
-      <li>Current Price, P/E, ROA, and related fields can be live-fetched (Finnhub, Alpha Vantage) or AI-assisted, but none of this is professional research.</li>
-      <li>Target prices and Stability ratings are always manually entered editorial content, not sourced from a live feed.</li>
-      <li>Verify all figures independently before making any actual investment decisions.</li>
-    </ul>
-  </div>
+  <section class="screen" data-screen="dashboard" aria-label="Dashboard">
+    <div id="dashboardContent"></div>
+  </section>
 
-  <div class="top-toolbar">
-  <div class="control-panel view-toggle-panel" style="flex-wrap: wrap;">
-    <span style="color:var(--text-secondary); font-size:0.85rem;">View as:</span>
-    <button id="viewDesktopBtn" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">🖥 Desktop interface</button>
-    <button id="viewMobileBtn" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">📱 Mobile interface</button>
-  </div>
-
-  <div class="control-panel account-panel" style="flex-wrap: wrap; align-items: center;">
-    <span style="color:var(--emerald);">Logged in as <strong id="loggedInEmailInline"></strong></span>
-    <button id="syncNowBtn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">Sync now</button>
-    <button id="resetAccountDataBtn" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device." style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Reset my account data</button>
-    <button id="logOutBtnInline" style="background:transparent; border:1px solid #ef4444; color:#ef4444;">Log Out</button>
-    <span id="syncStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
-  </div>
-  </div>
-
-  <div class="nav-btn-row">
-    <button id="navFetchLiveDataBtn" type="button" class="nav-btn" title="Jump to Fetch Live Data">Fetch Live Data</button>
-    <button id="navDetailedUpdateBtn" type="button" class="nav-btn" title="Jump to Detailed Update for Selected Assets">Detailed Update for Selected Assets</button>
-    <button id="navQuickPriceUpdateBtn" type="button" class="nav-btn" title="Jump to Update Current Price and Consensus Target Price">Update Current Price and Consensus Target Price</button>
-    <button id="navNewsBtn" type="button" class="nav-btn" title="Jump to News of Current and Potential Holdings">News of Current and Potential Holdings</button>
-    <button id="navNewsSelBtn" type="button" class="nav-btn" title="Jump to News of Selected Assets">News of Selected Assets</button>
-  </div>
+  <section class="screen" data-screen="holdings" aria-label="Holdings and Planning" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
     <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" data-section="pastPurchasesSectionBody">▶</button>
@@ -702,6 +850,9 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   </div>
 
+  </section>
+
+  <section class="screen" data-screen="news" aria-label="News and Research" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Current and Potential Holdings</h2>
     <button id="newsToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Current and Potential Holdings section" data-section="newsSectionBody">▶</button>
@@ -829,6 +980,9 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   </div>
 
+  </section>
+
+  <section class="screen" data-screen="portfolio" aria-label="Portfolio" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
     <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" data-section="portfolioSectionBody">▶</button>
@@ -971,6 +1125,9 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
   </div>
 
   </div>
+  </section>
+
+  <section class="screen" data-screen="data" aria-label="Data updates" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
     <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" data-section="fetchLiveDataSectionBody">▶</button>
@@ -1094,6 +1251,9 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   </div>
 
+  </section>
+
+  <section class="screen" data-screen="methodology" aria-label="Methodology and Glossary" hidden>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Methodology and Glossary</h2>
     <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" data-section="methodologyGlossarySectionBody">▶</button>
@@ -1312,10 +1472,22 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   </div>
 
+  </section>
+
+  <div class="disclaimer" data-keep-open="1">
+    <strong>⚠ Not financial advice.</strong>
+    <ul>
+      <li>Current Price, P/E, ROA, and related fields can be live-fetched (Finnhub, Alpha Vantage) or AI-assisted, but none of this is professional research.</li>
+      <li>Target prices and Stability ratings are always manually entered editorial content, not sourced from a live feed.</li>
+      <li>Verify all figures independently before making any actual investment decisions.</li>
+    </ul>
+  </div>
   <div class="disclaimer" data-keep-open="1">
     © 2026 Stock Portfolio Optimizer. All rights reserved.
   </div>
 
+</div>
+  </div>
 </div>
 </div>
 <script src="data.js"></script>
