@@ -692,6 +692,27 @@ body.view-mobile #methodologyGlossarySectionBody thead { display: none; }
 body.view-mobile #methodologyGlossarySectionBody tr { padding: 10px 0; border-bottom: 1px solid var(--border-color); }
 body.view-mobile #methodologyGlossarySectionBody td { padding: 2px 0 !important; border: 0 !important; }
 body.view-mobile #methodologyGlossarySectionBody tr.v7-gl-hidden { display: none; }
+
+/* ===== Top bar: account and sync controls (v7.4.1) ===== */
+.app-account-bar { align-items: center; justify-content: flex-end; gap: 8px 10px; flex: 1 1 auto; min-width: 0; }
+.app-account-bar .app-nav-sync { align-items: center; font-size: 12px; line-height: 1.3; color: var(--text-secondary); max-width: 240px; }
+.app-account-bar .app-sync-dot { margin-top: 0; }
+.app-account-bar #syncStatus { margin-left: 0; }
+.app-account-bar .view-toggle-panel { margin: 0; padding: 0; background: none; border: 0; flex-wrap: nowrap; gap: 4px; }
+.app-account-bar .view-toggle-panel .tab-btn { min-width: 0 !important; flex: 0 0 auto !important; }
+.app-account-bar .app-link-danger { white-space: nowrap; }
+.app-account-bar .app-nav-email { font-size: 12px; color: var(--text-secondary); min-width: 0; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-account-bar .app-nav-email strong { word-break: normal; }
+@media (max-width: 820px) {
+  .app-topbar { position: static; padding: 12px; }
+  .app-account-bar { justify-content: flex-start; flex-basis: 100%; }
+  .app-account-bar .app-nav-email { max-width: none; flex: 1 1 0; order: 10; }
+  .app-account-bar #logOutBtnInline { order: 11; }
+}
+body.view-mobile .app-topbar { position: static; padding: 12px; }
+body.view-mobile .app-account-bar { justify-content: flex-start; flex-basis: 100%; }
+body.view-mobile .app-account-bar .app-nav-email { max-width: none; flex: 1 1 0; order: 10; }
+body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -775,27 +796,24 @@ body.view-mobile #methodologyGlossarySectionBody tr.v7-gl-hidden { display: none
       <button type="button" class="app-nav-item app-nav-more" id="appNavMoreBtn" aria-expanded="false" aria-controls="appNav"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
     </div>
     <div class="app-nav-account">
-      <div class="app-nav-email">Signed in as <strong id="loggedInEmailInline"></strong></div>
-      <div class="app-nav-sync"><span class="app-sync-dot" aria-hidden="true"></span><span id="syncStatus"></span></div>
-      <div class="app-nav-actions">
-        <button id="syncNowBtn" type="button" class="app-small-btn">Sync now</button>
-        <button id="logOutBtnInline" type="button" class="app-small-btn app-danger">Log Out</button>
-      </div>
-      <div class="app-nav-actions view-toggle-panel" role="group" aria-label="Interface">
-        <button id="viewDesktopBtn" type="button" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">Desktop</button>
-        <button id="viewMobileBtn" type="button" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">Mobile</button>
-      </div>
-      <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
       <div id="htmlBuildLine" class="app-build-line">
-      Version v7.4 — Data updates: Live data / Detailed update / Price &amp; target tabs, one card per data source, numbered steps. Methodology: search every definition, quick links to each part. Your data and scoring are unchanged.</div>
+      Version v7.4.1 — the top bar now shows sync status, Sync now, Desktop / Mobile, Reset my account data, who is signed in and Log Out (the "Fetch live data" button there is gone; it stays in the navigation). Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
   <div class="app-main">
     <header class="app-topbar">
       <h1 id="screenTitle">Dashboard</h1>
-      <div class="app-topbar-actions">
-        <button type="button" class="app-primary-btn" data-route="data" data-open-section="fetchLiveDataSectionBody" id="topFetchLiveBtn"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span>Fetch live data</span></button>
+      <div class="app-topbar-actions app-account-bar" role="group" aria-label="Account and sync">
+        <div class="app-nav-sync"><span class="app-sync-dot" aria-hidden="true"></span><span id="syncStatus"></span></div>
+        <button id="syncNowBtn" type="button" class="app-small-btn">Sync now</button>
+        <div class="app-nav-actions view-toggle-panel" role="group" aria-label="Interface">
+          <button id="viewDesktopBtn" type="button" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">Desktop</button>
+          <button id="viewMobileBtn" type="button" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">Mobile</button>
+        </div>
+        <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
+        <div class="app-nav-email">Signed in as <strong id="loggedInEmailInline"></strong></div>
+        <button id="logOutBtnInline" type="button" class="app-small-btn app-danger">Log Out</button>
       </div>
     </header>
 
