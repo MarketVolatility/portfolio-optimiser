@@ -396,7 +396,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <div class="auth-step active" id="loginStep">
       <h2>Sign in</h2>
       <p>Use your email address and password to access the optimizer.</p>
-      <form class="auth-form" onsubmit="return handleLogin(event)">
+      <form id="loginForm" class="auth-form">
         <div>
           <label for="loginEmail">Email address</label>
           <input id="loginEmail" type="email" autocomplete="email" required>
@@ -409,14 +409,14 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
         <button type="submit">Sign in</button>
       </form>
       <div class="auth-links">
-        <button type="button" onclick="showAuthStep('registerStep')">Create account</button>
+        <button type="button" data-show-step="registerStep">Create account</button>
       </div>
     </div>
 
     <div class="auth-step" id="registerStep">
       <h2>Create account</h2>
       <p>Create an account with your email address and password.</p>
-      <form class="auth-form" onsubmit="return handleRegister(event)">
+      <form id="registerForm" class="auth-form">
         <div>
           <label for="registerEmail">Email address</label>
           <input id="registerEmail" type="email" autocomplete="email" required>
@@ -433,7 +433,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
         <button type="submit">Sign up</button>
       </form>
       <div class="auth-links">
-        <button type="button" onclick="showAuthStep('loginStep')">Back to sign in</button>
+        <button type="button" data-show-step="loginStep">Back to sign in</button>
       </div>
     </div>
   </div>
@@ -445,7 +445,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
     <h1>Stock Portfolio Optimizer</h1>
     <p class="subtitle">Multi-Factor Portfolio Cash Weight Optimization Dashboard</p>
     <div id="htmlBuildLine" style="text-align:left; color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">
-      Version v6.15 — Market data, Past Purchases, Sales &amp; Buy Strategy, news and import/export code moved to tested TypeScript modules; everything works as before.</div>
+      Version v6.16 — The whole app now runs from tested TypeScript modules (the old single script is gone); everything works as before.</div>
   </header>
   <div class="disclaimer" data-keep-open="1">
     <strong>⚠ Not financial advice.</strong>
@@ -481,7 +481,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Past Purchases and Planning</h2>
-    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" onclick="toggleCollapsibleSection('pastPurchasesSectionBody','pastPurchasesToggleBtn')">▶</button>
+    <button id="pastPurchasesToggleBtn" class="section-toggle-btn" title="Collapse or expand the Past Purchases and Planning section" data-section="pastPurchasesSectionBody">▶</button>
   </div>
   <div id="pastPurchasesSectionBody">
 
@@ -704,7 +704,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Current and Potential Holdings</h2>
-    <button id="newsToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Current and Potential Holdings section" onclick="toggleCollapsibleSection('newsSectionBody','newsToggleBtn')">▶</button>
+    <button id="newsToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Current and Potential Holdings section" data-section="newsSectionBody">▶</button>
   </div>
   <div id="newsSectionBody">
 
@@ -755,7 +755,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">News of Selected Assets</h2>
-    <button id="newsSelToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Selected Assets section" onclick="toggleCollapsibleSection('newsSelSectionBody','newsSelToggleBtn')">▶</button>
+    <button id="newsSelToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Selected Assets section" data-section="newsSelSectionBody">▶</button>
   </div>
   <div id="newsSelSectionBody">
 
@@ -831,7 +831,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Portfolio</h2>
-    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" onclick="toggleCollapsibleSection('portfolioSectionBody','portfolioToggleBtn')">▶</button>
+    <button id="portfolioToggleBtn" class="section-toggle-btn" title="Collapse or expand the Portfolio section" data-section="portfolioSectionBody">▶</button>
   </div>
   <div id="portfolioSectionBody">
 
@@ -973,7 +973,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
   </div>
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Fetch Live Data</h2>
-    <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" onclick="toggleCollapsibleSection('fetchLiveDataSectionBody','fetchLiveDataToggleBtn')">▶</button>
+    <button id="fetchLiveDataToggleBtn" class="section-toggle-btn" title="Collapse or expand the Fetch Live Data section" data-section="fetchLiveDataSectionBody">▶</button>
   </div>
   <div id="fetchLiveDataSectionBody">
 
@@ -1014,7 +1014,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Detailed Update for Selected Assets</h2>
-    <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" onclick="toggleCollapsibleSection('detailedUpdateSectionBody','detailedUpdateToggleBtn')">▶</button>
+    <button id="detailedUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Detailed Update for Selected Assets section" data-section="detailedUpdateSectionBody">▶</button>
   </div>
   <div id="detailedUpdateSectionBody">
 
@@ -1063,7 +1063,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Update Current Price and Consensus Target Price</h2>
-    <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" onclick="toggleCollapsibleSection('quickPriceUpdateSectionBody','quickPriceUpdateToggleBtn')">▶</button>
+    <button id="quickPriceUpdateToggleBtn" class="section-toggle-btn" title="Collapse or expand the Update Current Price and Consensus Target Price section" data-section="quickPriceUpdateSectionBody">▶</button>
   </div>
   <div id="quickPriceUpdateSectionBody">
 
@@ -1096,7 +1096,7 @@ body.view-mobile .nav-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.5rem
 
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#facc15; font-weight:600; margin:0;">Methodology and Glossary</h2>
-    <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" onclick="toggleCollapsibleSection('methodologyGlossarySectionBody','methodologyGlossaryToggleBtn')">▶</button>
+    <button id="methodologyGlossaryToggleBtn" class="section-toggle-btn" title="Collapse or expand the Methodology and Glossary section" data-section="methodologyGlossarySectionBody">▶</button>
   </div>
   <div id="methodologyGlossarySectionBody">
 
