@@ -482,8 +482,6 @@ body.view-mobile .app-main > .container { padding: 16px 12px 104px; }
 .dash-weight > span { display: block; margin-top: 4px; font-size: 13px; }
 .dash-bar { position: relative; height: 8px; background: #1e293b; border-radius: 4px; }
 .dash-bar-fill { height: 8px; background: #3b82f6; border-radius: 4px; }
-.dash-bar-fill.dash-over { background: var(--amber); }
-.dash-bar-tick { position: absolute; top: -4px; width: 2px; height: 16px; background: #f8fafc; margin-left: -1px; }
 .dash-note { margin: 12px 0 0; color: var(--text-secondary); font-size: 12px; }
 .dash-empty { margin: 0; color: var(--text-secondary); font-size: 14px; }
 .dash-link { background: none; border: 0; padding: 0; color: #93c5fd; font: inherit; font-size: 13px; cursor: pointer; }
@@ -606,6 +604,45 @@ body.view-mobile .v7-menu-list { left: 0; right: auto; }
 body.view-mobile .v7-groups-table { display: none; }
 body.view-mobile .v7-cards { display: flex; }
 body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
+
+/* ===== News & Research workspace (Phase 4d) ===== */
+.screen[data-screen="news"] .v7-news-main > div:has(> .section-toggle-btn) { display: none !important; }
+.v7-news-layout { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.v7-news-main { flex: 999 1 560px; min-width: 0; }
+.v7-news-side { flex: 1 1 360px; min-width: 0; max-width: 560px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 76px; }
+.v7-step { flex-direction: column; align-items: stretch !important; gap: 0.6rem; margin-bottom: 14px; }
+.v7-step label { white-space: normal; }
+.v7-step-title { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 1.05rem; color: #fff; }
+.v7-step-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: 13px; font-weight: 700; flex: 0 0 26px; }
+#newsCopyBtn, #nsCopyBtn { background: var(--accent-blue) !important; border-color: var(--accent-blue) !important; color: #fff !important; font-weight: 600; }
+.v7-old-reports h2, .v7-old-reports #newsTableContent, .v7-old-reports #nsTableContent { display: none !important; }
+.v7-old-reports > div { margin: 0 0 8px !important; }
+.v7-report-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.v7-report-filters .v7-filter { flex: 1 1 140px; min-height: 36px; font-size: 13px; }
+.v7-report-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow-y: auto; }
+.v7-report { background: var(--bg-raised); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; }
+.v7-report.v7-on { border-color: #3b82f6; }
+.v7-report-title { width: 100%; box-sizing: border-box; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #fff; font: inherit; font-weight: 600; font-size: 14px; padding: 2px 4px; margin-left: -5px; }
+.v7-report-title:hover, .v7-report-title:focus { border-color: #334155; background: var(--bg-main); }
+.v7-report-meta { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.v7-report-tickers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.v7-chip { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--bg-main); border: 1px solid #334155; font-size: 11px; color: #cbd5e1; }
+.v7-report-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.v7-report-actions .v7-tool-btn { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.v7-tool-btn.v7-danger { color: #fca5a5; }
+.v7-reader-empty { margin: 0; padding: 18px; border: 1px dashed #334155; border-radius: 12px; color: var(--text-secondary); font-size: 14px; text-align: center; }
+body.news-modal-open #v7ReaderDock .v7-reader-empty { display: none; }
+/* Docked reader: the same viewer, as a panel beside the list instead of a full-screen pop-up. */
+body.v7-reader-docked.news-modal-open { overflow: auto; }
+#v7ReaderDock .news-modal { position: static; inset: auto; z-index: auto; background: none; padding: 0; display: block; }
+#v7ReaderDock .news-modal-panel { width: 100%; height: auto; max-height: calc(100vh - 140px); border-radius: 12px; }
+#v7ReaderDock .news-modal-body { padding: 1rem 1.25rem 1.5rem; }
+@media (max-width: 820px) {
+  .v7-news-side { position: static; max-width: none; }
+  #v7ReaderDock { display: none; }
+}
+body.view-mobile .v7-news-side { position: static; max-width: none; }
+body.view-mobile #v7ReaderDock { display: none; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -701,7 +738,7 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
       </div>
       <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
       <div id="htmlBuildLine" class="app-build-line">
-      Version v7.2 — Holdings &amp; Planning: totals, Lots / Sales plan / Buy plan tabs, By ticker view (cards on a phone), Table setup drawer; white headings. Your data and scoring are unchanged.</div>
+      Version v7.3.1 — "Current Holding" is now every open lot (the Dashboard's holdings), so "Request all" includes them all. v7.3 — News &amp; Research: numbered steps (assets → copy the prompt → save the AI's reply), one Saved reports list with search, reader beside the list; Dashboard Holdings shows each position's percentage of market value. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -977,18 +1014,24 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
   </section>
 
   <section class="screen" data-screen="news" aria-label="News and Research" hidden>
+  <div class="v7-tabs" role="tablist" aria-label="Briefing type" data-v7>
+    <button type="button" role="tab" class="v7-tab" data-news-tab="newsSectionBody">Holdings briefing</button>
+    <button type="button" role="tab" class="v7-tab" data-news-tab="newsSelSectionBody">Selected assets</button>
+  </div>
+  <div class="v7-news-layout">
+  <div class="v7-news-main">
   <div style="display:flex; align-items:center; gap:0.6rem; margin-top:2.5rem; margin-bottom:0.75rem;">
     <h2 style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">News of Current and Potential Holdings</h2>
     <button id="newsToggleBtn" class="section-toggle-btn" title="Collapse or expand the News of Current and Potential Holdings section" data-section="newsSectionBody">▶</button>
   </div>
   <div id="newsSectionBody">
 
-  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
-    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">📰 News briefing for your holdings and planned buys — copy and paste this to your AI</h2>
+  <div class="control-panel v7-step">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Assets in this briefing</h3>
     <div class="disclaimer" style="margin-bottom:1rem;">
       No API key needed:
       <ul>
-        <li>Covers every ticker you currently hold (the "Current Holding" set, from Sales Strategy on the open Past Purchases list) plus every ticker with a still-draft row in Buy Strategy.</li>
+        <li>Covers every ticker you currently hold (the "Current Holding" set: every open lot on the open Past Purchases list) plus every ticker with a still-draft row in Buy Strategy.</li>
         <li>Includes each asset's <strong>Portfolio data</strong> (the figures in your Portfolio table) and asks the AI to check and update them in a table, analyse them and list strengths and weaknesses (about 500 words).</li>
         <li>Asks the AI for a <strong>one-year performance</strong> paragraph and news from the <strong>last one month</strong> that could move each stock's price — about two pages per asset, each starting with a header: asset name, current price, price trend over the last week, and expected price trend over the next week.</li>
         <li>The AI is asked to reply as a Word document (.docx) if it can create files, otherwise as plain text in the same layout.</li>
@@ -997,6 +1040,10 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     </div>
     <div class="chart-note" style="margin-bottom:0.4rem;">Assets included in the prompt:</div>
     <div id="newsAssetList" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;"></div>
+  </div>
+
+  <div class="control-panel v7-step">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Copy the prompt</h3>
     <label for="newsPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
     <textarea id="newsPromptBox" readonly rows="10" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
     <div style="margin-top:0.5rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
@@ -1006,9 +1053,9 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     </div>
   </div>
 
-  <div class="control-panel" style="flex-direction:column; align-items:stretch; gap:0.75rem; margin-top:1rem;">
+  <div class="control-panel v7-step" style="flex-direction:column; align-items:stretch; gap:0.75rem;">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Save the AI's reply</h3>
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
-      <strong style="color:#facc15;">Save the AI's reply:</strong>
       <button id="newsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md).">⬆ Upload AI result (Word or text)</button>
       <input id="newsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none;">
       <span id="newsUploadStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
@@ -1020,11 +1067,13 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage, so both are available on all your devices (☁ in the Format column). Older .doc files aren't supported — save them as .docx first.</div>
   </div>
 
+  <div class="v7-old-reports">
   <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
     <h2 id="newsListHeading" style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
     <span id="newsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div id="newsTableContent"></div>
+  </div>
 
   </div>
 
@@ -1043,8 +1092,8 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     <span id="nsListStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
 
-  <div class="table-container" style="margin-top:1rem; padding:1.25rem;">
-    <h2 style="font-size:1.1rem; color:var(--accent-blue); font-weight:600; margin-bottom:0.75rem;">📰 News of Selected Assets — copy and paste this to your AI</h2>
+  <div class="control-panel v7-step">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Pick the assets</h3>
     <div class="disclaimer" style="margin-bottom:1rem;">
       Pick the assets for a news briefing on the list you're viewing — held or not:
       <ul>
@@ -1074,6 +1123,10 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
       <button id="nsGenerateBtn" type="button">Generate request</button>
       <button id="nsRefreshBtn" type="button" style="background:transparent; border:1px solid var(--border-color); color:var(--text-secondary);">↻ Refresh asset list</button>
     </div>
+  </div>
+
+  <div class="control-panel v7-step">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Copy the prompt</h3>
     <label for="nsPromptBox" style="display:block; color:var(--text-secondary); font-size:0.85rem; margin-bottom:0.4rem;">Step 1 — copy this prompt to your AI (one that can search the web gives the most current results):</label>
     <textarea id="nsPromptBox" readonly rows="8" style="width:100%; background: var(--bg-main); color:#fff; border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:8px; font-family:monospace; font-size:0.85rem; resize:vertical;"></textarea>
     <div style="margin-top:0.5rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
@@ -1082,9 +1135,9 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     </div>
   </div>
 
-  <div class="control-panel" style="flex-direction:column; align-items:stretch; gap:0.75rem; margin-top:1rem;">
+  <div class="control-panel v7-step" style="flex-direction:column; align-items:stretch; gap:0.75rem;">
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Save the AI's reply</h3>
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
-      <strong style="color:#facc15;">Save the AI's reply:</strong>
       <button id="nsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md). It is saved against the Selected Assets list you're viewing.">⬆ Upload AI result (Word or text)</button>
       <input id="nsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none;">
       <span id="nsUploadStatus" style="color:var(--text-secondary); font-size:0.9rem;"></span>
@@ -1096,14 +1149,30 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
     <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage (☁ in the Format column). Each report remembers which Selected Assets list it was saved under (List column). Older .doc files aren't supported — save them as .docx first.</div>
   </div>
 
+  <div class="v7-old-reports">
   <div style="display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem;">
     <h2 id="nsReportsHeading" style="font-size:1.3rem; color:#fff; font-weight:600; margin:0;">Current and Past News viewing: —</h2>
     <span id="nsReportsStatus" style="color:var(--emerald); font-size:0.9rem;"></span>
   </div>
   <div id="nsTableContent"></div>
-
   </div>
 
+  </div>
+  </div>
+  <aside class="v7-news-side" aria-labelledby="v7ReportsTitle">
+    <div id="v7ReportsPanel" class="dash-card">
+      <div class="dash-card-head"><h2 id="v7ReportsTitle">Saved reports</h2><span id="v7ReportCount" class="dash-muted"></span></div>
+      <div class="v7-report-filters">
+        <label class="v7-sr-only" for="v7ReportSearch">Search reports</label>
+        <input id="v7ReportSearch" type="search" class="v7-filter" placeholder="Search title or ticker…">
+        <label class="v7-sr-only" for="v7ReportKind">Report type</label>
+        <select id="v7ReportKind" class="v7-filter"><option value="all">All reports</option><option value="holdings">Holdings briefings</option><option value="selected">Selected assets</option></select>
+      </div>
+      <ul id="v7ReportList" class="v7-report-list"></ul>
+    </div>
+    <div id="v7ReaderDock"><p class="v7-reader-empty">Choose <strong>Read</strong> on a report to open it here.</p></div>
+  </aside>
+  </div>
   </section>
 
   <section class="screen" data-screen="portfolio" aria-label="Portfolio" hidden>
