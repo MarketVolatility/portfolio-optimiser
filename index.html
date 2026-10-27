@@ -635,8 +635,12 @@ body.news-modal-open #v7ReaderDock .v7-reader-empty { display: none; }
 /* Docked reader: the same viewer, as a panel beside the list instead of a full-screen pop-up. */
 body.v7-reader-docked.news-modal-open { overflow: auto; }
 #v7ReaderDock .news-modal { position: static; inset: auto; z-index: auto; background: none; padding: 0; display: block; }
-#v7ReaderDock .news-modal-panel { width: 100%; height: auto; max-height: calc(100vh - 140px); border-radius: 12px; }
-#v7ReaderDock .news-modal-body { padding: 1rem 1.25rem 1.5rem; }
+/* v7.4.2: the docked reader sits in the main column below step 3 and grows with the page
+   (no inner scroll box); its header (title, downloads, close) stays in view while reading. */
+#v7ReaderDock { margin-top: 14px; scroll-margin-top: 76px; }
+#v7ReaderDock .news-modal-panel { width: 100%; height: auto; max-height: none; overflow: visible; border-radius: 12px; box-shadow: none; }
+#v7ReaderDock .news-modal-header { position: sticky; top: 64px; z-index: 5; border-radius: 12px 12px 0 0; }
+#v7ReaderDock .news-modal-body { overflow: visible; padding: 1.5rem 2rem 2.5rem; border-radius: 0 0 12px 12px; font-size: 15px; line-height: 1.65; }
 @media (max-width: 820px) {
   .v7-news-side { position: static; max-width: none; }
   #v7ReaderDock { display: none; }
@@ -797,7 +801,7 @@ body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v7.4.1 — the top bar now shows sync status, Sync now, Desktop / Mobile, Reset my account data, who is signed in and Log Out (the "Fetch live data" button there is gone; it stays in the navigation). Your data and scoring are unchanged.</div>
+      Version v7.4.2 — on a wide screen a saved news report now opens in the main column below step 3 (Save the AI&#39;s reply), full width, with its title bar staying in view. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -1225,6 +1229,7 @@ body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
   </div>
 
   </div>
+  <div id="v7ReaderDock"><p class="v7-reader-empty">Choose <strong>Read</strong> on a saved report to open it here, below step 3.</p></div>
   </div>
   <aside class="v7-news-side" aria-labelledby="v7ReportsTitle">
     <div id="v7ReportsPanel" class="dash-card">
@@ -1237,7 +1242,6 @@ body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
       </div>
       <ul id="v7ReportList" class="v7-report-list"></ul>
     </div>
-    <div id="v7ReaderDock"><p class="v7-reader-empty">Choose <strong>Read</strong> on a report to open it here.</p></div>
   </aside>
   </div>
   </section>
