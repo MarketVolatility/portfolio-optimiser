@@ -815,6 +815,85 @@ body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
 body.view-mobile :is(.row-end, .field, .section-head, .field-check, .chip-row, .stack-sm, .row-actions, .row-sm, .field-wide, .row-actions-tight, .row-center, .list-head, .chip-row-mb, .row-actions-mb, .row-actions-gap, .section-head-tight, .field-xs, .chip-row-plain-mb, .row-between, .row-gap-lg) { flex-wrap: wrap !important; }
 .v7-step > div:is(.row-end, .field, .section-head, .field-check, .chip-row, .stack-sm, .row-actions, .row-sm, .field-wide, .row-actions-tight, .row-center, .list-head, .chip-row-mb, .row-actions-mb, .row-actions-gap, .section-head-tight, .field-xs, .chip-row-plain-mb, .row-between, .row-gap-lg) { margin: 0 !important; }
 
+/* ===== Named classes for the HTML the tables and dialogs build in code (Phase 5) ===== */
+.t-muted { color:var(--text-secondary); }
+.icon-btn { background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); width:32px; height:32px; border-radius:6px; cursor:pointer; }
+.t-strong { font-weight:600; }
+.t-nowrap { white-space:nowrap; }
+.t-pos { color:var(--emerald); }
+.grow-1 { flex:1; }
+.tag-warn { font-size:0.7rem; color:#fbbf24; }
+.t-pos-strong { color:var(--emerald); font-weight:600; }
+.t-muted-xs { color:var(--text-secondary); font-size:0.75rem; }
+.cell-empty { color:var(--text-secondary); padding:1.25rem 1rem; }
+.t-muted-sm { color:var(--text-secondary); font-size:0.85rem; }
+.btn-pad-wide { padding:0.6rem 1.4rem; }
+.empty-note { color:var(--text-secondary); font-size:0.9rem; padding:0.75rem 0; }
+.badge-muted { color:var(--text-secondary); font-size:0.75rem; font-weight:600; }
+.sub-note { font-size:0.7rem; color:var(--text-secondary); margin-top:0.25rem; }
+.t-gold { color:#facc15; }
+.btn-xs { padding:0.3rem 0.8rem; font-size:0.8rem; }
+.mini-btn.mini-btn-pos { width:auto; padding:0 0.5rem; font-size:0.7rem; color:#34d399; }
+.mini-btn { width:auto; padding:0 0.5rem; font-size:0.7rem; }
+.dialog-title { margin:0 0 0.5rem; color:#fff; font-size:1.1rem; }
+.dialog-text { color:var(--text-secondary); font-size:0.9rem; line-height:1.5; margin-bottom:0.9rem; }
+.dialog-field { display:flex; flex-direction:column; font-size:0.85rem; color:var(--text-secondary); gap:4px; margin-bottom:1rem; }
+.dialog-actions { display:flex; gap:0.6rem; justify-content:flex-end; }
+.news-title-input { min-width:220px; font-weight:600; }
+.chip-cell { display:inline-block; margin:0 0.25rem 0.25rem 0; }
+.t-nowrap.t-right { white-space:nowrap; text-align:right; }
+.t-amber { color:var(--amber); }
+.t-muted-sm2 { color:var(--text-secondary); font-size:0.8rem; }
+.minw-0 { min-width:0; }
+.mt-4px { margin-top:4px; }
+.cell-note { text-align:left; font-style:italic; color:var(--text-secondary); padding:0.75rem; }
+.badge-warn { color:#fbbf24; font-size:0.75rem; font-weight:600; }
+.badge-violet { color:#a78bfa; font-size:0.75rem; font-weight:600; }
+.link-btn { background:none; border:none; color:var(--text-secondary); font-size:0.7rem; text-decoration:underline; cursor:pointer; padding:0; }
+.badge-pos { color:var(--emerald); font-size:0.75rem; font-weight:600; }
+.badge-neg { color:var(--neg); font-size:0.75rem; font-weight:600; }
+.t-muted-xxs { color:var(--text-secondary); font-size:0.7rem; }
+.t-violet-strong { font-weight:600; color:#a78bfa; }
+.t-sky-strong { font-weight:600; color:#7dd3fc; }
+.t-xxs { font-size:0.7rem; }
+.sub-note-warn { font-size:0.7rem; color:#fbbf24; margin-top:0.25rem; }
+.mini-btn.mini-btn-warn { width:auto; padding:0 0.4rem; font-size:0.7rem; color:#fbbf24; }
+.note-amber { color:var(--amber); font-size:0.85rem; margin-top:0.6rem; }
+.dialog-title-lg { margin:0 0 0.5rem; color:#fff; font-size:1.15rem; }
+.dialog-text-tight { color:var(--text-secondary); font-size:0.9rem; margin-bottom:0.75rem; line-height:1.5; }
+.dialog-bulk { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem; }
+.dialog-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+.select-xs { padding:0.35rem 0.6rem; font-size:0.85rem; }
+.dialog-actions-wrap { display:flex; gap:0.6rem; justify-content:flex-end; flex-wrap:wrap; margin-top:1rem; }
+.cell-input.input-over { border-color: var(--neg); }
+.cell-input.t-pos { color: var(--emerald); }
+
+/* Value-dependent colours and the code-built dialogs. Colours and backgrounds here used to be
+   inline styles, which win over every other rule, so they keep that precedence (!important). */
+.tone-pos { color: var(--emerald) !important; } .tone-neg { color: var(--neg) !important; }
+.tone-muted { color: var(--text-secondary) !important; } .tone-text { color: var(--text-primary) !important; }
+.tone-amber { color: var(--amber) !important; } .tone-gold { color: #facc15 !important; } .tone-warn { color: #fbbf24 !important; }
+.tone-violet { color: #a78bfa !important; } .tone-sky { color: #7dd3fc !important; } .tone-purple { color: #7c3aed !important; }
+.tone-blue { color: var(--accent-blue) !important; } .tone-white { color: #fff !important; }
+.tone-excluded { color: #c98a9e !important; } .tone-included { color: #eab308 !important; }
+.t-bold { font-weight: 700; } .t-left { text-align: left; } .tag-xs { font-size: 0.75rem; }
+.total-cell { background: rgba(250,204,21,0.08) !important; font-weight: 700; }
+tr.foot-row { background: rgba(255,255,255,0.02); }
+tr.foot-row-total { background: rgba(255,255,255,0.03); border-top: 2px solid var(--border-color); }
+.dialog-cell { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color); position: static !important; background: transparent !important; vertical-align: top; line-height: 1.4; }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; width: 100%; max-width: 420px; color: var(--text-primary); }
+.dialog-panel.dialog-panel-wide { max-width: 960px; max-height: 85vh; overflow: auto; }
+.pw-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.pw-dialog { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; max-width: 440px; width: 100%; color: var(--text-primary); }
+.pw-title { font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; }
+.pw-text { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
+.pw-label { display: block; font-size: 0.8rem; margin-bottom: 0.3rem; }
+.pw-input { width: 100%; box-sizing: border-box; }
+.pw-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+.order-row { display: flex; align-items: center; gap: 0.75rem; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.gl-body { margin-top: 1rem; }
+
 /* ===== Phase 5 visual system: the approved mock-up's type, colours and controls =====
    One layer, last in the sheet, so the look is set here rather than in the older rules above. */
 :root {
@@ -963,7 +1042,7 @@ tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v7.6 — cleaner code underneath (fully typed, no leftover legacy checks or styles) and a refreshed look: Inter typeface, consistent buttons, fields and tables, quieter scrollbars, green / rose for gains and losses. Your data and scoring are unchanged.</div>
+      Version v7.6.1 — tidier code underneath: the tables and dialogs no longer carry inline styles (same look). v7.6: Inter typeface, consistent buttons, fields and tables. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
