@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>Stock Portfolio Optimizer</title>
 <style>
-/* ===== Design tokens: Graphite & Teal (v8.0) ===== */
+/* ===== Design tokens: Graphite & Teal ===== */
 :root {
   --font: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -37,7 +37,7 @@ body { background-color: var(--bg-main); color: var(--text-primary); padding: 2r
   font-size: 0.9rem; line-height: 1.5;
 }
 .disclaimer ul { margin: 0.5rem 0 0 1.25rem; padding: 0; }
-/* v5.84: every explanation / disclaimer note (except the Financial Disclaimer at the top and the Copyright line) sits behind one small collapsible label. */
+/* every explanation / disclaimer note (except the Financial Disclaimer at the top and the Copyright line) sits behind one small collapsible label. */
 .intro-wrap { margin: 0 0 0.75rem 0; }
 .intro-toggle { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.3rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
 .intro-toggle:hover { color: var(--text-primary); }
@@ -154,7 +154,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 .cell-input:hover { border-color: var(--border-color); }
 .cell-input:focus { outline: none; border-color: var(--accent); background: var(--bg-main); }
 .cell-input-num { width: 90px; }
-/* v5.80: an empty Date Sale shows the placeholder 00/00/0000. Date cells are text boxes (DD/MM/YYYY); the placeholder sits over the empty box until a real date is typed. */
+/* an empty Date Sale shows the placeholder 00/00/0000. Date cells are text boxes (DD/MM/YYYY); the placeholder sits over the empty box until a real date is typed. */
 .pp-date-zero-wrap { position: relative; display: block; }
 .pp-date-zero-wrap .pp-date-empty:not(:focus) { color: transparent; }
 .pp-date-zero-wrap .pp-date-zero { position: absolute; left: calc(0.5rem + 1px); top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-secondary); font-size: 0.95rem; }
@@ -191,10 +191,8 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 .auth-brand{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-weight:800; margin-bottom:8px; }
 #appShell{ display:none; }
 
-/* --- v5.98 visual refresh ---
-   Layered on top of the rules above (later rules win at equal specificity), so the
-   original look can be restored by deleting this block. Inline styles written by
-   app.js still apply; !important is only used where an inline style must be beaten. */
+/* --- Base visual layer ---
+   Layered on top of the rules above (later rules win at equal specificity). */
 body {
   background:
     radial-gradient(1200px 600px at 10% -10%, var(--accent-soft), transparent 60%),
@@ -269,7 +267,7 @@ tbody tr:hover td:first-child { background: var(--bg-hover); }
 .row-ctrl-btn { width: 24px; height: 24px; font-size: 0.8rem; }
 .allocation-badge { font-variant-numeric: tabular-nums; }
 
-/* v5.99: temporary column collapse — "−" in each header's top-right corner,
+/* temporary column collapse — "−" in each header's top-right corner,
    "+" on a collapsed column (see applyColumnCollapse in app.js). */
 th.col-collapsible { padding-right: 1.9rem; }
 .col-collapse-btn {
@@ -300,7 +298,7 @@ td.col-collapsed {
 td.col-collapsed > * { display: none !important; }
 body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !important; }
 
-/* v6.01: Current and Past News viewer */
+/* Current and Past News viewer */
 .news-doc { color: var(--text-primary); font-size: 0.92rem; line-height: 1.65; max-width: 900px; }
 .news-doc-text { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; }
 .news-doc h1, .news-doc h2, .news-doc h3, .news-doc h4 { color: var(--text-primary); margin: 1.4rem 0 0.5rem; line-height: 1.3; }
@@ -311,7 +309,7 @@ body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !impor
 .news-doc th, .news-doc td { position: static; padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border-color); background: transparent !important; box-shadow: none; text-transform: none; font-size: 0.88rem; }
 .news-doc a { color: var(--accent-strong); }
 
-/* v6.02: News pop-up viewer */
+/* News pop-up viewer */
 body.news-modal-open { overflow: hidden; }
 .news-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;
   padding: 3vh 3vw; background: rgba(1,4,9,.78); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
@@ -620,7 +618,7 @@ body.news-modal-open .v7-reader-dock:has(> .news-modal) .v7-reader-empty { displ
 /* Docked reader: the same viewer, as a panel beside the list instead of a full-screen pop-up. */
 body.v7-reader-docked.news-modal-open { overflow: auto; }
 .v7-reader-dock .news-modal { position: static; inset: auto; z-index: auto; background: none; padding: 0; display: block; }
-/* v7.4.2: the docked reader sits in the main column below step 3 and grows with the page
+/* the docked reader sits in the main column below step 3 and grows with the page
    (no inner scroll box); its header (title, downloads, close) stays in view while reading. */
 .v7-reader-dock { margin-top: 14px; scroll-margin-top: 76px; }
 #v7DashReaderDock { margin-top: 20px; }
@@ -679,7 +677,7 @@ body.view-mobile #methodologyGlossarySectionBody tr { padding: 10px 0; border-bo
 body.view-mobile #methodologyGlossarySectionBody td { padding: 2px 0 !important; border: 0 !important; }
 body.view-mobile #methodologyGlossarySectionBody tr.v7-gl-hidden { display: none; }
 
-/* ===== Top bar: account and sync controls (v7.4.1) ===== */
+/* ===== Top bar: account and sync controls ===== */
 .app-account-bar { align-items: center; justify-content: flex-end; gap: 8px 10px; flex: 1 1 auto; min-width: 0; }
 .app-account-bar .app-nav-sync { align-items: center; font-size: 12px; line-height: 1.3; color: var(--text-secondary); max-width: 240px; }
 .app-account-bar .app-sync-dot { margin-top: 0; }
@@ -753,7 +751,6 @@ body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
 .list-head { display:flex; align-items:center; justify-content:space-between; margin:1.5rem 0 0.75rem; flex-wrap:wrap; gap:0.6rem; }
 .mark-include { color:var(--gold); }
 .mark-exclude { color:#c98a9e; }
-.btn-warn-outline { background:transparent; border:1px solid var(--gold); color:var(--gold); }
 .btn-muted-outline { background:transparent; border:1px solid var(--text-secondary); color:var(--text-secondary); }
 .chip-row-mb { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem; }
 .row-actions-mb { margin-bottom:1.25rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; }
@@ -891,8 +888,6 @@ button:not(.tab-btn):not(.v7-tool-btn):not(.app-nav-item):not(.v7-tab):not(.v7-c
 .btn-secondary:hover, .btn-muted-outline:hover, .tab-btn:not(.active-tab):hover { background: var(--bg-hover); border-color: #4a5768; color: var(--text-primary); }
 .btn-danger-outline { background: transparent; border: 1px solid rgba(244,112,103,.6); color: var(--neg); }
 .btn-danger-outline:hover { background: rgba(244,112,103,.1); }
-.btn-warn-outline { background: rgba(227,179,65,.06); border: 1px solid rgba(227,179,65,.7); color: var(--gold); }
-.btn-warn-outline:hover { background: rgba(227,179,65,.12); }
 .v7-tool-btn { background: var(--bg-raised); border-color: var(--border-strong); color: var(--text-primary); font-weight: 500; }
 .v7-tool-btn:hover { background: var(--bg-hover); border-color: #4a5768; }
 .v7-tool-btn.v7-danger { color: var(--neg); }
@@ -981,7 +976,7 @@ a { color: var(--accent-strong); }
 @media (max-width: 820px) { .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 var(--accent); } }
 body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 var(--accent); }
 
-/* Update histories (v8.1): "Current and past entries" tables under Detailed Update and Price & target update */
+/* Update histories : "Current and past entries" tables under Detailed Update and Price & target update */
 .v7-hist-toggle { display: flex; align-items: center; width: 100%; min-height: 52px; padding: 0 18px; margin: 6px 0 0; border: 1px solid var(--border-color);
   border-radius: var(--radius); background: var(--bg-raised); color: var(--text-primary); font: inherit; font-size: 15px; font-weight: 700; text-align: left; cursor: pointer; box-shadow: none; }
 .v7-hist-toggle:hover { background: var(--bg-hover); border-color: var(--border-strong); }
@@ -1026,8 +1021,24 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 .req-chip.req-off .req-btn-x { color: #c98a9e; border-color: rgba(201,138,158,.5); }
 .mark-include-teal { color: var(--accent-strong); }
 
-/* v8.4: a call with no price is valued at its purchase price — marked "at cost" */
+/* a call with no price is valued at its purchase price — marked "at cost" */
 .at-cost-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-secondary); vertical-align: 1px; white-space: nowrap; }
+
+/* Design polish (v8.5) */
+/* Secondary "do it for the whole list" actions: a teal outline, matching the primary teal buttons */
+.btn-accent-outline { background: transparent; border: 1px solid var(--accent-line); color: var(--accent-strong); font-weight: 600; }
+.btn-accent-outline:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+/* Table header controls (sort, move, remove, collapse) stay quiet until the column is pointed at,
+   so wide tables read as data first; touch screens and keyboard focus always show them in full. */
+.col-ctrl-btn { background: transparent; border-color: var(--border-color); color: var(--text-secondary); transition: opacity .15s ease, background .15s ease, color .15s ease; }
+.col-ctrl-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.col-ctrl-sort-active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+@media (hover: hover) {
+  th .col-ctrl-btn:not(.col-ctrl-sort-active), th .col-collapse-btn { opacity: .35; }
+  th:hover .col-ctrl-btn, th:focus-within .col-ctrl-btn, th:hover .col-collapse-btn, th:focus-within .col-collapse-btn { opacity: 1; }
+}
+/* The sidebar version line: one quiet line */
+.app-build-line { font-size: 11px; color: var(--text-faint); letter-spacing: .02em; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -1110,8 +1121,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <button type="button" class="app-nav-item app-nav-more" id="appNavMoreBtn" aria-expanded="false" aria-controls="appNav"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
     </div>
     <div class="app-nav-account">
-      <div id="htmlBuildLine" class="app-build-line">
-      Version v8.4.1 — a call option with no price uses its purchase price everywhere: market value, totals and the price shown (marked “at cost”). v8.3: News &amp; Research is one request flow (no separate Holdings / Selected assets tabs or named lists); both pickers start on Current and Potential Holding. v8.2: Request all from any list; chosen assets show teal. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
+      <div id="htmlBuildLine" class="app-build-line">Version 8.5</div>
     </div>
   </nav>
 
@@ -1161,7 +1171,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 
   <section id="v7HoldingsTotals" class="dash-tiles v7-holdings-totals" aria-label="Totals"></section>
 
-  <div class="v7-tabs" role="tablist" aria-label="Holdings views" data-v7>
+  <div class="v7-tabs" role="tablist" aria-label="Holdings views">
     <button type="button" role="tab" class="v7-tab" data-holdings-tab="lots" aria-controls="v7PaneLots">Lots</button>
     <button type="button" role="tab" class="v7-tab" data-holdings-tab="sales" aria-controls="v7PaneSales">Sales plan</button>
     <button type="button" role="tab" class="v7-tab" data-holdings-tab="buys" aria-controls="v7PaneBuys">Buy plan</button>
@@ -1170,7 +1180,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   <div id="v7PaneLots" class="v7-pane" role="tabpanel" aria-label="Lots">
   <div class="control-panel v7-toolbar">
     <div class="v7-toolbar-group">
-      <div class="v7-seg" role="group" aria-label="Lots view" data-v7>
+      <div class="v7-seg" role="group" aria-label="Lots view">
         <button type="button" class="v7-seg-btn" data-lots-view-btn="groups" aria-pressed="true">By ticker</button>
         <button type="button" class="v7-seg-btn" data-lots-view-btn="table" aria-pressed="false">All lots (edit)</button>
       </div>
@@ -1183,11 +1193,11 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <button id="ppCurrentHoldingsToggle" class="tab-btn btn-sm" title="Show only purchase rows that still have unsold units (after every sale row on this list is matched against them)">Current Holdings</button>
     </div>
     <div class="v7-toolbar-group v7-toolbar-actions">
-      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabTickerBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">+ Add asset</button>
-      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabParamBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Columns</button>
-      <button type="button" class="v7-tool-btn" data-v7 data-pp-drawer-tab="ppTabRowsBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Row order</button>
+      <button type="button" class="v7-tool-btn" data-pp-drawer-tab="ppTabTickerBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">+ Add asset</button>
+      <button type="button" class="v7-tool-btn" data-pp-drawer-tab="ppTabParamBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Columns</button>
+      <button type="button" class="v7-tool-btn" data-pp-drawer-tab="ppTabRowsBtn" aria-controls="v7PpSetupDrawer" aria-expanded="false">Row order</button>
       <details class="v7-menu" id="v7PpIoMenu">
-        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <summary class="v7-tool-btn">Import / Export ▾</summary>
         <div class="v7-menu-list">
     <button id="ppSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every row of the currently open Past Purchases list (purchases and sales, one line each), with every fillable parameter as a column, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
     <button id="ppImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into the currently open Past Purchases list. Each line becomes its own row (purchases and sales can be on separate lines); lines already in the table are ignored, new ones are added next to that ticker's rows, and you'll be asked what to do with any line that conflicts with an existing row.">⬆ Import Excel</button>
@@ -1242,7 +1252,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       </div>
     </div>
     <aside id="v7PpSetupDrawer" class="control-panel v7-drawer" aria-labelledby="v7PpSetupTitle" hidden>
-      <div class="v7-drawer-head" data-v7>
+      <div class="v7-drawer-head">
         <h3 id="v7PpSetupTitle" class="v7-drawer-title" tabindex="-1">Table setup</h3>
         <button type="button" id="v7PpSetupClose" class="v7-tool-btn" aria-label="Close table setup">✕</button>
       </div>
@@ -1326,7 +1336,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
     <div class="v7-toolbar-group v7-toolbar-actions">
       <details class="v7-menu" id="v7SsIoMenu">
-        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <summary class="v7-tool-btn">Import / Export ▾</summary>
         <div class="v7-menu-list">
     <button id="ssSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft (not yet realized) Sales Strategy row, with Ticker/Units to Sell/Selling Price as columns, so you can add rows or complete data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
     <button id="ssImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Sales Strategy table. Each line becomes its own new draft row (two lines for the same ticker are separate batches, not a conflict); a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
@@ -1366,7 +1376,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
     <div class="v7-toolbar-group v7-toolbar-actions">
       <details class="v7-menu" id="v7BsIoMenu">
-        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <summary class="v7-tool-btn">Import / Export ▾</summary>
         <div class="v7-menu-list">
     <button id="bsSampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template with every still-draft Buy Strategy row (Ticker, Strike Price, Expiration Date, Units to Buy, Buying Price) so you can add rows offline and re-import them.">⬇ Sample Excel for Data Entry</button>
     <button id="bsImportExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload an Excel file (matching the Sample Excel's column headers) into this Buy Strategy table. Each line becomes its own new draft row; a line identical to one already planned is skipped so re-importing the same file is safe.">⬆ Import Excel</button>
@@ -1397,7 +1407,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   <div id="newsSectionBody">
 
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Choose the assets</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">1</span>Choose the assets</h3>
     <div class="disclaimer mb-4">
       No API key needed:
       <ul>
@@ -1416,7 +1426,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     <div class="row-actions">
       <label class="label-sm" for="nsImportSelect">Request all from:</label>
       <select id="nsImportSelect" class="form-input minw-260"></select>
-      <button class="btn-warn-outline" id="nsImportBtn" type="button" title="Mark every asset on the chosen list as ✓ included, in one click.">✓ Request all</button>
+      <button class="btn-accent-outline" id="nsImportBtn" type="button" title="Mark every asset on the chosen list as ✓ included, in one click.">✓ Request all</button>
       <button class="btn-muted-outline" id="nsResetBtn" type="button" title="Reset every asset below back to grey/undecided, in one click.">↺ Reset request list</button>
       <span class="status-text" id="nsImportStatus"></span>
     </div>
@@ -1429,7 +1439,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </div>
 
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Copy the prompt</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">2</span>Copy the prompt</h3>
     <label class="field-label" for="nsPromptBox">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
     <textarea class="prompt-box" id="nsPromptBox" readonly rows="8"></textarea>
     <div class="row-actions-tight">
@@ -1439,7 +1449,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </div>
 
   <div class="control-panel v7-step stack-md">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Save the AI's reply</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">3</span>Save the AI's reply</h3>
     <div class="row-center">
       <button id="nsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md).">⬆ Upload AI result (Word or text)</button>
       <input id="nsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">
@@ -1493,12 +1503,12 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 
   <div class="control-panel v7-toolbar">
     <div class="v7-toolbar-group">
-      <span class="v7-toolbar-label" data-v7>Mandate</span>
-      <div class="v7-seg" role="group" aria-label="Mandate (Optimized Weight)" data-v7>
-        <button type="button" class="v7-seg-btn" data-v7 data-mandate="tactical" aria-pressed="false" title="Tactical Buying Urgency (Highest Upside Target Rank)">Tactical</button>
-        <button type="button" class="v7-seg-btn" data-v7 data-mandate="conservative" aria-pressed="false" title="Conservative Profile (Moat Stability &amp; High Yield Focus)">Conservative</button>
-        <button type="button" class="v7-seg-btn" data-v7 data-mandate="balanced" aria-pressed="false" title="Balanced Matrix Profile (ROA Efficiency &amp; Upside Optimizer)">Balanced</button>
-        <button type="button" class="v7-seg-btn" data-v7 data-mandate="aggressive" aria-pressed="false" title="Aggressive Capture Matrix (EPS Trajectory Acceleration)">Aggressive</button>
+      <span class="v7-toolbar-label">Mandate</span>
+      <div class="v7-seg" role="group" aria-label="Mandate (Optimized Weight)">
+        <button type="button" class="v7-seg-btn" data-mandate="tactical" aria-pressed="false" title="Tactical Buying Urgency (Highest Upside Target Rank)">Tactical</button>
+        <button type="button" class="v7-seg-btn" data-mandate="conservative" aria-pressed="false" title="Conservative Profile (Moat Stability &amp; High Yield Focus)">Conservative</button>
+        <button type="button" class="v7-seg-btn" data-mandate="balanced" aria-pressed="false" title="Balanced Matrix Profile (ROA Efficiency &amp; Upside Optimizer)">Balanced</button>
+        <button type="button" class="v7-seg-btn" data-mandate="aggressive" aria-pressed="false" title="Aggressive Capture Matrix (EPS Trajectory Acceleration)">Aggressive</button>
       </div>
     </div>
     <div class="v7-toolbar-group">
@@ -1512,11 +1522,11 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </select>
     </div>
     <div class="v7-toolbar-group v7-toolbar-actions">
-      <button type="button" class="v7-tool-btn" data-v7 data-drawer-tab="tabAddBtn" aria-controls="v7SetupDrawer" aria-expanded="false">+ Add asset</button>
-      <button type="button" class="v7-tool-btn" data-v7 data-drawer-tab="tabAddParamBtn" aria-controls="v7SetupDrawer" aria-expanded="false">Columns</button>
-      <button type="button" class="v7-tool-btn" data-v7 data-drawer-tab="tabRowsBtn" aria-controls="v7SetupDrawer" aria-expanded="false">Row order</button>
+      <button type="button" class="v7-tool-btn" data-drawer-tab="tabAddBtn" aria-controls="v7SetupDrawer" aria-expanded="false">+ Add asset</button>
+      <button type="button" class="v7-tool-btn" data-drawer-tab="tabAddParamBtn" aria-controls="v7SetupDrawer" aria-expanded="false">Columns</button>
+      <button type="button" class="v7-tool-btn" data-drawer-tab="tabRowsBtn" aria-controls="v7SetupDrawer" aria-expanded="false">Row order</button>
       <details class="v7-menu" id="v7IoMenu">
-        <summary class="v7-tool-btn" data-v7>Import / Export ▾</summary>
+        <summary class="v7-tool-btn">Import / Export ▾</summary>
         <div class="v7-menu-list">
     <button id="sampleExcelBtn" class="tab-btn tab-btn-export-excel" title="Download an Excel template listing every ticker across ALL your Portfolio Lists, with every fillable parameter as a column, so you can research/complete missing data offline and re-import it.">⬇ Sample Excel for Data Entry</button>
     <button id="importExcelBtn" class="tab-btn tab-btn-export-excel" title="Upload a filled-in Excel file (matching the Sample Excel's column headers) to pull its values into the currently open Portfolio List — adding any ticker that isn't in it yet.">⬆ Import Excel</button>
@@ -1535,7 +1545,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     <span class="status-ok" id="listActionStatus"></span>
     <span class="status-text" id="excelDataEntryStatus"></span>
   </div>
-  <div class="v7-filter-bar" data-v7><span id="v7FilterNote" aria-live="polite"></span><button type="button" id="v7ClearFilters" class="v7-link-btn">Clear filters</button></div>
+  <div class="v7-filter-bar"><span id="v7FilterNote" aria-live="polite"></span><button type="button" id="v7ClearFilters" class="v7-link-btn">Clear filters</button></div>
 
   <div class="v7-work">
   <div class="table-container v7-table-scroll">
@@ -1546,7 +1556,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </div>
 
   <aside id="v7SetupDrawer" class="control-panel v7-drawer" aria-labelledby="v7SetupTitle" hidden>
-    <div class="v7-drawer-head" data-v7>
+    <div class="v7-drawer-head">
       <h3 id="v7SetupTitle" class="v7-drawer-title" tabindex="-1">Table setup</h3>
       <button type="button" id="v7SetupClose" class="v7-tool-btn" aria-label="Close table setup">✕</button>
     </div>
@@ -1633,7 +1643,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </section>
 
   <section class="screen" data-screen="data" aria-label="Data updates" hidden>
-  <div class="v7-tabs" role="tablist" aria-label="Way to update data" data-v7>
+  <div class="v7-tabs" role="tablist" aria-label="Way to update data">
     <button type="button" role="tab" class="v7-tab" data-data-tab="fetchLiveDataSectionBody">Live data</button>
     <button type="button" role="tab" class="v7-tab" data-data-tab="detailedUpdateSectionBody">Detailed update</button>
     <button type="button" role="tab" class="v7-tab" data-data-tab="quickPriceUpdateSectionBody">Price &amp; target</button>
@@ -1651,7 +1661,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </div>
   <div class="v7-provider-grid">
     <div class="control-panel v7-provider">
-      <h3 class="v7-provider-title" data-v7>Finnhub<span class="v7-provider-tag">Stock price, P/E and ROA</span></h3>
+      <h3 class="v7-provider-title">Finnhub<span class="v7-provider-tag">Stock price, P/E and ROA</span></h3>
       <label class="grow-220" for="apiKey">Finnhub API key <a class="link-accent" href="https://finnhub.io/register" target="_blank" rel="noopener noreferrer">(get free key)</a></label>
       <div class="v7-key-row">
         <input class="key-input" id="apiKey" type="text" placeholder="paste key here">
@@ -1663,7 +1673,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       </div>
     </div>
     <div class="control-panel v7-provider">
-      <h3 class="v7-provider-title" data-v7>Alpha Vantage<span class="v7-provider-tag">Second source for the same fields</span></h3>
+      <h3 class="v7-provider-title">Alpha Vantage<span class="v7-provider-tag">Second source for the same fields</span></h3>
       <label class="grow-220" for="alphaVantageApiKeyInput">Alpha Vantage API key — also used as the Cash Runway (yr) data fallback above <a class="link-accent" href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer">(get free key)</a></label>
       <div class="v7-key-row">
         <input class="key-input" id="alphaVantageApiKeyInput" type="text" placeholder="paste key here">
@@ -1676,7 +1686,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       </div>
     </div>
     <div class="control-panel v7-provider">
-      <h3 class="v7-provider-title" data-v7>Marketdata.app<span class="v7-provider-tag">Call-option prices</span></h3>
+      <h3 class="v7-provider-title">Marketdata.app<span class="v7-provider-tag">Call-option prices</span></h3>
       <label class="grow-220" for="marketDataApiKeyInput">Marketdata.app API key — call-option prices for Past Purchases / Sales Strategy (free plan: 100 requests/day, 1 per contract, data 24h delayed) <a class="link-accent" href="https://www.marketdata.app/" target="_blank" rel="noopener noreferrer">(get free key)</a></label>
       <div class="v7-key-row">
         <input class="key-input" id="marketDataApiKeyInput" type="text" placeholder="paste token here">
@@ -1704,16 +1714,16 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       </ul>
     </div>
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Choose the assets</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">1</span>Choose the assets</h3>
     <div class="row-end">
       <input id="dusTicker" placeholder="Ticker (e.g. RGTI)" class="form-input w-140">
       <input id="dusName" placeholder="Company Name" class="form-input grow-180">
       <button id="dusAddBtn" type="button">Add to Request</button>
     </div>
     <div class="row-actions">
-      <label class="label-sm" for="v7DusRequestFrom" data-v7>Request all from:</label>
-      <select id="v7DusRequestFrom" class="form-input minw-260" data-v7></select>
-      <button class="btn-warn-outline" id="v7DusRequestAllBtn" type="button" data-v7 title="Mark every asset on the chosen list as ✓ included, in one click.">✓ Request all</button>
+      <label class="label-sm" for="v7DusRequestFrom">Request all from:</label>
+      <select id="v7DusRequestFrom" class="form-input minw-260"></select>
+      <button class="btn-accent-outline" id="v7DusRequestAllBtn" type="button" title="Mark every asset on the chosen list as ✓ included, in one click.">✓ Request all</button>
       <button class="btn-muted-outline" id="dusResetSelectionsBtn" type="button" title="Reset every asset below back to grey/undecided, in one click, instead of clicking ✕ on each one individually.">↺ Reset request list</button>
     </div>
     <div class="hint-line" id="dusAddStatus"></div>
@@ -1721,7 +1731,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     <div class="chip-row-mb" id="dusRequestList"></div>
   </div>
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Create the request and copy it</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">2</span>Create the request and copy it</h3>
     <div class="row-actions-mb">
       <button id="dusGenerateBtn" type="button">Generate request</button>
       <button class="btn-secondary" id="dusRefreshBtn" type="button">↻ Refresh asset list</button>
@@ -1734,7 +1744,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
   </div>
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Paste the AI&#39;s reply</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">3</span>Paste the AI&#39;s reply</h3>
     <label class="field-label" for="dusPasteInput">Paste the reply here (numbers only, comma-separated):</label>
     <textarea class="prompt-box" id="dusPasteInput" rows="4" placeholder="e.g. 245.00, 1.85, 320.5, 0.72, 850.4, 227.50, ..."></textarea>
     <div class="row-actions">
@@ -1742,7 +1752,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <span class="status-text" id="dusParseStatus"></span>
     </div>
   </div>
-  <div class="control-panel v7-step v7-hist" data-v7 data-hist-kind="detailed">
+  <div class="control-panel v7-step v7-hist" data-hist-kind="detailed">
     <h3 class="v7-step-title"><span class="v7-step-num">4</span>Detailed Update History</h3>
     <button type="button" class="v7-hist-toggle" data-hist="toggle" aria-expanded="false" aria-controls="v7DusHistBody">▶ Current and past entries</button>
     <p class="v7-hist-summary" data-hist="summary"></p>
@@ -1785,7 +1795,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       </ul>
     </div>
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Copy the prompt</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">1</span>Copy the prompt</h3>
     <label class="field-label" for="qpuPromptBox">Copy this prompt to your AI (it lists every ticker on every Portfolio list):</label>
     <textarea class="prompt-box" id="qpuPromptBox" readonly rows="6"></textarea>
     <div class="row-actions-gap">
@@ -1795,7 +1805,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
   </div>
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Paste the AI&#39;s reply</h3>
+    <h3 class="v7-step-title"><span class="v7-step-num">2</span>Paste the AI&#39;s reply</h3>
     <label class="field-label" for="qpuPasteInput">Paste the reply here (numbers only, comma-separated):</label>
     <textarea class="prompt-box" id="qpuPasteInput" rows="4" placeholder="e.g. 245.00, 260.00, 320.50, 345.00, ..."></textarea>
     <div class="row-actions">
@@ -1803,7 +1813,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <span class="status-text" id="qpuParseStatus"></span>
     </div>
   </div>
-  <div class="control-panel v7-step v7-hist" data-v7 data-hist-kind="quick">
+  <div class="control-panel v7-step v7-hist" data-hist-kind="quick">
     <h3 class="v7-step-title"><span class="v7-step-num">3</span>Price &amp; target update history</h3>
     <button type="button" class="v7-hist-toggle" data-hist="toggle" aria-expanded="false" aria-controls="v7QpuHistBody">▶ Current and past entries</button>
     <p class="v7-hist-summary" data-hist="summary"></p>
@@ -1839,7 +1849,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 
   <section class="screen" data-screen="methodology" aria-label="Methodology and Glossary" hidden>
   <div id="methodologyGlossarySectionBody">
-  <div class="v7-method-bar" data-v7>
+  <div class="v7-method-bar">
     <p class="v7-method-lead">How the Portfolio scores each asset, and what every column means. Search, or jump to a part.</p>
     <div class="v7-method-search">
       <label class="v7-sr-only" for="v7GlossarySearch">Search definitions</label>
