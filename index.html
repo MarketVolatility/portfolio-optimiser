@@ -1012,6 +1012,21 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
 .v7-hist-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
 body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; }
 @media (max-width: 820px) { .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; } }
+
+/* Detailed Update "Choose the assets" (v8.1.1): chosen assets stand out with a teal edge,
+   tint and a filled ✓; excluded ones are dimmed; undecided ones stay quiet. */
+.dus-chip { transition: border-color .15s ease, background .15s ease, opacity .15s ease; }
+.dus-chip .dus-btn { min-height: 0; color: var(--text-faint); border: 1px solid transparent; box-shadow: none; }
+.dus-chip .dus-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.dus-chip .dus-btn-ok:hover { color: var(--accent-strong); background: var(--accent-soft); }
+.dus-chip.dus-on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.dus-chip.dus-on .dus-chip-label { color: var(--text-primary); font-weight: 600; }
+.dus-chip.dus-on .dus-btn-ok { background: var(--accent); color: var(--accent-ink); }
+.dus-chip.dus-on .dus-btn-ok:hover { background: var(--accent-hover); color: var(--accent-ink); }
+.dus-chip.dus-off { opacity: .6; }
+.dus-chip.dus-off .dus-chip-label { text-decoration: line-through; text-decoration-color: rgba(201,138,158,.7); }
+.dus-chip.dus-off .dus-btn-x { color: #c98a9e; border-color: rgba(201,138,158,.5); }
+.mark-include-teal { color: var(--accent-strong); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -1096,7 +1111,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v8.1 — update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
+      Version v8.1.1 — chosen assets in Detailed update show teal. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -1743,7 +1758,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       Pick ticker(s) for a <strong>full, detailed</strong> refresh:
       <ul>
         <li>Requests every editable numeric parameter on your Portfolio table (not the fixed 2-field set below), except "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" (manual/Import-Excel only, never requested from an AI).</li>
-        <li>Click <strong class="mark-include">✓</strong> to include a ticker, <strong class="mark-exclude">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all for current Portfolio list" / "Reset request list" for one-click bulk actions, or add a brand-new ticker below.</li>
+        <li>Click <strong class="mark-include-teal">✓</strong> to include a ticker (it turns teal), <strong class="mark-exclude">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all for current Portfolio list" / "Reset request list" for one-click bulk actions, or add a brand-new ticker below.</li>
         <li>Marking a ticker ✓ adds it to your currently open Portfolio List right away.</li>
         <li>Click "Generate request", copy the prompt to an AI assistant, then paste its numbered reply back and click "Parse & Update".</li>
       </ul>
