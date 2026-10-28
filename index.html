@@ -601,7 +601,7 @@ body.view-mobile .v7-tab { flex: 1 1 0; padding: 0 8px; }
 .v7-step label { white-space: normal; }
 .v7-step-title { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 1.05rem; color: var(--text-primary); }
 .v7-step-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700; flex: 0 0 26px; }
-#newsCopyBtn, #nsCopyBtn { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; font-weight: 600; }
+#nsCopyBtn { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; font-weight: 600; }
 .v7-report-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .v7-report-filters .v7-filter { flex: 1 1 140px; min-height: 36px; font-size: 13px; }
 .v7-report-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow-y: auto; }
@@ -875,7 +875,7 @@ tr.foot-row-total { background: rgba(255,255,255,0.03); border-top: 2px solid va
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; letter-spacing: -0.005em; }
 input, select, textarea, button { font-family: inherit; }
 table, .cell-input, .dash-big, .v7-report-meta { font-variant-numeric: tabular-nums; }
-textarea.prompt-box, textarea.reply-box, #newsPromptBox, #nsPromptBox { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }
+textarea.prompt-box, textarea.reply-box, #nsPromptBox { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }
 
 /* Quiet scrollbars in the border colour (were orange) */
 * { scrollbar-color: var(--border-strong) transparent; }
@@ -1099,7 +1099,6 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <button type="button" class="app-nav-item nav-primary" data-route="holdings" data-open-section="pastPurchasesSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Holdings &amp; Planning</span></button>
       <button type="button" class="app-nav-item nav-primary" data-route="portfolio" data-open-section="portfolioSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><span>Portfolio</span></button>
       <button type="button" class="app-nav-item nav-primary" id="navNewsBtn" data-route="news" data-open-section="newsSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg><span>News &amp; Research</span></button>
-      <button type="button" class="app-nav-item app-nav-sub" id="navNewsSelBtn" data-route="news" data-open-section="newsSelSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Selected assets</span></button>
       <div class="app-nav-group">Data updates</div>
       <button type="button" class="app-nav-item" id="navFetchLiveDataBtn" data-route="data" data-open-section="fetchLiveDataSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span>Fetch live data</span></button>
       <button type="button" class="app-nav-item" id="navDetailedUpdateBtn" data-route="data" data-open-section="detailedUpdateSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Detailed update</span></button>
@@ -1109,7 +1108,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v8.2 — Detailed update chooses assets like Selected assets (Request all from any list); chosen assets show teal in both. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
+      Version v8.3 — News &amp; Research is one request flow (no separate Holdings / Selected assets tabs or named lists); both pickers start on Current and Potential Holding. v8.2: Request all from any list; chosen assets show teal. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -1390,78 +1389,19 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   </section>
 
   <section class="screen" data-screen="news" aria-label="News and Research" hidden>
-  <div class="v7-tabs" role="tablist" aria-label="Briefing type" data-v7>
-    <button type="button" role="tab" class="v7-tab" data-news-tab="newsSectionBody">Holdings briefing</button>
-    <button type="button" role="tab" class="v7-tab" data-news-tab="newsSelSectionBody">Selected assets</button>
-  </div>
   <div class="v7-news-layout">
   <div class="v7-news-main">
   <div id="newsSectionBody">
 
   <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Assets in this briefing</h3>
+    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Choose the assets</h3>
     <div class="disclaimer mb-4">
       No API key needed:
       <ul>
-        <li>Covers every ticker you currently hold (the "Current Holding" set: every open lot on the open Past Purchases list) plus every ticker with a still-draft row in Buy Strategy.</li>
-        <li>Includes each asset's <strong>Portfolio data</strong> (the figures in your Portfolio table) and asks the AI to check and update them in a table, analyse them and list strengths and weaknesses (about 500 words).</li>
-        <li>Asks the AI for a <strong>one-year performance</strong> paragraph and news from the <strong>last one month</strong> that could move each stock's price — about two pages per asset, each starting with a header: asset name, current price, price trend over the last week, and expected price trend over the next week.</li>
-        <li>The AI is asked to reply as a Word document (.docx) if it can create files, otherwise as plain text in the same layout.</li>
+        <li>"Request all from" starts on <strong>Current and Potential Holding (Portfolio)</strong> — every ticker you hold plus every still-draft Buy Strategy ticker — and can tick every asset on any other list: any Portfolio List, a Past Purchases list, your current holdings, Buy Strategy or a saved Selected Assets list.</li>
+        <li>Click <strong class="mark-include-teal">✓</strong> to include an asset (it turns teal), <strong class="mark-exclude">✕</strong> to exclude it (click again to clear). Add a ticker that isn't on any list with "Add to Request".</li>
+        <li>The prompt includes each asset's <strong>Portfolio data</strong> and asks the AI to check and update it, give a <strong>one-year performance</strong> paragraph and the news from the <strong>last one month</strong> that could move the price, and reply as a Word document (.docx) if it can.</li>
         <li>An AI's "expected trend" is an opinion, not a forecast you can rely on — treat the briefing as a starting point and verify the news yourself.</li>
-      </ul>
-    </div>
-    <div class="chart-note mb-1-5">Assets included in the prompt:</div>
-    <div class="chip-row-plain-mb" id="newsAssetList"></div>
-  </div>
-
-  <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Copy the prompt</h3>
-    <label class="field-label" for="newsPromptBox">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
-    <textarea class="prompt-box" id="newsPromptBox" readonly rows="10"></textarea>
-    <div class="row-actions-tight">
-      <button class="btn-secondary" id="newsCopyBtn" type="button">📋 Copy prompt</button>
-      <button class="btn-secondary" id="newsRefreshBtn" type="button">↻ Refresh asset list</button>
-      <span class="status-text-sm" id="newsPromptStatus"></span>
-    </div>
-  </div>
-
-  <div class="control-panel v7-step stack-md">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Save the AI's reply</h3>
-    <div class="row-center">
-      <button id="newsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md).">⬆ Upload AI result (Word or text)</button>
-      <input id="newsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">
-      <span class="status-text" id="newsUploadStatus"></span>
-    </div>
-    <div class="chart-note">Or paste the reply as text:</div>
-    <input id="newsPasteTitle" class="form-input maxw-420" placeholder="Title (optional — defaults to today's date)">
-    <textarea class="reply-box" id="newsPasteInput" rows="5" placeholder="Paste the AI's news briefing here…"></textarea>
-    <div><button id="newsSavePastedBtn" type="button">Save pasted text</button></div>
-    <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage, so both are available on all your devices. Older .doc files aren't supported — save them as .docx first.</div>
-  </div>
-
-
-  </div>
-
-  <div id="newsSelSectionBody">
-
-  <div class="control-panel flex-wrap">
-    <label class="list-label" for="nsListSelector">Selected Assets List:</label>
-    <select id="nsListSelector" class="form-input minw-180"></select>
-    <button class="btn-secondary" id="nsNewListBtn">+ New List</button>
-    <button class="btn-secondary" id="nsRenameListBtn">Rename</button>
-    <button class="btn-danger-outline" id="nsDeleteListBtn" title="Requires re-entering your account password to confirm.">Delete List</button>
-    <span class="status-ok" id="nsListStatus"></span>
-  </div>
-
-  <div class="control-panel v7-step">
-    <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Pick the assets</h3>
-    <div class="disclaimer mb-4">
-      Pick the assets for a news briefing on the list you're viewing — held or not:
-      <ul>
-        <li>Click <strong class="mark-include-teal">✓</strong> to include an asset (it turns teal), <strong class="mark-exclude">✕</strong> to exclude it (both start grey/undecided, treated as excluded; click again to clear). Each Selected Assets list keeps its own choices.</li>
-        <li>"Request all from" ticks every asset on another list in one click — any Portfolio List, a Past Purchases list, your current holdings, Buy Strategy (potential holdings) or another Selected Assets list; where each list comes from is shown in brackets. "↺ Reset request list" sets every asset back to grey.</li>
-        <li>Add a ticker that isn't on any list yet with "Add to Request".</li>
-        <li>Click "Generate request", copy the prompt to an AI assistant, then save its reply below with "⬆ Upload AI result" or "Save pasted text". It works like News of Current and Potential Holdings: news from the last month, one-year performance, and a check of each asset's Portfolio data.</li>
       </ul>
     </div>
     <div class="row-end">
@@ -1477,7 +1417,6 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <button class="btn-muted-outline" id="nsResetBtn" type="button" title="Reset every asset below back to grey/undecided, in one click.">↺ Reset request list</button>
       <span class="status-text" id="nsImportStatus"></span>
     </div>
-    <h3 class="sub-title" id="nsActiveHeading">Selected Assets viewing: —</h3>
     <div class="chart-note mt-1">All assets across your App Lists — click ✓ to include, ✕ to exclude from the request:</div>
     <div class="chip-row-mb" id="nsRequestList"></div>
     <div class="row-actions-mb">
@@ -1488,7 +1427,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 
   <div class="control-panel v7-step">
     <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Copy the prompt</h3>
-    <label class="field-label" for="nsPromptBox">Step 1 — copy this prompt to your AI (one that can search the web gives the most current results):</label>
+    <label class="field-label" for="nsPromptBox">Copy this prompt to your AI (one that can search the web gives the most current results):</label>
     <textarea class="prompt-box" id="nsPromptBox" readonly rows="8"></textarea>
     <div class="row-actions-tight">
       <button class="btn-secondary" id="nsCopyBtn" type="button">📋 Copy prompt</button>
@@ -1499,7 +1438,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
   <div class="control-panel v7-step stack-md">
     <h3 class="v7-step-title" data-v7><span class="v7-step-num">3</span>Save the AI's reply</h3>
     <div class="row-center">
-      <button id="nsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md). It is saved against the Selected Assets list you're viewing.">⬆ Upload AI result (Word or text)</button>
+      <button id="nsUploadBtn" type="button" class="tab-btn tab-btn-export-excel" title="Upload the AI's reply as a Word document (.docx) or a text file (.txt / .md).">⬆ Upload AI result (Word or text)</button>
       <input id="nsUploadFileInput" type="file" accept=".docx,.txt,.md,.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="display:none">
       <span class="status-text" id="nsUploadStatus"></span>
     </div>
@@ -1507,7 +1446,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     <input id="nsPasteTitle" class="form-input maxw-420" placeholder="Title (optional — defaults to today's date)">
     <textarea class="reply-box" id="nsPasteInput" rows="5" placeholder="Paste the AI's news briefing here…"></textarea>
     <div><button id="nsSavePastedBtn" type="button">Save pasted text</button></div>
-    <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage. Each report remembers which Selected Assets list it was saved under (shown in Saved reports). Older .doc files aren't supported — save them as .docx first.</div>
+    <div class="chart-note" data-intro="1">Everything is saved to the cloud: the text of every report syncs with the rest of your data, and the original Word file (.docx) is stored in your private cloud file storage. Older .doc files aren't supported — save them as .docx first.</div>
   </div>
 
 
