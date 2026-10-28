@@ -647,8 +647,6 @@ body.view-mobile .v7-reader-dock { display: none; }
 .v7-provider > span:empty, .v7-fetch-row > span:empty { display: none; }
 .v7-step label { white-space: normal; }
 .v7-step > div[style*="display:flex"] { margin: 0 !important; }
-.v7-add-ticker { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border-color); }
-.v7-subhead { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; }
 #dusRequestList { margin: 0 !important; }
 #dusCopyBtn, #qpuCopyBtn, #dusGenerateBtn, #dusParseBtn, #qpuParseBtn { font-weight: 600; }
 #dusCopyBtn, #qpuCopyBtn { background: var(--accent) !important; border-color: var(--accent) !important; color: var(--accent-ink) !important; }
@@ -1013,19 +1011,19 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
 body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; }
 @media (max-width: 820px) { .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; } }
 
-/* Detailed Update "Choose the assets" (v8.1.1): chosen assets stand out with a teal edge,
-   tint and a filled ✓; excluded ones are dimmed; undecided ones stay quiet. */
-.dus-chip { transition: border-color .15s ease, background .15s ease, opacity .15s ease; }
-.dus-chip .dus-btn { min-height: 0; color: var(--text-faint); border: 1px solid transparent; box-shadow: none; }
-.dus-chip .dus-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
-.dus-chip .dus-btn-ok:hover { color: var(--accent-strong); background: var(--accent-soft); }
-.dus-chip.dus-on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
-.dus-chip.dus-on .dus-chip-label { color: var(--text-primary); font-weight: 600; }
-.dus-chip.dus-on .dus-btn-ok { background: var(--accent); color: var(--accent-ink); }
-.dus-chip.dus-on .dus-btn-ok:hover { background: var(--accent-hover); color: var(--accent-ink); }
-.dus-chip.dus-off { opacity: .6; }
-.dus-chip.dus-off .dus-chip-label { text-decoration: line-through; text-decoration-color: rgba(201,138,158,.7); }
-.dus-chip.dus-off .dus-btn-x { color: #c98a9e; border-color: rgba(201,138,158,.5); }
+/* Request checklists — Detailed Update and News of Selected Assets (v8.1.1 / v8.2): chosen assets
+   stand out with a teal edge, tint and a filled ✓; excluded ones are dimmed; undecided ones stay quiet. */
+.req-chip { transition: border-color .15s ease, background .15s ease, opacity .15s ease; }
+.req-chip .req-btn { min-height: 0; color: var(--text-faint); border: 1px solid transparent; box-shadow: none; }
+.req-chip .req-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.req-chip .req-btn-ok:hover { color: var(--accent-strong); background: var(--accent-soft); }
+.req-chip.req-on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.req-chip.req-on .req-chip-label { color: var(--text-primary); font-weight: 600; }
+.req-chip.req-on .req-btn-ok { background: var(--accent); color: var(--accent-ink); }
+.req-chip.req-on .req-btn-ok:hover { background: var(--accent-hover); color: var(--accent-ink); }
+.req-chip.req-off { opacity: .6; }
+.req-chip.req-off .req-chip-label { text-decoration: line-through; text-decoration-color: rgba(201,138,158,.7); }
+.req-chip.req-off .req-btn-x { color: #c98a9e; border-color: rgba(201,138,158,.5); }
 .mark-include-teal { color: var(--accent-strong); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
@@ -1111,7 +1109,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v8.1.1 — chosen assets in Detailed update show teal. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
+      Version v8.2 — Detailed update chooses assets like Selected assets (Request all from any list); chosen assets show teal in both. v8.1: update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -1460,7 +1458,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
     <div class="disclaimer mb-4">
       Pick the assets for a news briefing on the list you're viewing — held or not:
       <ul>
-        <li>Click <strong class="mark-include">✓</strong> to include an asset, <strong class="mark-exclude">✕</strong> to exclude it (both start grey/undecided, treated as excluded; click again to clear). Each Selected Assets list keeps its own choices.</li>
+        <li>Click <strong class="mark-include-teal">✓</strong> to include an asset (it turns teal), <strong class="mark-exclude">✕</strong> to exclude it (both start grey/undecided, treated as excluded; click again to clear). Each Selected Assets list keeps its own choices.</li>
         <li>"Request all from" ticks every asset on another list in one click — any Portfolio List, a Past Purchases list, your current holdings, Buy Strategy (potential holdings) or another Selected Assets list; where each list comes from is shown in brackets. "↺ Reset request list" sets every asset back to grey.</li>
         <li>Add a ticker that isn't on any list yet with "Add to Request".</li>
         <li>Click "Generate request", copy the prompt to an AI assistant, then save its reply below with "⬆ Upload AI result" or "Save pasted text". It works like News of Current and Potential Holdings: news from the last month, one-year performance, and a check of each asset's Portfolio data.</li>
@@ -1758,28 +1756,27 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       Pick ticker(s) for a <strong>full, detailed</strong> refresh:
       <ul>
         <li>Requests every editable numeric parameter on your Portfolio table (not the fixed 2-field set below), except "Actual Upside (%)", "Units Purchased", "Average Purchase Price ($)" and "To Buy Price" (manual/Import-Excel only, never requested from an AI).</li>
-        <li>Click <strong class="mark-include-teal">✓</strong> to include a ticker (it turns teal), <strong class="mark-exclude">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all for current Portfolio list" / "Reset request list" for one-click bulk actions, or add a brand-new ticker below.</li>
+        <li>Click <strong class="mark-include-teal">✓</strong> to include a ticker (it turns teal), <strong class="mark-exclude">✕</strong> to exclude (both start grey/undecided, treated as excluded) — or use "Request all from" (any Portfolio list, Past Purchases list, your current holdings, Buy Strategy, the News holdings or a Selected Assets list; it starts on your open Portfolio list) / "Reset request list" for one-click bulk actions, or add a ticker with "Add to Request".</li>
         <li>Marking a ticker ✓ adds it to your currently open Portfolio List right away.</li>
         <li>Click "Generate request", copy the prompt to an AI assistant, then paste its numbered reply back and click "Parse & Update".</li>
       </ul>
     </div>
   <div class="control-panel v7-step">
     <h3 class="v7-step-title" data-v7><span class="v7-step-num">1</span>Choose the assets</h3>
-    <div class="row-actions">
-      <button class="btn-warn-outline" id="dusSelectAllCurrentListBtn" type="button" title="Mark every asset already on your currently open Portfolio List as ✓ included, in one click.">Request all for current Portfolio list: <strong id="dusCurrentListNameLabel"></strong></button>
-      <button class="btn-muted-outline" id="dusResetSelectionsBtn" type="button" title="Reset every asset below back to grey/undecided, in one click, instead of clicking ✕ on each one individually.">↺ Reset request list</button>
-    </div>
-    <div class="chart-note mt-3">All assets across your App Lists — click ✓ to include, ✕ to exclude from the request:</div>
-    <div class="chip-row-mb" id="dusRequestList"></div>
-    <div class="v7-add-ticker">
-      <div class="v7-subhead" data-v7>Not in the list? Add a ticker:</div>
     <div class="row-end">
       <input id="dusTicker" placeholder="Ticker (e.g. RGTI)" class="form-input w-140">
       <input id="dusName" placeholder="Company Name" class="form-input grow-180">
       <button id="dusAddBtn" type="button">Add to Request</button>
     </div>
-    <div class="hint-line" id="dusAddStatus"></div>
+    <div class="row-actions">
+      <label class="label-sm" for="v7DusRequestFrom" data-v7>Request all from:</label>
+      <select id="v7DusRequestFrom" class="form-input minw-260" data-v7></select>
+      <button class="btn-warn-outline" id="v7DusRequestAllBtn" type="button" data-v7 title="Mark every asset on the chosen list as ✓ included, in one click.">✓ Request all</button>
+      <button class="btn-muted-outline" id="dusResetSelectionsBtn" type="button" title="Reset every asset below back to grey/undecided, in one click, instead of clicking ✕ on each one individually.">↺ Reset request list</button>
     </div>
+    <div class="hint-line" id="dusAddStatus"></div>
+    <div class="chart-note mt-3">All assets across your App Lists — click ✓ to include, ✕ to exclude from the request:</div>
+    <div class="chip-row-mb" id="dusRequestList"></div>
   </div>
   <div class="control-panel v7-step">
     <h3 class="v7-step-title" data-v7><span class="v7-step-num">2</span>Create the request and copy it</h3>
