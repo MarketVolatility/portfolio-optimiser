@@ -982,6 +982,36 @@ a { color: var(--accent-strong); }
 /* Phone bottom bar: the current item's teal edge sits on top */
 @media (max-width: 820px) { .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 var(--accent); } }
 body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 var(--accent); }
+
+/* Update histories (v8.1): "Current and past entries" tables under Detailed Update and Price & target update */
+.v7-hist-toggle { display: flex; align-items: center; width: 100%; min-height: 52px; padding: 0 18px; margin: 6px 0 0; border: 1px solid var(--border-color);
+  border-radius: var(--radius); background: var(--bg-raised); color: var(--text-primary); font: inherit; font-size: 15px; font-weight: 700; text-align: left; cursor: pointer; box-shadow: none; }
+.v7-hist-toggle:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.v7-hist-toggle[aria-expanded="true"] { border-color: var(--accent-line); }
+.v7-hist-summary { margin: 10px 0 0; font-size: 13px; color: var(--text-secondary); }
+.v7-hist-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
+.v7-hist-pager { display: inline-flex; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border-strong); }
+.v7-hist-pg, .v7-hist-go { min-height: 38px; padding: 0 14px; border: 0; border-radius: 0; font-size: 13px; font-weight: 700; box-shadow: none; }
+.v7-hist-pg { background: var(--accent); color: var(--accent-ink); }
+.v7-hist-pg + .v7-hist-pg { border-left: 1px solid rgba(4,47,46,.35); }
+.v7-hist-pg:hover:not(:disabled) { background: var(--accent-hover); }
+.v7-hist-pg:disabled { background: var(--bg-raised); color: var(--text-faint); opacity: 1; }
+.v7-hist-go { border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); }
+.v7-hist-go:hover { background: var(--accent-hover); }
+.v7-hist-range { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.v7-hist-bar .v7-hist-date { width: auto; min-height: 38px; padding: 0 10px; color-scheme: dark; }
+.v7-hist-bar .v7-hist-search { flex: 1 1 160px; max-width: 240px; min-height: 38px; padding: 0 10px; margin-left: auto; }
+.v7-hist-table { max-height: 60vh; margin-top: 4px; }
+.v7-hist-table td { vertical-align: middle; }
+.v7-hist-table th { min-width: 88px; }
+.v7-hist-entry { display: inline-block; min-width: 64px; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-main); color: var(--text-soft); font-size: 13px; }
+.v7-hist-entry.v7-hist-current { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
+.v7-hist > * { min-width: 0; max-width: 100%; }
+.v7-hist-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 240px; max-width: 520px; }
+.v7-chip.v7-chip-hit { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.v7-hist-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; }
+@media (max-width: 820px) { .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -1066,7 +1096,7 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
     </div>
     <div class="app-nav-account">
       <div id="htmlBuildLine" class="app-build-line">
-      Version v8.0.1 — Graphite &amp; Teal design with the Plus Jakarta Sans typeface; fully strict TypeScript; old pre-v7 data conversions removed. Your data and scoring are unchanged.</div>
+      Version v8.1 — update histories under Detailed update and Price &amp; target update (when each update was done and which assets it covered). v8.0: Graphite &amp; Teal design, fully strict TypeScript. Your data and scoring are unchanged.</div>
     </div>
   </nav>
 
@@ -1758,6 +1788,35 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
       <span class="status-text" id="dusParseStatus"></span>
     </div>
   </div>
+  <div class="control-panel v7-step v7-hist" data-v7 data-hist-kind="detailed">
+    <h3 class="v7-step-title"><span class="v7-step-num">4</span>Detailed Update History</h3>
+    <button type="button" class="v7-hist-toggle" data-hist="toggle" aria-expanded="false" aria-controls="v7DusHistBody">▶ Current and past entries</button>
+    <p class="v7-hist-summary" data-hist="summary"></p>
+    <div id="v7DusHistBody" data-hist="body" hidden>
+      <div class="v7-hist-bar">
+        <div class="v7-hist-pager" role="group" aria-label="Pages">
+          <button type="button" class="v7-hist-pg" data-hist-page="newest">Newest</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="prev">Previous</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="next">Next</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="oldest">Oldest</button>
+        </div>
+        <span class="v7-hist-range" data-hist="range"></span>
+        <label class="v7-sr-only" for="v7DusHistDate">Date</label>
+        <input id="v7DusHistDate" type="date" class="v7-filter v7-hist-date" data-hist="date">
+        <button type="button" class="v7-hist-go" data-hist="go">Go to date</button>
+        <label class="v7-sr-only" for="v7DusHistSearch">Filter by ticker</label>
+        <input id="v7DusHistSearch" type="search" class="v7-filter v7-hist-search" data-hist="search" placeholder="Filter by ticker…" autocomplete="off">
+      </div>
+      <p class="v7-report-status" data-hist="status" role="status"></p>
+      <div class="table-container v7-hist-table">
+        <table>
+          <thead><tr><th>Delete</th><th>Entry</th><th>Date</th><th>Time</th><th>List</th><th>Assets</th><th>Assets updated</th><th>Parameters</th></tr></thead>
+          <tbody data-hist="rows"></tbody>
+        </table>
+      </div>
+      <p class="v7-hist-note">History syncs to your account with the rest of your data (automatically, and with "Sync now"), so it follows you across devices. Deleting an entry only removes it from this history — the values it set are kept.</p>
+    </div>
+  </div>
 
   </div>
 
@@ -1788,6 +1847,35 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
     <div class="row-actions">
       <button id="qpuParseBtn" type="button">Parse & Update</button>
       <span class="status-text" id="qpuParseStatus"></span>
+    </div>
+  </div>
+  <div class="control-panel v7-step v7-hist" data-v7 data-hist-kind="quick">
+    <h3 class="v7-step-title"><span class="v7-step-num">3</span>Price &amp; target update history</h3>
+    <button type="button" class="v7-hist-toggle" data-hist="toggle" aria-expanded="false" aria-controls="v7QpuHistBody">▶ Current and past entries</button>
+    <p class="v7-hist-summary" data-hist="summary"></p>
+    <div id="v7QpuHistBody" data-hist="body" hidden>
+      <div class="v7-hist-bar">
+        <div class="v7-hist-pager" role="group" aria-label="Pages">
+          <button type="button" class="v7-hist-pg" data-hist-page="newest">Newest</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="prev">Previous</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="next">Next</button>
+          <button type="button" class="v7-hist-pg" data-hist-page="oldest">Oldest</button>
+        </div>
+        <span class="v7-hist-range" data-hist="range"></span>
+        <label class="v7-sr-only" for="v7QpuHistDate">Date</label>
+        <input id="v7QpuHistDate" type="date" class="v7-filter v7-hist-date" data-hist="date">
+        <button type="button" class="v7-hist-go" data-hist="go">Go to date</button>
+        <label class="v7-sr-only" for="v7QpuHistSearch">Filter by ticker</label>
+        <input id="v7QpuHistSearch" type="search" class="v7-filter v7-hist-search" data-hist="search" placeholder="Filter by ticker…" autocomplete="off">
+      </div>
+      <p class="v7-report-status" data-hist="status" role="status"></p>
+      <div class="table-container v7-hist-table">
+        <table>
+          <thead><tr><th>Delete</th><th>Entry</th><th>Date</th><th>Time</th><th>Assets</th><th>Assets updated</th><th>Parameters</th></tr></thead>
+          <tbody data-hist="rows"></tbody>
+        </table>
+      </div>
+      <p class="v7-hist-note">History syncs to your account with the rest of your data (automatically, and with "Sync now"), so it follows you across devices. Deleting an entry only removes it from this history — the values it set are kept.</p>
     </div>
   </div>
 
