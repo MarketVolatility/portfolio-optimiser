@@ -1039,6 +1039,22 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 }
 /* The sidebar version line: one quiet line */
 .app-build-line { font-size: 11px; color: var(--text-faint); letter-spacing: .02em; }
+
+/* Account → Sync & backups */
+.v7-backups { max-width: 1100px; }
+.v7-backups-lead { margin: 0 0 16px; color: var(--text-secondary); }
+.v7-backup-card { display: flex; flex-direction: column; align-items: stretch !important; gap: 12px; padding: 24px 26px; }
+.v7-backup-card > * { min-width: 0; }
+.v7-backup-text { margin: 0; color: var(--text-soft); line-height: 1.6; font-size: 14px; }
+.v7-backup-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.v7-backup-actions button { min-width: 150px; }
+.v7-backup-status { margin: 0; min-height: 1.4em; font-size: 14px; color: var(--text-secondary); }
+.v7-backup-status:empty { display: none; }
+.v7-backup-subtitle { margin: 10px 0 0; padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.v7-backup-sync { display: flex; flex-wrap: wrap; gap: 10px; }
+.v7-backup-sync button { min-height: 44px; }
+@media (max-width: 820px) { .v7-backup-actions { justify-content: stretch; } .v7-backup-actions button, .v7-backup-sync button { flex: 1 1 100%; } }
+body.view-mobile .v7-backup-actions button, body.view-mobile .v7-backup-sync button { flex: 1 1 100%; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -1118,10 +1134,12 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
       <button type="button" class="app-nav-item" id="navDetailedUpdateBtn" data-route="data" data-open-section="detailedUpdateSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Detailed update</span></button>
       <button type="button" class="app-nav-item" id="navQuickPriceUpdateBtn" data-route="data" data-open-section="quickPriceUpdateSectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6.5c0-1.9-2.2-3.5-5-3.5s-5 1.6-5 3.5 2.2 3.1 5 3.5 5 1.6 5 3.5-2.2 3.5-5 3.5-5-1.6-5-3.5"/></svg><span>Price &amp; target update</span></button>
       <button type="button" class="app-nav-item" data-route="methodology" data-open-section="methodologyGlossarySectionBody"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>Methodology &amp; glossary</span></button>
+      <div class="app-nav-group">Account</div>
+      <button type="button" class="app-nav-item" id="navBackupsBtn" data-route="backups"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/><path d="M12 8v4l3 2"/></svg><span>Sync &amp; backups</span></button>
       <button type="button" class="app-nav-item app-nav-more" id="appNavMoreBtn" aria-expanded="false" aria-controls="appNav"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
     </div>
     <div class="app-nav-account">
-      <div id="htmlBuildLine" class="app-build-line">Version 8.5</div>
+      <div id="htmlBuildLine" class="app-build-line">Version 8.6</div>
     </div>
   </nav>
 
@@ -2078,6 +2096,30 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 
   </div>
 
+  </section>
+
+  <section class="screen" data-screen="backups" aria-label="Sync and backups" hidden>
+  <div id="backupsBody" class="v7-backups">
+    <p class="v7-backups-lead">Download a backup of your account, restore one, and compare or repair the copies on this device and in the cloud.</p>
+    <div class="control-panel v7-backup-card">
+      <h3 class="v7-step-title">Account backup and restore</h3>
+      <p class="v7-backup-text">A backup holds everything this account has saved on this device: every Portfolio list, Past Purchases, Sales and Buy plans, news reports and their original Word files, update histories, column and layout settings, and your saved API keys. Passwords and login sessions are not included. Keep the private backup file — and a copy of index.html — somewhere outside this browser. Changes made on another device arrive here when you sign in, so sign in again first if you've used another device.</p>
+      <div class="v7-backup-actions">
+        <button type="button" id="backupAccountBtn" title="Download one private file with all of this account's saved data">Backup Account</button>
+        <button type="button" id="restoreAccountBtn" title="Choose a backup file; this device and the cloud are set back to it (asks for your password)">Restore Account</button>
+        <input id="restoreAccountFileInput" type="file" accept=".json,application/json" hidden>
+      </div>
+      <p id="backupStatus" class="v7-backup-status" role="status"></p>
+      <h4 class="v7-backup-subtitle">This device and the cloud copy</h4>
+      <p class="v7-backup-text">Export both copies side by side to compare them (API keys are hidden), make the cloud copy match this device, or put back an earlier cloud copy from such a comparison file. Overwriting and restoring ask for your account password.</p>
+      <div class="v7-backup-sync">
+        <button type="button" class="btn-secondary" id="exportComparisonBtn">Export local and cloud backup for AI comparison</button>
+        <button type="button" class="btn-secondary" id="overwriteCloudBtn">Overwrite cloud with local</button>
+        <button type="button" class="btn-secondary" id="restoreCloudFromComparisonBtn">Restore previous cloud backup from AI comparison file</button>
+        <input id="restoreComparisonFileInput" type="file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </div>
   </section>
 
   <div class="disclaimer" data-keep-open="1">
