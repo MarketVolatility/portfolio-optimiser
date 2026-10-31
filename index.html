@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="8.6.2">
+<meta name="app-version" content="8.7.0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>Stock Portfolio Optimizer</title>
+<script>
+/* Sets the saved theme before the page paints, so a light-theme user never sees a dark flash. */
+(function(){ try{ var t = localStorage.getItem("uiTheme"); var light = t === "light" || (t !== "dark" && window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
+  document.documentElement.setAttribute("data-theme", light ? "light" : "dark"); }catch(e){ document.documentElement.setAttribute("data-theme", "dark"); } })();
+</script>
 <style>
 /* ===== Design tokens: Graphite & Teal ===== */
 :root {
@@ -26,7 +31,27 @@
   --pos: #3fb950; --neg: #f47067; --amber: #d29922; --gold: #e3b341; --info: #79c0ff; --violet: #bc8cff;
   /* shape */
   --radius: 12px; --radius-sm: 8px;
+  /* chrome: nav, top bar, overlays */
+  --bg-nav: #0a0e14; --bg-topbar: rgba(11,15,25,.94); --bg-overlay: rgba(13,17,23,.98); --bg-backdrop: rgba(1,4,9,.78);
+  --bg-zebra: #191f28; --bg-zebra-soft: rgba(255,255,255,.015); --border-hover: #4a5768;
+  --text-max: #fff; --title-from: #fff; --title-to: #99f6e4; --warn-bg: #3d2e0f; --warn-ink: #f5d68a; --scheme: dark;
   --shadow: 0 1px 2px rgba(1,4,9,.3), 0 8px 24px -12px rgba(1,4,9,.6);
+
+}
+/* Light theme: same Graphite & Teal roles, light surfaces. Chosen in Account → Theme
+   (Auto follows the device). The <head> script sets data-theme before first paint. */
+:root[data-theme="light"] {
+  --bg-main: #f6f8fa; --bg-card: #ffffff; --bg-raised: #f1f4f7; --bg-hover: #e9eef3;
+  --bg-input: #ffffff; --bg-head: #f0f3f6;
+  --border-color: #d8dee4; --border-strong: #c2cad3;
+  --text-primary: #1f2328; --text-soft: #31373e; --text-secondary: #59636e; --text-faint: #6e7781;
+  --accent: #0f766e; --accent-hover: #115e59; --accent-strong: #0f766e; --accent-ink: #ffffff;
+  --accent-soft: rgba(15,118,110,.10); --accent-line: rgba(15,118,110,.40); --focus: #0f766e;
+  --pos: #1a7f37; --neg: #cf222e; --amber: #9a6700; --gold: #9a6700; --info: #0969da; --violet: #8250df;
+  --bg-nav: #eef1f4; --bg-topbar: rgba(246,248,250,.94); --bg-overlay: rgba(246,248,250,.98); --bg-backdrop: rgba(31,35,40,.45);
+  --bg-zebra: #f8f9fb; --bg-zebra-soft: rgba(31,35,40,.025); --border-hover: #a8b3be;
+  --text-max: #1f2328; --title-from: #1f2328; --title-to: #0f766e; --warn-bg: #fff8c5; --warn-ink: #4d2d00; --scheme: light;
+  --shadow: 0 1px 2px rgba(31,35,40,.06), 0 8px 24px -12px rgba(31,35,40,.18);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font); }
@@ -64,7 +89,7 @@ button:hover { background: var(--accent-hover); }
 .table-container::-webkit-scrollbar { height: 14px; width: 14px; }
 .table-container::-webkit-scrollbar-track { background: var(--bg-main); }
 .table-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 7px; border: 2px solid var(--bg-main); }
-.table-container::-webkit-scrollbar-thumb:hover { background: #4a5768; }
+.table-container::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 0.95rem; }
 th { background: var(--border-color); color: var(--text-primary); padding: 1.25rem 1rem; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em; border-bottom: 2px solid var(--border-color); position: -webkit-sticky; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .col-header-controls { display: flex; gap: 0.3rem; margin-top: 0.5rem; text-transform: none; letter-spacing: normal; }
@@ -174,7 +199,7 @@ body.view-mobile .view-toggle-panel .tab-btn { flex: 1 1 45% !important; min-wid
 .row-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 .row-ctrl-remove { border-color: rgba(244,112,103,.35); color: var(--neg); }
 .row-ctrl-remove:hover { background: rgba(244,112,103,0.2); }
-.auth-overlay{ position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(13,17,23,.98); }
+.auth-overlay{ position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--bg-overlay); }
 .auth-card{ width:min(430px,100%); background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
 .auth-card h2{ margin:0 0 8px; font-size:22px; color: var(--text-primary); }
 .auth-card p{ color:var(--text-secondary); font-size:13px; line-height:1.5; margin:0 0 20px; }
@@ -213,7 +238,7 @@ body {
 /* Header now sits at the top of the page. */
 header { margin-bottom: 1.5rem; padding-bottom: 1.25rem; }
 h1 { font-size: 2rem; letter-spacing: -0.02em;
-  background: linear-gradient(90deg, #fff 0%, #99f6e4 100%);
+  background: linear-gradient(90deg, var(--title-from) 0%, var(--title-to) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 
@@ -256,8 +281,8 @@ textarea { border-radius: var(--radius-sm); }
 table { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 th { padding: 0.8rem 0.85rem; font-size: 0.72rem; color: var(--text-soft); vertical-align: bottom; }
 td { padding: 0.7rem 0.85rem; vertical-align: middle; }
-tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
-tbody tr:nth-child(even) td:first-child { background: #191f28; }
+tbody tr:nth-child(even) td { background: var(--bg-zebra-soft); }
+tbody tr:nth-child(even) td:first-child { background: var(--bg-zebra); }
 tbody tr:hover td { background: var(--bg-hover); }
 tbody tr:hover td:first-child { background: var(--bg-hover); }
 .cell-input-num { text-align: right; }
@@ -313,7 +338,7 @@ body.view-mobile .col-collapse-btn { width: 24px !important; height: 24px !impor
 /* News pop-up viewer */
 body.news-modal-open { overflow: hidden; }
 .news-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;
-  padding: 3vh 3vw; background: rgba(1,4,9,.78); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+  padding: 3vh 3vw; background: var(--bg-backdrop); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .news-modal-panel { width: min(1100px, 100%); height: 100%; max-height: 94vh; display: flex; flex-direction: column;
   background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: 16px;
   box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
@@ -349,7 +374,7 @@ body.view-mobile .news-modal-panel { max-height: 100vh; border-radius: 0; }
 
 /* Sign-in card */
 .auth-overlay { background:
-  radial-gradient(800px 400px at 50% 0%, var(--accent-soft), transparent 70%), rgba(13,17,23,.98); }
+  radial-gradient(800px 400px at 50% 0%, var(--accent-soft), transparent 70%), var(--bg-overlay); }
 .auth-card { border-radius: 18px; }
 
 /* Automatic small-screen tweaks (the manual "Mobile interface" switch still works). */
@@ -372,7 +397,7 @@ body { padding: 0; }
 body.view-mobile { padding: 0 !important; }
 .app-layout { display: flex; min-height: 100vh; }
 .app-nav { position: sticky; top: 0; height: 100vh; width: 248px; flex: 0 0 248px; box-sizing: border-box; overflow-y: auto;
-  background: #0a0e14; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 18px 12px; }
+  background: var(--bg-nav); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 18px 12px; }
 .app-brand { display: flex; gap: 10px; align-items: center; padding: 4px 8px 18px; }
 .app-brand-name { font-weight: 700; font-size: 15px; line-height: 1.25; color: var(--text-primary); }
 .app-brand-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
@@ -400,7 +425,7 @@ body.view-mobile { padding: 0 !important; }
 .app-build-line { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 .app-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .app-topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding: 14px clamp(16px, 3vw, 32px); background: rgba(11,15,25,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-color); }
+  padding: 14px clamp(16px, 3vw, 32px); background: var(--bg-topbar); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-color); }
 .app-topbar h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.01em; }
 .app-topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -472,7 +497,7 @@ body.view-mobile .app-main > .container { padding: 16px 12px 104px; }
 .dash-note { margin: 12px 0 0; color: var(--text-secondary); font-size: 12px; }
 .dash-empty { margin: 0; color: var(--text-secondary); font-size: 14px; }
 .dash-link { background: none; border: 0; padding: 0; color: var(--accent-strong); font: inherit; font-size: 13px; cursor: pointer; }
-.dash-link:hover { color: #99f6e4; text-decoration: underline; }
+.dash-link:hover { color: var(--accent-strong); text-decoration: underline; }
 .dash-months { display: grid; grid-template-columns: 72px 1fr 88px; gap: 8px 10px; align-items: center; font-size: 13px; }
 .dash-months > span:last-of-type, .dash-months > span:nth-child(3n) { text-align: right; }
 .dash-mbar { display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
@@ -515,7 +540,7 @@ body.view-mobile .dash-sub { font-size: 12px; }
 .v7-seg-btn.v7-on { background: var(--accent); color: var(--accent-ink); }
 .v7-tool-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-strong);
   background: var(--bg-raised); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; list-style: none; }
-.v7-tool-btn:hover { border-color: #4a5768; }
+.v7-tool-btn:hover { border-color: var(--border-hover); }
 .v7-tool-btn[aria-expanded="true"] { border-color: var(--accent); }
 .v7-seg-btn:focus-visible, .v7-tool-btn:focus-visible, .v7-filter:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .v7-menu { position: relative; }
@@ -699,6 +724,80 @@ body.view-mobile .app-account-bar { justify-content: flex-start; flex-basis: 100
 body.view-mobile .app-account-bar .app-nav-email { max-width: none; flex: 1 1 200px; order: 10; }
 body.view-mobile .app-account-bar #logOutBtnInline { order: 11; }
 
+html { color-scheme: var(--scheme); }
+
+/* ===== Account menu (top bar) ===== */
+.acct-menu { position: relative; }
+.acct-menu-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px 0 4px; border-radius: 999px;
+  border: 1px solid var(--border-color); background: transparent; color: var(--text-soft); font-size: 12px; cursor: pointer; }
+.acct-menu-btn:hover, .acct-menu-btn[aria-expanded="true"] { background: var(--bg-hover); border-color: var(--border-hover); color: var(--text-primary); }
+.acct-menu-btn:focus-visible, .cmdk-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.acct-avatar { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft);
+  color: var(--accent-strong); font-weight: 700; font-size: 12px; text-transform: uppercase; }
+.acct-menu-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 70; width: 280px; padding: 12px; border-radius: var(--radius);
+  background: var(--bg-card); border: 1px solid var(--border-strong); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; }
+.acct-menu-panel[hidden] { display: none; }
+.app-account-bar .acct-menu-email { max-width: none; white-space: normal; overflow-wrap: anywhere; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+.acct-menu-email strong { display: block; color: var(--text-primary); font-size: 13px; margin-top: 2px; }
+.acct-menu-heading { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+.acct-seg { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--bg-main); border: 1px solid var(--border-color); }
+.acct-seg .tab-btn { flex: 1 1 0 !important; min-width: 0 !important; min-height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+.acct-seg .tab-btn.active-tab { background: var(--accent); color: var(--accent-ink); }
+.app-account-bar #syncNowBtn, .cmdk-trigger { white-space: nowrap; }
+/* The menu keeps its own order on phones (the old top-bar rules reordered email and Log Out). */
+.acct-menu-panel .app-nav-email, .acct-menu-panel #logOutBtnInline, body.view-mobile .acct-menu-panel .app-nav-email,
+body.view-mobile .acct-menu-panel #logOutBtnInline { order: 0; flex: none; max-width: none; }
+.acct-menu-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); }
+@media (max-width: 820px) {
+  .app-topbar { flex-wrap: nowrap; }
+  .app-account-bar { flex-basis: auto; justify-content: flex-end; flex-wrap: nowrap; }
+  .app-account-bar .app-nav-sync #syncStatus, .acct-menu-label, .cmdk-trigger-label, .cmdk-kbd { display: none; }
+  .acct-menu-panel { position: fixed; left: 12px; right: 12px; top: 60px; width: auto; }
+}
+body.view-mobile .app-topbar { flex-wrap: nowrap; }
+body.view-mobile .app-account-bar { flex-basis: auto; justify-content: flex-end; flex-wrap: nowrap; }
+body.view-mobile .app-account-bar .app-nav-sync #syncStatus, body.view-mobile .acct-menu-label,
+body.view-mobile .cmdk-trigger-label, body.view-mobile .cmdk-kbd { display: none; }
+body.view-mobile .acct-menu-panel { position: fixed; left: 12px; right: 12px; top: 60px; width: auto; }
+
+/* ===== Number cells: unit beside the box, even Dashboard cards ===== */
+.cell-unit { display: inline-flex; align-items: center; gap: 3px; }
+.cell-unit::before, .cell-unit::after { color: var(--text-faint); font-size: 0.85em; font-variant-numeric: tabular-nums; }
+.cell-unit-pre::before { content: attr(data-unit); }
+.cell-unit-suf::after { content: attr(data-unit); }
+.cell-input-num::placeholder { color: var(--text-faint); opacity: 1; }
+#dashboardContent .dash-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1180px) { #dashboardContent .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+body.view-mobile #dashboardContent .dash-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ===== Quick jump (Ctrl/⌘ K) and keyboard shortcuts ===== */
+.cmdk-trigger { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.cmdk-kbd, .kbd { font-family: var(--mono); font-size: 10.5px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-strong);
+  background: var(--bg-raised); color: var(--text-secondary); }
+.cmdk-overlay { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px;
+  background: var(--bg-backdrop); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.cmdk-overlay[hidden] { display: none; }
+.cmdk-box { width: min(620px, 100%); max-height: 70vh; display: flex; flex-direction: column; border-radius: var(--radius); background: var(--bg-card);
+  border: 1px solid var(--border-strong); box-shadow: var(--shadow); overflow: hidden; }
+.cmdk-input { width: 100%; box-sizing: border-box; padding: 16px 18px; border: 0; border-bottom: 1px solid var(--border-color); background: transparent;
+  color: var(--text-primary); font: 500 15px var(--font); outline: none; }
+.cmdk-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.cmdk-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); }
+.cmdk-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--text-soft); font-size: 14px; }
+.cmdk-item[aria-selected="true"] { background: var(--accent-soft); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--accent); }
+.cmdk-item-hint { font-size: 12px; color: var(--text-faint); }
+.cmdk-empty { padding: 18px; color: var(--text-secondary); font-size: 14px; }
+.cmdk-foot { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-faint); }
+.kbd-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.kbd-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+.kbd-table td:last-child { text-align: right; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .acct-menu-panel, .cmdk-box { animation: pop-in .14s ease-out; }
+  @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: none; } }
+}
+
 /* ===== Named classes for what used to be inline style="…" attributes (Phase 5) ===== */
 .gl-term { padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); color: var(--text-primary); font-weight:600; }
 .gl-def { padding:0.6rem 1rem; border-bottom:1px solid var(--border-color); }
@@ -848,7 +947,7 @@ body.view-mobile :is(.row-end, .field, .field-check, .chip-row, .stack-sm, .row-
 .tone-muted { color: var(--text-secondary) !important; } .tone-text { color: var(--text-primary) !important; }
 .tone-amber { color: var(--amber) !important; } .tone-gold { color: var(--gold) !important; } .tone-warn { color: var(--gold) !important; }
 .tone-violet { color: var(--violet) !important; } .tone-sky { color: var(--info) !important; } .tone-purple { color: #7c3aed !important; }
-.tone-blue { color: var(--accent) !important; } .tone-white { color: #fff !important; }
+.tone-blue { color: var(--accent) !important; } .tone-white { color: var(--text-max) !important; }
 .tone-excluded { color: #c98a9e !important; } .tone-included { color: var(--gold) !important; }
 .t-bold { font-weight: 700; } .t-left { text-align: left; } .tag-xs { font-size: 0.75rem; }
 .total-cell { background: rgba(227,179,65,0.08) !important; font-weight: 700; }
@@ -880,17 +979,17 @@ textarea.prompt-box, textarea.reply-box, #nsPromptBox { font-family: ui-monospac
 .table-container, .news-modal-body { scrollbar-color: var(--border-strong) transparent; }
 .table-container::-webkit-scrollbar-track { background: transparent; }
 .table-container::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid var(--bg-card); }
-.table-container::-webkit-scrollbar-thumb:hover { background: #4a5768; }
+.table-container::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
 /* Buttons: primary (blue) by default; secondary / tab / tool buttons share one quiet style */
 button { min-height: 38px; border-radius: 8px; font-weight: 600; letter-spacing: 0; }
 button:not(.tab-btn):not(.v7-tool-btn):not(.app-nav-item):not(.v7-tab):not(.v7-chip-btn):not(.expander-toggle):not(.intro-toggle):not(.app-small-btn):not(.app-link-danger):not(.col-ctrl-btn):not(.row-ctrl-btn):not(.news-modal-close):not(.pw-toggle-btn):not(.dash-link):not(.v7-seg-btn):not(.col-collapse-btn) { box-shadow: 0 1px 0 rgba(255,255,255,.06) inset; }
 .btn-secondary, .btn-muted-outline, .tab-btn:not(.active-tab) { background: var(--bg-raised); border: 1px solid var(--border-strong); color: var(--text-soft); }
-.btn-secondary:hover, .btn-muted-outline:hover, .tab-btn:not(.active-tab):hover { background: var(--bg-hover); border-color: #4a5768; color: var(--text-primary); }
+.btn-secondary:hover, .btn-muted-outline:hover, .tab-btn:not(.active-tab):hover { background: var(--bg-hover); border-color: var(--border-hover); color: var(--text-primary); }
 .btn-danger-outline { background: transparent; border: 1px solid rgba(244,112,103,.6); color: var(--neg); }
 .btn-danger-outline:hover { background: rgba(244,112,103,.1); }
 .v7-tool-btn { background: var(--bg-raised); border-color: var(--border-strong); color: var(--text-primary); font-weight: 500; }
-.v7-tool-btn:hover { background: var(--bg-hover); border-color: #4a5768; }
+.v7-tool-btn:hover { background: var(--bg-hover); border-color: var(--border-hover); }
 .v7-tool-btn.v7-danger { color: var(--neg); }
 
 /* Text fields and lists: one look, with a clear focus ring */
@@ -905,7 +1004,7 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 /* Tables: the mock-up's quiet header and thin row lines */
 th { background: var(--bg-head); color: var(--text-secondary); font-weight: 600; letter-spacing: 0.04em; border-bottom: 1px solid var(--border-strong); }
 td { border-bottom-color: var(--border-color); }
-tbody tr:nth-child(even) td { background: rgba(255,255,255,.012); }
+tbody tr:nth-child(even) td { background: var(--bg-zebra-soft); }
 
 /* Cards and panels: same corner, border and depth everywhere */
 .control-panel, .table-container, .dash-card, .dash-tile, .v7-provider { border-radius: 12px; border-color: var(--border-color); }
@@ -993,7 +1092,7 @@ body.view-mobile .app-nav-item[aria-current="page"] { box-shadow: inset 0 2px 0 
 .v7-hist-go { border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); }
 .v7-hist-go:hover { background: var(--accent-hover); }
 .v7-hist-range { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.v7-hist-bar .v7-hist-date { width: auto; min-height: 38px; padding: 0 10px; color-scheme: dark; }
+.v7-hist-bar .v7-hist-date { width: auto; min-height: 38px; padding: 0 10px; color-scheme: var(--scheme); }
 .v7-hist-bar .v7-hist-search { flex: 1 1 160px; max-width: 240px; min-height: 38px; padding: 0 10px; margin-left: auto; }
 .v7-hist-table { max-height: 60vh; margin-top: 4px; }
 .v7-hist-table td { vertical-align: middle; }
@@ -1058,7 +1157,7 @@ body.view-mobile .v7-hist-bar .v7-hist-search { max-width: none; margin-left: 0;
 body.view-mobile .v7-backup-actions button, body.view-mobile .v7-backup-sync button { flex: 1 1 100%; }
 
 /* Shown when index.html and app.js come from different releases (ui/version-check.ts) */
-.version-mismatch-banner { position: sticky; top: 0; z-index: 10001; padding: 12px 18px; background: #3d2e0f; border-bottom: 1px solid var(--amber); color: #f5d68a; font-size: 14px; line-height: 1.5; }
+.version-mismatch-banner { position: sticky; top: 0; z-index: 10001; padding: 12px 18px; background: var(--warn-bg); border-bottom: 1px solid var(--amber); color: var(--warn-ink); font-size: 14px; line-height: 1.5; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <!-- Export helpers: SheetJS for Excel (retried across multiple CDN hosts at click time
@@ -1144,7 +1243,7 @@ body.view-mobile .v7-backup-actions button, body.view-mobile .v7-backup-sync but
       <button type="button" class="app-nav-item app-nav-more" id="appNavMoreBtn" aria-expanded="false" aria-controls="appNav"><svg class="app-nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>More</span></button>
     </div>
     <div class="app-nav-account">
-      <div id="htmlBuildLine" class="app-build-line">Version 8.6.2</div>
+      <div id="htmlBuildLine" class="app-build-line">Version 8.7.0</div>
     </div>
   </nav>
 
@@ -1154,13 +1253,38 @@ body.view-mobile .v7-backup-actions button, body.view-mobile .v7-backup-sync but
       <div class="app-topbar-actions app-account-bar" role="group" aria-label="Account and sync">
         <div class="app-nav-sync"><span class="app-sync-dot" aria-hidden="true"></span><span id="syncStatus"></span></div>
         <button id="syncNowBtn" type="button" class="app-small-btn">Sync now</button>
-        <div class="app-nav-actions view-toggle-panel" role="group" aria-label="Interface">
-          <button id="viewDesktopBtn" type="button" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">Desktop</button>
-          <button id="viewMobileBtn" type="button" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">Mobile</button>
+        <button id="cmdkOpenBtn" type="button" class="app-small-btn cmdk-trigger" aria-haspopup="dialog" title="Jump to a screen or ticker (Ctrl+K or ⌘K)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <span class="cmdk-trigger-label">Search</span><kbd class="cmdk-kbd" aria-hidden="true">Ctrl K</kbd>
+        </button>
+        <div class="acct-menu" id="accountMenu">
+          <button id="accountMenuBtn" type="button" class="acct-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="accountMenuPanel" title="Account, display and sign out">
+            <span id="accountAvatar" class="acct-avatar" aria-hidden="true">?</span><span class="acct-menu-label">Account</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div id="accountMenuPanel" class="acct-menu-panel" hidden>
+            <div class="app-nav-email acct-menu-email">Signed in as <strong id="loggedInEmailInline"></strong></div>
+            <div class="acct-menu-group">
+              <div class="acct-menu-heading" id="acctLayoutHeading">Layout</div>
+              <div class="acct-seg" role="group" aria-labelledby="acctLayoutHeading">
+                <button id="viewDesktopBtn" type="button" class="tab-btn active-tab" title="Optimized for a wide screen — full control rows, denser table">Desktop</button>
+                <button id="viewMobileBtn" type="button" class="tab-btn" title="Optimized for a phone screen — stacked controls, larger touch targets">Mobile</button>
+              </div>
+            </div>
+            <div class="acct-menu-group">
+              <div class="acct-menu-heading" id="acctThemeHeading">Theme</div>
+              <div class="acct-seg" role="group" aria-labelledby="acctThemeHeading">
+                <button type="button" class="tab-btn" data-theme-choice="auto" title="Follow this device's light or dark setting">Auto</button>
+                <button type="button" class="tab-btn" data-theme-choice="light">Light</button>
+                <button type="button" class="tab-btn" data-theme-choice="dark">Dark</button>
+              </div>
+            </div>
+            <div class="acct-menu-foot">
+              <button id="logOutBtnInline" type="button" class="app-small-btn app-danger">Log Out</button>
+              <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
+            </div>
+          </div>
         </div>
-        <button id="resetAccountDataBtn" type="button" class="app-link-danger" title="Wipes this account's data — locally and in the cloud — back to the default starting Sample List. Use this if this account ever ended up showing data from a different account on a shared device.">Reset my account data</button>
-        <div class="app-nav-email">Signed in as <strong id="loggedInEmailInline"></strong></div>
-        <button id="logOutBtnInline" type="button" class="app-small-btn app-danger">Log Out</button>
       </div>
     </header>
 
@@ -2143,7 +2267,7 @@ body.view-mobile .v7-backup-actions button, body.view-mobile .v7-backup-sync but
   </div>
 </div>
 </div>
-<script src="data.js?v=8.6.2"></script>
-<script src="app.js?v=8.6.2"></script>
+<script src="data.js?v=8.7.0"></script>
+<script src="app.js?v=8.7.0"></script>
 </body>
 </html>
